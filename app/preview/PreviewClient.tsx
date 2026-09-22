@@ -41,6 +41,10 @@ function FieldValue({ value }: { value: string | undefined }) {
         display: 'inline-block',
         maxWidth: '640px',
         wordBreak: 'break-word',
+        // Descriptions carry real line breaks (stripHtml keeps paragraph
+        // boundaries). Render them, rather than collapsing the feed's actual
+        // content into one running block.
+        whiteSpace: 'pre-wrap',
       }}
     >
       {value}

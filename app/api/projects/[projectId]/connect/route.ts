@@ -2,7 +2,11 @@ import { NextResponse } from 'next/server'
 import { createSupabaseServerClient } from '@/lib/supabase-server'
 import { adminDb, getOwnedProject } from '@/lib/feeds'
 import { createShopifyClient } from '@/lib/shopify'
+import { createShopifyClientForProject } from '@/lib/projectShopify'
 import { encryptToken } from '@/lib/crypto'
+import { missingScopes } from '@/lib/shopifyScopes'
+import { enforceRateLimit } from '@/lib/rateLimit'
+import { errorResponse } from '@/lib/errors'
 
 // Strip protocol and any path so we store the bare *.myshopify.com domain that
 // lib/shopify.ts expects (it builds `https://${shopUrl}/admin/...`).
@@ -91,7 +95,7 @@ export async function POST(
   }
 
   const scopes = parsed.data?.currentAppInstallation?.accessScopes?.map((s) => s.handle) ?? []
-  const readMarketsMissing = !scopes.includes('read_markets')
+  const missing = missingScopes(scopes)
 
   // Customer-facing storefront root (e.g. "https://www.vinnu.dk"). Product links
   // fall back to this when the selected market has no Shopify Markets web
@@ -129,9 +133,50 @@ export async function POST(
     connection_status: 'connected',
     last_verified_at: now,
     shop: parsed.data?.shop?.myshopifyDomain ?? parsed.data?.shop?.name ?? shopUrl,
-    // Non-blocking: the connection works, but markets won't load without this
-    // scope. The UI should surface it as a warning.
-    readMarketsMissing,
+    // Non-blocking: the token authenticates, but some capabilities are degraded
+    // without these. The UI surfaces them as warnings rather than refusing the
+    // connection — a feed of plain product fields works fine without any of them.
+    missingScopes: missing,
     grantedScopes: scopes,
   })
+}
+
+// GET — re-read the granted scopes for an already-connected project.
+//
+// The scopes are NOT stored on the project row, so the only way to know them
+// later is to ask Shopify again. That is deliberate: a stored copy goes stale
+// the moment someone edits the app in Shopify Admin, and a stale "all good"
+// is worse than no answer. One small query, on a single-project page.
+export async function GET(
+  _req: Request,
+  { params }: { params: Promise<{ projectId: string }> }
+) {
+  const { projectId } = await params
+
+  const supabase = await createSupabaseServerClient()
+  const {
+    data: { user },
+  } = await supabase.auth.getUser()
+  if (!user) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
+
+  const owned = await getOwnedProject(user.id, projectId)
+  if (!owned) return NextResponse.json({ error: 'Not found' }, { status: 404 })
+
+  try {
+    // Reaches an external API, so it goes through the shared limiter like every
+    // other Shopify-touching route.
+    await enforceRateLimit(user.id, 'shopify_scope_check')
+  } catch (err) {
+    return errorResponse(err, 'GET /api/projects/[projectId]/connect')
+  }
+
+  try {
+    const shopify = await createShopifyClientForProject(adminDb(), projectId)
+    const granted = await shopify.fetchGrantedScopes()
+    return NextResponse.json({ checked: true, missingScopes: missingScopes(granted) })
+  } catch {
+    // No connection yet, an undecryptable token, or Shopify being unreachable.
+    // This is an advisory check — it must never turn into a page-level error.
+    return NextResponse.json({ checked: false, missingScopes: [] })
+  }
 }

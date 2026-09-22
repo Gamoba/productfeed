@@ -1,11 +1,12 @@
 'use client'
 
 import { useState } from 'react'
+import type { MissingScope } from '@/lib/shopifyScopes'
 
 export type ConnectResult = {
   connection_status: string
   shop: string
-  readMarketsMissing: boolean
+  missingScopes: MissingScope[]
   last_verified_at: string
 }
 
@@ -54,15 +55,17 @@ export function ProjectConnectModal({
       const result: ConnectResult = {
         connection_status: data.connection_status ?? 'connected',
         shop: data.shop ?? shopUrl.trim(),
-        readMarketsMissing: data.readMarketsMissing ?? false,
+        missingScopes: data.missingScopes ?? [],
         last_verified_at: data.last_verified_at ?? new Date().toISOString(),
       }
 
-      if (result.readMarketsMissing) {
-        // Connection works but markets won't load — surface, then let the user
-        // close so they see it.
+      if (result.missingScopes.length > 0) {
+        // The token authenticates, but something will be degraded. Hold the
+        // modal open so the user reads it here, where they still have the
+        // Shopify app settings in mind — not later, from a feed full of IDs.
         setWarning(
-          'Forbundet, men app’en mangler read_markets-scope. Produkt-sync virker, men markeder kan ikke hentes.'
+          'Connected, but the token is missing: ' +
+            result.missingScopes.map((s) => `${s.handle} — ${s.impact}`).join(' ')
         )
         onConnected(result)
       } else {

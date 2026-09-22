@@ -13,6 +13,49 @@ export type SyncResult = {
   synced: number
   metafields: number
   durationMs: number
+  // Non-fatal problems worth telling the user about. The sync itself succeeded;
+  // these say the data it wrote is not everything it could have been. Empty on
+  // a clean sync.
+  warnings: SyncWarning[]
+}
+
+export type SyncWarning = {
+  // Machine-readable so the UI can style/act on a specific case rather than
+  // pattern-matching prose.
+  code: 'metaobjects_access_denied' | 'metaobjects_unresolved'
+  message: string
+}
+
+// Turns the metaobject resolution summary into user-facing warnings.
+//
+// The two cases need different words because they need different fixes: a
+// missing scope is a Shopify app setting, while a handful of stragglers is a
+// transient lookup failure that a re-sync clears.
+function metaobjectWarnings(summary: ShopifyData['metaobjects']): SyncWarning[] {
+  const missing = summary.total - summary.resolved
+  if (missing <= 0) return []
+
+  if (summary.accessDenied) {
+    return [
+      {
+        code: 'metaobjects_access_denied',
+        message:
+          `${missing} metaobject references could not be translated because the access token ` +
+          'is missing the read_metaobjects scope. Fields like region, grape and country will ' +
+          'show a Shopify ID instead of their value. Add the scope in Shopify Admin, ' +
+          'reconnect the project, and sync again.',
+      },
+    ]
+  }
+  return [
+    {
+      code: 'metaobjects_unresolved',
+      message:
+        `${missing} of ${summary.total} metaobject references could not be translated and are ` +
+        'stored as Shopify IDs. Run the sync again — if they persist, the metaobject has ' +
+        'most likely been deleted in Shopify.',
+    },
+  ]
 }
 
 export type SupabaseMetafield = {
@@ -245,6 +288,7 @@ export async function syncProducts(feedId: string): Promise<SyncResult> {
     synced: products.length,
     metafields: allMetafields.length,
     durationMs: totalMs,
+    warnings: metaobjectWarnings(shopifyData.metaobjects),
   }
 }
 
@@ -264,6 +308,9 @@ export async function getProductsForFeed(feedId: string): Promise<SupabaseProduc
 
 export function toShopifyData(products: SupabaseProduct[]): ShopifyData {
   return {
+    // Rehydrating from the database: the GIDs were already translated (or not)
+    // during the sync that wrote these rows, so there is nothing to report here.
+    metaobjects: { total: 0, resolved: 0, accessDenied: false },
     products: products.map((p) => ({
       id: parseInt(p.shopify_id, 10),
       title: p.title ?? '',

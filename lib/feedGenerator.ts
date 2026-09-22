@@ -2,6 +2,12 @@ import { createClient } from '@supabase/supabase-js'
 import Anthropic from '@anthropic-ai/sdk'
 import type { SupabaseProduct } from '@/lib/sync'
 import { resolveField, applyFeedFilters, type FeedFilter } from '@/lib/feedFilters'
+import { applyTransforms, stripHtml, type FindReplacePair } from '@/lib/mappingTransforms'
+import {
+  selectBranchValue,
+  type CombineBlock,
+  type OnlyIf,
+} from '@/lib/mappingRules'
 
 // ── Types ──────────────────────────────────────────────────────────────────
 
@@ -16,15 +22,6 @@ type MappingType =
   | 'AI'
 
 type Config = Record<string, unknown>
-type CombineBlock = { type: 'field' | 'text'; value: string }
-type FindReplacePair = { find: string; replace: string }
-type Condition = { field: string; operator: string; value: string; logic: 'AND' | 'OR' | null }
-// ELSE branch supports four shapes. `empty` / `static` / `field` use `value`;
-// `combine` reuses the same block list as a top-level COMBINE mapping.
-type ElseBranch =
-  | { type: 'empty' | 'static' | 'field'; value: string }
-  | { type: 'combine'; blocks: CombineBlock[] }
-type OnlyIf = { conditions: Condition[]; else: ElseBranch }
 
 type FeedMapping = {
   google_field: string
@@ -100,43 +97,10 @@ function xmlEscape(str: string): string {
     .replace(/'/g, '&apos;')
 }
 
-function stripHtml(html: string): string {
-  return html.replace(/<[^>]*>/g, '').replace(/\s+/g, ' ').trim()
-}
-
-function evalCond(cond: Condition, product: SupabaseProduct, marketUrl: string | null): boolean {
-  const v = resolveField(cond.field, product, marketUrl)
-  switch (cond.operator) {
-    case 'equals':       return v === cond.value
-    case 'not_equals':   return v !== cond.value
-    case 'contains':     return v.includes(cond.value)
-    case 'not_contains': return !v.includes(cond.value)
-    case 'starts_with':  return v.startsWith(cond.value)
-    case 'ends_with':    return v.endsWith(cond.value)
-    case 'greater_than': return parseFloat(v) > parseFloat(cond.value)
-    case 'less_than':    return parseFloat(v) < parseFloat(cond.value)
-    case 'is_empty':     return !v
-    case 'is_not_empty': return !!v
-    // *_field variants resolve the RHS as a field reference instead of a
-    // literal — used by default mappings that compare two product fields
-    // (e.g. price < compare_at_price for sale detection).
-    case 'less_than_field':    return parseFloat(v) < parseFloat(resolveField(cond.value, product, marketUrl))
-    case 'greater_than_field': return parseFloat(v) > parseFloat(resolveField(cond.value, product, marketUrl))
-    case 'equals_field':       return v === resolveField(cond.value, product, marketUrl)
-    case 'not_equals_field':   return v !== resolveField(cond.value, product, marketUrl)
-    default:             return true
-  }
-}
-
-function evaluateOnlyIf(onlyIf: OnlyIf, product: SupabaseProduct, marketUrl: string | null): boolean {
-  const { conditions } = onlyIf
-  if (!conditions.length) return true
-  let result = evalCond(conditions[0], product, marketUrl)
-  for (let i = 1; i < conditions.length; i++) {
-    const val = evalCond(conditions[i], product, marketUrl)
-    result = conditions[i].logic === 'OR' ? result || val : result && val
-  }
-  return result
+// Binds resolveField to one product, giving the shared rule evaluator
+// (lib/mappingRules) the field-reading callback it needs.
+function fieldResolver(product: SupabaseProduct, marketUrl: string | null) {
+  return (field: string) => resolveField(field, product, marketUrl)
 }
 
 async function applyMapping(
@@ -218,33 +182,22 @@ async function applyMapping(
   }
 }
 
-// Applies a mapping rule and its onlyIf condition, returning the resolved value.
+// Resolves one mapping for one product: run its main function, pick the branch
+// its rules select, then push the result through the transform layer.
+//
+// Order matters and is deliberate. Transforms run LAST, on whichever branch
+// won — so a "strip HTML" filter cleans the ELSE value just as it cleans the
+// primary one, and the user doesn't have to repeat the filter per branch.
 async function resolvedValue(
   mapping: FeedMapping,
   product: SupabaseProduct,
   anthropic: Anthropic | null,
   marketUrl: string | null
 ): Promise<string> {
-  let value = await applyMapping(mapping.mapping_type, mapping.config, product, anthropic, marketUrl)
-
-  const onlyIf = mapping.config.onlyIf as OnlyIf | undefined
-  if (onlyIf?.conditions?.length) {
-    const conditionMet = evaluateOnlyIf(onlyIf, product, marketUrl)
-    if (!conditionMet) {
-      const eb = onlyIf.else
-      if (eb.type === 'static') value = eb.value
-      else if (eb.type === 'field') value = resolveField(eb.value, product, marketUrl)
-      else if (eb.type === 'combine') {
-        value = (eb.blocks ?? [])
-          .map((b) => (b.type === 'field' ? resolveField(b.value, product, marketUrl) : b.value))
-          .join('')
-      } else {
-        value = ''
-      }
-    }
-  }
-
-  return value
+  const base = await applyMapping(mapping.mapping_type, mapping.config, product, anthropic, marketUrl)
+  const resolve = fieldResolver(product, marketUrl)
+  const value = selectBranchValue(mapping.config.onlyIf as OnlyIf | undefined, base, resolve)
+  return applyTransforms(value, mapping.config.transforms)
 }
 
 function xmlLine(field: string, value: string): string {

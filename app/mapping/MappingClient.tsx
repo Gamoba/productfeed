@@ -2,6 +2,23 @@
 
 import { createContext, useContext, useEffect, useMemo, useState, useTransition } from 'react'
 import { saveMappings, type MappingEntry } from './actions'
+import {
+  applyTransforms,
+  configTransforms,
+  stripHtml,
+  TRANSFORM_LABELS,
+  type Transform,
+  type TransformType,
+} from '@/lib/mappingTransforms'
+import {
+  collectRuleFields,
+  selectBranchValue,
+  type CombineBlock,
+  type Condition,
+  type OnlyIf,
+  type Rule,
+  type ValueSpec,
+} from '@/lib/mappingRules'
 
 // Lets all FieldSelect / ShopifyFieldsModal usages pick up the active feed
 // mode without prop-drilling through 8+ render sites.
@@ -35,12 +52,6 @@ type MappingType =
 
 type Config = Record<string, unknown>
 type FieldState = { type: MappingType; config: Config }
-
-type Condition = { field: string; operator: string; value: string; logic: 'AND' | 'OR' | null }
-type ElseBranch =
-  | { type: 'empty' | 'static' | 'field'; value: string }
-  | { type: 'combine'; blocks: { type: 'field' | 'text'; value: string }[] }
-type OnlyIf = { conditions: Condition[]; else: ElseBranch }
 
 type AISuggestion = {
   google_field: string
@@ -244,6 +255,18 @@ const inpSm = 'ff-input'
 const btnSm =
   'px-2 py-1 rounded text-[11px] font-medium transition-colors border border-[var(--hairline)] bg-white text-[var(--ink-secondary)] hover:bg-[var(--bg-surface)]'
 const miniSel = 'ff-select shrink-0'
+// Left-hand keyword column of a rule row (ONLY IF / ELSE IF / THEN / ELSE).
+// Fixed width so every keyword lines up down the panel.
+const condLbl = 'text-xs text-gray-400 font-mono w-16 shrink-0 pt-2'
+
+// Drops one key from a mapping config. Used when a whole layer (the rule stack,
+// the filter layer) is removed — the key must disappear rather than be left as
+// an empty object, so the saved config stays clean.
+function withoutKey(config: Config, key: string): Config {
+  const next = { ...config }
+  delete next[key]
+  return next
+}
 
 // ── Live preview: client-side resolver ────────────────────────────────────
 
@@ -334,9 +357,10 @@ function resolveClientField(
   return String(val)
 }
 
-function stripPreviewHtml(html: string): string {
-  return html.replace(/<[^>]*>/g, '').replace(/\s+/g, ' ').trim()
-}
+// The preview's AI placeholder. It is not a real value, so the rule layer and
+// the transform layer both step around it — otherwise "Truncate to 20" would
+// render "__AI__" chopped in half.
+const AI_PLACEHOLDER = '__AI__'
 
 function applyClientMapping(
   type: MappingType,
@@ -351,7 +375,7 @@ function applyClientMapping(
     case 'STATIC':
       return String(config.value ?? '')
     case 'COMBINE': {
-      const blocks = (config.blocks as { type: 'field' | 'text'; value: string }[]) ?? []
+      const blocks = (config.blocks as CombineBlock[]) ?? []
       return blocks
         .map((b) => (b.type === 'field' ? resolveClientField(b.value, product, marketUrl, feedMode) : b.value))
         .join('')
@@ -373,39 +397,11 @@ function applyClientMapping(
       return val.slice(0, Number(config.maxChars ?? 500))
     }
     case 'STRIP_HTML':
-      return stripPreviewHtml(resolveClientField(String(config.field ?? ''), product, marketUrl, feedMode))
+      return stripHtml(resolveClientField(String(config.field ?? ''), product, marketUrl, feedMode))
     case 'AI':
-      return '__AI__'
+      return AI_PLACEHOLDER
     default:
       return ''
-  }
-}
-
-function evalPreviewCond(
-  cond: Condition,
-  product: PreviewProduct,
-  marketUrl: string | null,
-  feedMode: 'product' | 'variant'
-): boolean {
-  const v = resolveClientField(cond.field, product, marketUrl, feedMode)
-  switch (cond.operator) {
-    case 'equals':       return v === cond.value
-    case 'not_equals':   return v !== cond.value
-    case 'contains':     return v.includes(cond.value)
-    case 'not_contains': return !v.includes(cond.value)
-    case 'starts_with':  return v.startsWith(cond.value)
-    case 'ends_with':    return v.endsWith(cond.value)
-    case 'greater_than': return parseFloat(v) > parseFloat(cond.value)
-    case 'less_than':    return parseFloat(v) < parseFloat(cond.value)
-    case 'is_empty':     return !v
-    case 'is_not_empty': return !!v
-    // *_field variants resolve the RHS as a field reference. Mirrors evalCond
-    // in feedGenerator so the preview matches the generated output exactly.
-    case 'less_than_field':    return parseFloat(v) < parseFloat(resolveClientField(cond.value, product, marketUrl, feedMode))
-    case 'greater_than_field': return parseFloat(v) > parseFloat(resolveClientField(cond.value, product, marketUrl, feedMode))
-    case 'equals_field':       return v === resolveClientField(cond.value, product, marketUrl, feedMode)
-    case 'not_equals_field':   return v !== resolveClientField(cond.value, product, marketUrl, feedMode)
-    default:             return true
   }
 }
 
@@ -416,36 +412,15 @@ function computePreviewValue(
   feedMode: 'product' | 'variant'
 ): string {
   if (!state.type) return ''
-  let value = applyClientMapping(state.type, state.config, product, marketUrl, feedMode)
+  const base = applyClientMapping(state.type, state.config, product, marketUrl, feedMode)
+  if (base === AI_PLACEHOLDER) return base
 
-  const onlyIf = state.config.onlyIf as OnlyIf | undefined
-  if (onlyIf?.conditions?.length) {
-    const { conditions } = onlyIf
-    let result = evalPreviewCond(conditions[0], product, marketUrl, feedMode)
-    for (let i = 1; i < conditions.length; i++) {
-      const val = evalPreviewCond(conditions[i], product, marketUrl, feedMode)
-      result = conditions[i].logic === 'OR' ? result || val : result && val
-    }
-    if (!result) {
-      const eb = onlyIf.else
-      if (eb.type === 'static') value = eb.value
-      else if (eb.type === 'field')
-        value = resolveClientField(eb.value, product, marketUrl, feedMode)
-      else if (eb.type === 'combine') {
-        value = (eb.blocks ?? [])
-          .map((b) =>
-            b.type === 'field'
-              ? resolveClientField(b.value, product, marketUrl, feedMode)
-              : b.value
-          )
-          .join('')
-      } else {
-        value = ''
-      }
-    }
-  }
-
-  return value
+  // Same order as lib/feedGenerator's resolvedValue: main function → rule
+  // branch → transforms. Both sides call the same lib/mappingRules code, so the
+  // preview can't drift from the generated feed.
+  const resolve = (field: string) => resolveClientField(field, product, marketUrl, feedMode)
+  const value = selectBranchValue(state.config.onlyIf as OnlyIf | undefined, base, resolve)
+  return applyTransforms(value, state.config.transforms)
 }
 
 // ── FieldSelect ────────────────────────────────────────────────────────────
@@ -501,8 +476,6 @@ function FieldSelect({
 }
 
 // ── CombineChipsEditor (chip-based COMBINE UI) ─────────────────────────────
-
-type CombineBlock = { type: 'field' | 'text'; value: string }
 
 function CombineChipsEditor({
   blocks,
@@ -1192,63 +1165,44 @@ function ConditionModeToggle({
   )
 }
 
-// ── OnlyIfEditor ───────────────────────────────────────────────────────────
+// ── Condition rows ─────────────────────────────────────────────────────────
 
-function OnlyIfEditor({
-  value,
+// The condition list of ONE branch. Rendered by the primary ONLY IF and by
+// every ELSE IF rule, so a condition row looks and behaves identically wherever
+// it appears.
+function ConditionRows({
+  label,
+  conditions,
   onChange,
-  onRemove,
   allFields,
 }: {
-  value: OnlyIf
-  onChange: (v: OnlyIf) => void
-  onRemove: () => void
+  label: string
+  conditions: Condition[]
+  onChange: (next: Condition[]) => void
   allFields: string[]
 }) {
-  const { conditions, else: elseBranch } = value
-  const setConditions = (next: Condition[]) => onChange({ ...value, conditions: next })
-  const setElse = (next: ElseBranch) => onChange({ ...value, else: next })
-  const lbl = 'text-xs text-gray-400 font-mono w-16 shrink-0 pt-2'
-
   return (
-    <div className="space-y-2 py-2">
-
+    <>
       {conditions.map((cond, i) => {
         const noVal = NO_VALUE_OPERATORS.includes(cond.operator)
         const base = baseOperator(cond.operator)
         const mode: 'value' | 'field' = isFieldOperator(cond.operator) ? 'field' : 'value'
         const showModeToggle = !noVal && MODE_AWARE_OPERATORS.has(base)
 
-        function setBase(nextBase: string) {
-          const next = [...conditions]
-          next[i] = {
-            ...next[i],
-            operator: withOperatorMode(nextBase, mode),
-            value: '',
-          }
-          setConditions(next)
+        const patch = (next: Partial<Condition>) => {
+          const list = [...conditions]
+          list[i] = { ...list[i], ...next }
+          onChange(list)
         }
-        function setMode(nextMode: 'value' | 'field') {
-          const next = [...conditions]
-          next[i] = {
-            ...next[i],
-            operator: withOperatorMode(base, nextMode),
-            value: '',
-          }
-          setConditions(next)
-        }
+
         return (
           <div key={i} className="flex gap-2 items-start">
             {i === 0 ? (
-              <span className={lbl}>ONLY IF</span>
+              <span className={condLbl}>{label}</span>
             ) : (
               <select
                 value={cond.logic ?? 'AND'}
-                onChange={(e) => {
-                  const next = [...conditions]
-                  next[i] = { ...next[i], logic: e.target.value as 'AND' | 'OR' }
-                  setConditions(next)
-                }}
+                onChange={(e) => patch({ logic: e.target.value as 'AND' | 'OR' })}
                 className={miniSel}
                 style={{ flex: '0 0 64px' }}
               >
@@ -1259,17 +1213,13 @@ function OnlyIfEditor({
             <div style={{ flex: '0 0 160px' }}>
               <FieldSelect
                 value={cond.field}
-                onChange={(v) => {
-                  const next = [...conditions]
-                  next[i] = { ...next[i], field: v }
-                  setConditions(next)
-                }}
+                onChange={(v) => patch({ field: v })}
                 allFields={allFields}
               />
             </div>
             <select
               value={base}
-              onChange={(e) => setBase(e.target.value)}
+              onChange={(e) => patch({ operator: withOperatorMode(e.target.value, mode), value: '' })}
               className={miniSel}
               style={{ flex: '0 0 140px' }}
             >
@@ -1280,28 +1230,25 @@ function OnlyIfEditor({
             {!noVal && (
               <div className="flex-1 min-w-0 flex gap-1.5 items-stretch">
                 {showModeToggle && (
-                  <ConditionModeToggle mode={mode} onChange={setMode} />
+                  <ConditionModeToggle
+                    mode={mode}
+                    onChange={(nextMode) =>
+                      patch({ operator: withOperatorMode(base, nextMode), value: '' })
+                    }
+                  />
                 )}
                 <div className="flex-1 min-w-0">
                   {mode === 'field' ? (
                     <FieldSelect
                       value={cond.value}
-                      onChange={(v) => {
-                        const next = [...conditions]
-                        next[i] = { ...next[i], value: v }
-                        setConditions(next)
-                      }}
+                      onChange={(v) => patch({ value: v })}
                       allFields={allFields}
                     />
                   ) : (
                     <input
                       type="text"
                       value={cond.value}
-                      onChange={(e) => {
-                        const next = [...conditions]
-                        next[i] = { ...next[i], value: e.target.value }
-                        setConditions(next)
-                      }}
+                      onChange={(e) => patch({ value: e.target.value })}
                       placeholder="Value..."
                       className={inp}
                     />
@@ -1312,7 +1259,7 @@ function OnlyIfEditor({
             {conditions.length > 1 && (
               <button
                 type="button"
-                onClick={() => setConditions(conditions.filter((_, j) => j !== i))}
+                onClick={() => onChange(conditions.filter((_, j) => j !== i))}
                 className={`${btnSm} bg-gray-100 text-gray-500 hover:bg-gray-200 mt-0.5`}
                 style={{ flex: 'none' }}
               >
@@ -1326,69 +1273,225 @@ function OnlyIfEditor({
       <div className="flex gap-2 pl-16">
         <button
           type="button"
-          onClick={() => setConditions([...conditions, { field: '', operator: 'equals', value: '', logic: 'AND' }])}
+          onClick={() => onChange([...conditions, { field: '', operator: 'equals', value: '', logic: 'AND' }])}
           className={`${btnSm} bg-gray-100 text-gray-600 hover:bg-gray-200`}
         >
           + AND
         </button>
         <button
           type="button"
-          onClick={() => setConditions([...conditions, { field: '', operator: 'equals', value: '', logic: 'OR' }])}
+          onClick={() => onChange([...conditions, { field: '', operator: 'equals', value: '', logic: 'OR' }])}
           className={`${btnSm} bg-gray-100 text-gray-600 hover:bg-gray-200`}
         >
           + OR
         </button>
       </div>
+    </>
+  )
+}
 
-      <div className="flex gap-2 items-start border-t border-[rgba(124,92,252,0.18)] pt-2">
-        <span className={lbl}>ELSE</span>
-        <select
-          value={elseBranch.type}
-          onChange={(e) => {
-            const next = e.target.value as ElseBranch['type']
-            if (next === 'combine') {
-              setElse({ type: 'combine', blocks: [] })
-            } else {
-              setElse({ type: next, value: '' })
-            }
-          }}
-          className={miniSel}
-          style={{ flex: '0 0 120px' }}
-        >
-          <option value="empty">Empty</option>
-          <option value="static">Static</option>
-          <option value="field">Field</option>
-          <option value="combine">Combine</option>
-        </select>
-        <div className="flex-1 min-w-0">
-          {elseBranch.type === 'static' && (
-            <input
-              type="text"
-              value={elseBranch.value}
-              onChange={(e) => setElse({ ...elseBranch, value: e.target.value })}
-              placeholder='e.g. "out_of_stock"'
-              className={inp}
-            />
-          )}
-          {elseBranch.type === 'field' && (
-            <FieldSelect
-              value={elseBranch.value}
-              onChange={(v) => setElse({ ...elseBranch, value: v })}
-              allFields={allFields}
-            />
-          )}
-          {elseBranch.type === 'empty' && (
-            <span className="text-sm text-gray-400 italic pt-1.5">The field is left empty</span>
-          )}
-          {elseBranch.type === 'combine' && (
-            <CombineChipsEditor
-              blocks={elseBranch.blocks ?? []}
-              allFields={allFields}
-              onChange={(next) => setElse({ type: 'combine', blocks: next })}
-            />
-          )}
-        </div>
+// ── ValueSpecEditor ────────────────────────────────────────────────────────
+
+// The value a branch produces: nothing, a literal, a field, or a combination.
+// Used by every ELSE IF rule and by the final ELSE.
+function ValueSpecEditor({
+  label,
+  value,
+  onChange,
+  allFields,
+}: {
+  label: string
+  value: ValueSpec
+  onChange: (next: ValueSpec) => void
+  allFields: string[]
+}) {
+  return (
+    <div className="flex gap-2 items-start">
+      <span className={condLbl}>{label}</span>
+      <select
+        value={value.type}
+        onChange={(e) => {
+          const next = e.target.value as ValueSpec['type']
+          onChange(next === 'combine' ? { type: 'combine', blocks: [] } : { type: next, value: '' })
+        }}
+        className={miniSel}
+        style={{ flex: '0 0 120px' }}
+      >
+        <option value="empty">Empty</option>
+        <option value="static">Static</option>
+        <option value="field">Field</option>
+        <option value="combine">Combine</option>
+      </select>
+      <div className="flex-1 min-w-0">
+        {value.type === 'static' && (
+          <input
+            type="text"
+            value={value.value}
+            onChange={(e) => onChange({ type: 'static', value: e.target.value })}
+            placeholder='e.g. "out_of_stock"'
+            className={inp}
+          />
+        )}
+        {value.type === 'field' && (
+          <FieldSelect
+            value={value.value}
+            onChange={(v) => onChange({ type: 'field', value: v })}
+            allFields={allFields}
+          />
+        )}
+        {value.type === 'empty' && (
+          <span className="text-sm text-gray-400 italic pt-1.5">The field is left empty</span>
+        )}
+        {value.type === 'combine' && (
+          <CombineChipsEditor
+            blocks={value.blocks ?? []}
+            allFields={allFields}
+            onChange={(next) => onChange({ type: 'combine', blocks: next })}
+          />
+        )}
       </div>
+    </div>
+  )
+}
+
+// ── OnlyIfEditor ───────────────────────────────────────────────────────────
+
+// The full rule stack for one field.
+//
+//   ONLY IF  <conditions>  → the mapping configured above this panel
+//   ELSE IF  <conditions>  → THEN <value>     (any number, in priority order)
+//   ELSE                   → <value>
+//
+// Top-down, first match wins — so moving a rule up makes it win over the ones
+// below it. The order shown here is literally the evaluation order; the
+// matching logic lives in lib/mappingRules.
+function OnlyIfEditor({
+  value,
+  onChange,
+  onRemove,
+  allFields,
+}: {
+  value: OnlyIf
+  onChange: (v: OnlyIf) => void
+  onRemove: () => void
+  allFields: string[]
+}) {
+  const { conditions, else: elseBranch } = value
+  const rules = value.rules ?? []
+
+  const setRules = (next: Rule[]) => onChange({ ...value, rules: next })
+  const patchRule = (i: number, next: Partial<Rule>) => {
+    const list = [...rules]
+    list[i] = { ...list[i], ...next }
+    setRules(list)
+  }
+  const moveRule = (i: number, delta: number) => {
+    const target = i + delta
+    if (target < 0 || target >= rules.length) return
+    const list = [...rules]
+    const [moved] = list.splice(i, 1)
+    list.splice(target, 0, moved)
+    setRules(list)
+  }
+
+  return (
+    <div className="space-y-2 py-2">
+
+      <ConditionRows
+        label="ONLY IF"
+        conditions={conditions}
+        onChange={(next) => onChange({ ...value, conditions: next })}
+        allFields={allFields}
+      />
+
+      {rules.map((rule, i) => (
+        <div
+          key={i}
+          className="space-y-2 pt-2.5 mt-2.5"
+          style={{ borderTop: '1px dashed var(--hairline)' }}
+        >
+          <div className="flex items-start gap-2">
+            <div className="flex-1 min-w-0 space-y-2">
+              <ConditionRows
+                label="ELSE IF"
+                conditions={rule.conditions}
+                onChange={(next) => patchRule(i, { conditions: next })}
+                allFields={allFields}
+              />
+            </div>
+            <div className="flex items-center gap-1 shrink-0 pt-1.5">
+              <button
+                type="button"
+                onClick={() => moveRule(i, -1)}
+                disabled={i === 0}
+                title="Higher priority"
+                aria-label="Move rule up"
+                className={`${btnSm} ${i === 0 ? 'opacity-30 cursor-default' : 'hover:bg-[var(--bg-surface)]'}`}
+              >
+                ↑
+              </button>
+              <button
+                type="button"
+                onClick={() => moveRule(i, 1)}
+                disabled={i === rules.length - 1}
+                title="Lower priority"
+                aria-label="Move rule down"
+                className={`${btnSm} ${i === rules.length - 1 ? 'opacity-30 cursor-default' : 'hover:bg-[var(--bg-surface)]'}`}
+              >
+                ↓
+              </button>
+              <button
+                type="button"
+                onClick={() => setRules(rules.filter((_, j) => j !== i))}
+                title="Remove rule"
+                aria-label="Remove rule"
+                className={`${btnSm} hover:bg-red-50 hover:text-red-600`}
+              >
+                ×
+              </button>
+            </div>
+          </div>
+          <ValueSpecEditor
+            label="THEN"
+            value={rule.value}
+            onChange={(next) => patchRule(i, { value: next })}
+            allFields={allFields}
+          />
+        </div>
+      ))}
+
+      <div className="flex pl-16 pt-0.5">
+        <button
+          type="button"
+          onClick={() =>
+            setRules([
+              ...rules,
+              {
+                conditions: [{ field: '', operator: 'equals', value: '', logic: null }],
+                value: { type: 'static', value: '' },
+              },
+            ])
+          }
+          className={`${btnSm} bg-[rgba(124,92,252,0.08)] text-[var(--accent-purple)] hover:bg-[rgba(124,92,252,0.14)]`}
+        >
+          + Else if
+        </button>
+      </div>
+
+      <div className="border-t border-[rgba(124,92,252,0.18)] pt-2">
+        <ValueSpecEditor
+          label="ELSE"
+          value={elseBranch}
+          onChange={(next) => onChange({ ...value, else: next })}
+          allFields={allFields}
+        />
+      </div>
+
+      {rules.length > 0 && (
+        <p className="pl-16" style={{ fontSize: '11px', color: 'var(--ink-muted)' }}>
+          Evaluated top-down — the first rule that matches wins.
+        </p>
+      )}
 
       <div className="flex justify-end pt-1">
         <button
@@ -1400,6 +1503,391 @@ function OnlyIfEditor({
         </button>
       </div>
 
+    </div>
+  )
+}
+
+// ── PreviewValueText ───────────────────────────────────────────────────────
+
+// Renders one resolved value the way it will actually be written to the feed.
+//
+// Two things matter here and both used to be wrong for `description`:
+//
+//  * Line breaks are REAL content. The value arrives with the paragraph breaks
+//    stripHtml preserved, so it is rendered `pre-wrap` rather than collapsed
+//    into one running sentence.
+//  * The whole value must be reachable. A description is an order of magnitude
+//    longer than any other field, so a fixed two-line clamp hid most of it with
+//    no way to see the rest. Long values collapse to a few lines and expand in
+//    place; short ones render untouched with no affordance at all.
+
+// Roughly "longer than the collapsed box can show". Only a heuristic — it
+// decides whether to OFFER the toggle, never whether text is reachable.
+function isLongValue(value: string): boolean {
+  return value.length > 160 || value.split('\n').length > 3
+}
+
+// A value that is still a raw Shopify global ID.
+//
+// This is what a metaobject reference looks like when it was never translated
+// to its display value — the feed would carry "gid://shopify/Metaobject/12345"
+// where "Piemonte" belongs. It is never a legitimate feed value, so the preview
+// names it instead of rendering it in the same purple as a real value and
+// letting it reach Google unnoticed.
+const SHOPIFY_GID_RE = /gid:\/\/shopify\/[A-Za-z]+\/\d+/
+
+function UnresolvedReference({ value }: { value: string }) {
+  return (
+    <span
+      title={
+        'Unresolved Shopify reference. The metaobject was not translated to its value ' +
+        'during sync — usually the access token is missing the read_metaobjects scope. ' +
+        'Check the project connection, then sync the feed again.'
+      }
+      style={{ display: 'inline-flex', alignItems: 'baseline', gap: '6px', flexWrap: 'wrap' }}
+    >
+      <span
+        className="ff-badge"
+        style={{
+          background: 'rgba(232, 163, 23, 0.14)',
+          color: '#8a6100',
+          border: '1px solid rgba(232, 163, 23, 0.35)',
+          whiteSpace: 'nowrap',
+        }}
+      >
+        Unresolved reference
+      </span>
+      <span
+        className="ff-mono"
+        style={{ fontSize: '10px', color: 'var(--ink-muted)', overflowWrap: 'anywhere' }}
+      >
+        {value}
+      </span>
+    </span>
+  )
+}
+
+function PreviewValueText({
+  value,
+  align = 'left',
+}: {
+  value: string
+  // The sidebar's value column is right-aligned for short scalar values; long
+  // multi-line text always reads left-aligned regardless.
+  align?: 'left' | 'right'
+}) {
+  const [expanded, setExpanded] = useState(false)
+  const long = isLongValue(value)
+  const leftAlign = long || align === 'left'
+
+  if (SHOPIFY_GID_RE.test(value)) {
+    return (
+      <div style={{ textAlign: 'left' }}>
+        <UnresolvedReference value={value} />
+      </div>
+    )
+  }
+
+  return (
+    <div style={{ textAlign: leftAlign ? 'left' : 'right' }}>
+      <span
+        style={{
+          display: 'block',
+          whiteSpace: 'pre-wrap',
+          overflowWrap: 'anywhere',
+          // 1.55 line-height × 4 lines. Collapsed height is a soft preview, not
+          // a limit — the toggle below always reveals the rest.
+          maxHeight: long && !expanded ? '6.2em' : undefined,
+          overflow: long && !expanded ? 'hidden' : undefined,
+          lineHeight: 1.55,
+        }}
+      >
+        {value}
+      </span>
+      {long && (
+        <button
+          type="button"
+          onClick={() => setExpanded((v) => !v)}
+          style={{
+            marginTop: '2px',
+            fontSize: '10px',
+            fontWeight: 500,
+            color: 'var(--accent-purple)',
+            background: 'transparent',
+            border: 'none',
+            padding: 0,
+            cursor: 'pointer',
+          }}
+        >
+          {expanded ? 'Show less' : `Show all (${value.length} chars)`}
+        </button>
+      )}
+    </div>
+  )
+}
+
+// ── TransformsEditor (the filter layer) ────────────────────────────────────
+
+// Filters stack ON TOP of whatever the mapping above them produced, in order.
+// That is the whole point: "Strip HTML" is a main function, but you also want
+// to run a Find & Replace over the plain text it produced — which the main
+// function alone can't express, because a field has exactly one of those.
+//
+// Runs last, on whichever rule branch won, so a filter is written once and
+// applies to every branch. See lib/mappingTransforms.
+
+const TRANSFORM_ORDER: TransformType[] = [
+  'STRIP_HTML',
+  'FIND_REPLACE',
+  'TRUNCATE',
+  'PREFIX_SUFFIX',
+]
+
+function newTransform(type: TransformType): Transform {
+  switch (type) {
+    case 'FIND_REPLACE': return { type, pairs: [{ find: '', replace: '' }] }
+    case 'TRUNCATE': return { type, maxChars: 500 }
+    case 'PREFIX_SUFFIX': return { type, prefix: '', suffix: '' }
+    default: return { type }
+  }
+}
+
+function TransformBody({
+  transform,
+  onChange,
+}: {
+  transform: Transform
+  onChange: (next: Transform) => void
+}) {
+  switch (transform.type) {
+    case 'STRIP_HTML':
+      return (
+        <span className="text-sm text-gray-400 italic pt-1.5">
+          Removes HTML tags, keeps paragraph breaks
+        </span>
+      )
+
+    case 'FIND_REPLACE': {
+      const pairs = transform.pairs?.length ? transform.pairs : [{ find: '', replace: '' }]
+      const setPairs = (next: { find: string; replace: string }[]) =>
+        onChange({ ...transform, pairs: next })
+      return (
+        <div className="space-y-2">
+          {pairs.map((pair, i) => (
+            <div key={i} className="flex gap-2 items-center">
+              <input
+                type="text"
+                value={pair.find}
+                onChange={(e) => {
+                  const next = [...pairs]
+                  next[i] = { ...pair, find: e.target.value }
+                  setPairs(next)
+                }}
+                placeholder="Find..."
+                className={inpSm}
+              />
+              <span className="text-gray-400 text-sm shrink-0">→</span>
+              <input
+                type="text"
+                value={pair.replace}
+                onChange={(e) => {
+                  const next = [...pairs]
+                  next[i] = { ...pair, replace: e.target.value }
+                  setPairs(next)
+                }}
+                placeholder="Replace with..."
+                className={inpSm}
+              />
+              {pairs.length > 1 && (
+                <button
+                  type="button"
+                  onClick={() => setPairs(pairs.filter((_, j) => j !== i))}
+                  className={`${btnSm} bg-gray-100 text-gray-500 hover:bg-gray-200 shrink-0`}
+                >
+                  ×
+                </button>
+              )}
+            </div>
+          ))}
+          <button
+            type="button"
+            onClick={() => setPairs([...pairs, { find: '', replace: '' }])}
+            className={`${btnSm} bg-[rgba(124,92,252,0.08)] text-[var(--accent-purple)] hover:bg-[rgba(124,92,252,0.14)]`}
+          >
+            + Add pair
+          </button>
+        </div>
+      )
+    }
+
+    case 'TRUNCATE':
+      return (
+        <div className="flex gap-2 items-center">
+          <input
+            type="number"
+            value={Number(transform.maxChars ?? 500)}
+            onChange={(e) => onChange({ ...transform, maxChars: Number(e.target.value) })}
+            min={1}
+            className="w-24 px-3 py-2 rounded-lg border border-gray-200 text-sm text-center focus:outline-none focus:ring-2 focus:ring-[rgba(124,92,252,0.2)] shrink-0"
+          />
+          <span className="text-sm text-gray-500 shrink-0">chars</span>
+        </div>
+      )
+
+    case 'PREFIX_SUFFIX':
+      return (
+        <div className="grid grid-cols-2 gap-2">
+          <input
+            type="text"
+            value={transform.prefix ?? ''}
+            onChange={(e) => onChange({ ...transform, prefix: e.target.value })}
+            placeholder="Prefix"
+            className={inp}
+          />
+          <input
+            type="text"
+            value={transform.suffix ?? ''}
+            onChange={(e) => onChange({ ...transform, suffix: e.target.value })}
+            placeholder="Suffix"
+            className={inp}
+          />
+        </div>
+      )
+
+    default:
+      return null
+  }
+}
+
+function TransformsEditor({
+  transforms,
+  onChange,
+  onRemove,
+}: {
+  transforms: Transform[]
+  onChange: (next: Transform[]) => void
+  onRemove: () => void
+}) {
+  const [adding, setAdding] = useState(false)
+
+  const patch = (i: number, next: Transform) => {
+    const list = [...transforms]
+    list[i] = next
+    onChange(list)
+  }
+  const move = (i: number, delta: number) => {
+    const target = i + delta
+    if (target < 0 || target >= transforms.length) return
+    const list = [...transforms]
+    const [moved] = list.splice(i, 1)
+    list.splice(target, 0, moved)
+    onChange(list)
+  }
+
+  return (
+    <div className="space-y-2 py-2">
+      {transforms.length === 0 && (
+        <p style={{ fontSize: '11px', color: 'var(--ink-muted)' }}>
+          No filters yet — add one to run it over the mapped value.
+        </p>
+      )}
+
+      {transforms.map((t, i) => (
+        <div key={i} className="flex gap-2 items-start">
+          <span className={condLbl}>THEN</span>
+          <div
+            className="shrink-0 pt-2"
+            style={{ width: '128px', fontSize: '12px', color: 'var(--ink)' }}
+          >
+            {TRANSFORM_LABELS[t.type] ?? t.type}
+          </div>
+          <div className="flex-1 min-w-0">
+            <TransformBody transform={t} onChange={(next) => patch(i, next)} />
+          </div>
+          <div className="flex items-center gap-1 shrink-0 pt-1.5">
+            <button
+              type="button"
+              onClick={() => move(i, -1)}
+              disabled={i === 0}
+              title="Run earlier"
+              aria-label="Move filter up"
+              className={`${btnSm} ${i === 0 ? 'opacity-30 cursor-default' : 'hover:bg-[var(--bg-surface)]'}`}
+            >
+              ↑
+            </button>
+            <button
+              type="button"
+              onClick={() => move(i, 1)}
+              disabled={i === transforms.length - 1}
+              title="Run later"
+              aria-label="Move filter down"
+              className={`${btnSm} ${i === transforms.length - 1 ? 'opacity-30 cursor-default' : 'hover:bg-[var(--bg-surface)]'}`}
+            >
+              ↓
+            </button>
+            <button
+              type="button"
+              onClick={() => onChange(transforms.filter((_, j) => j !== i))}
+              title="Remove filter"
+              aria-label="Remove filter"
+              className={`${btnSm} hover:bg-red-50 hover:text-red-600`}
+            >
+              ×
+            </button>
+          </div>
+        </div>
+      ))}
+
+      <div className="flex gap-2 items-center" style={{ paddingLeft: '72px' }}>
+        {adding ? (
+          <>
+            {TRANSFORM_ORDER.map((type) => (
+              <button
+                key={type}
+                type="button"
+                onClick={() => {
+                  onChange([...transforms, newTransform(type)])
+                  setAdding(false)
+                }}
+                className={`${btnSm} hover:bg-[var(--bg-surface)]`}
+              >
+                {TRANSFORM_LABELS[type]}
+              </button>
+            ))}
+            <button
+              type="button"
+              onClick={() => setAdding(false)}
+              className="text-xs text-gray-400 hover:text-gray-600 transition-colors"
+            >
+              Cancel
+            </button>
+          </>
+        ) : (
+          <button
+            type="button"
+            onClick={() => setAdding(true)}
+            className={`${btnSm} bg-[rgba(124,92,252,0.08)] text-[var(--accent-purple)] hover:bg-[rgba(124,92,252,0.14)]`}
+          >
+            + Add filter
+          </button>
+        )}
+      </div>
+
+      {transforms.length > 1 && (
+        <p style={{ fontSize: '11px', color: 'var(--ink-muted)', paddingLeft: '72px' }}>
+          Applied top-down, each one to the result of the one above.
+        </p>
+      )}
+
+      <div className="flex justify-end pt-1">
+        <button
+          type="button"
+          onClick={onRemove}
+          className="text-xs text-gray-400 hover:text-red-500 transition-colors"
+        >
+          Remove filters
+        </button>
+      </div>
     </div>
   )
 }
@@ -1436,6 +1924,9 @@ function FieldRow({
   const [showOnlyIf, setShowOnlyIf] = useState(!!onlyIf?.conditions?.length)
   const hasConditions = onlyIf?.conditions?.some((c) => c.field) ?? false
 
+  const transforms = configTransforms(state.config)
+  const [showTransforms, setShowTransforms] = useState(transforms.length > 0)
+
   function openOnlyIf() {
     if (!onlyIf) {
       onConfigChange({
@@ -1450,9 +1941,13 @@ function FieldRow({
   }
 
   function removeOnlyIf() {
-    const { onlyIf: _removed, ...rest } = state.config as Record<string, unknown>
-    onConfigChange(rest)
+    onConfigChange(withoutKey(state.config, 'onlyIf'))
     setShowOnlyIf(false)
+  }
+
+  function removeTransforms() {
+    onConfigChange(withoutKey(state.config, 'transforms'))
+    setShowTransforms(false)
   }
 
   return (
@@ -1552,6 +2047,22 @@ function FieldRow({
           <div className="flex items-start gap-1.5 shrink-0 mt-0.5">
             <button
               type="button"
+              // Pure show/hide. Unlike "Only if", this button never deletes:
+              // the badge is a count, and losing two configured filters to a
+              // mis-click on the thing that reports them would be a trap.
+              // Deleting is the explicit "Remove filters" link inside the panel.
+              onClick={() => setShowTransforms((v) => !v)}
+              title="Stack extra operations on top of this mapping"
+              className={`px-2.5 py-2 rounded-lg text-xs font-medium transition-colors ${
+                transforms.length > 0
+                  ? 'bg-[rgba(124,92,252,0.14)] text-[#5b3fd6] hover:bg-[rgba(124,92,252,0.2)]'
+                  : 'bg-gray-100 text-gray-500 hover:bg-gray-200'
+              }`}
+            >
+              {transforms.length > 0 ? `Filters · ${transforms.length}` : '+ Filter'}
+            </button>
+            <button
+              type="button"
               onClick={showOnlyIf ? removeOnlyIf : openOnlyIf}
               className={`px-2.5 py-2 rounded-lg text-xs font-medium transition-colors ${
                 hasConditions
@@ -1581,8 +2092,8 @@ function FieldRow({
         <div className="flex gap-4 mt-1.5">
           <div className="w-52 shrink-0" />
           <div className="w-40 shrink-0" />
-          <div className="flex-1 min-w-0 flex items-center gap-1.5">
-            {previewValue === '__AI__' ? (
+          <div className="flex-1 min-w-0 flex items-start gap-1.5">
+            {previewValue === AI_PLACEHOLDER ? (
               <span className="inline-flex items-center px-1.5 py-0.5 rounded text-xs bg-[rgba(124,92,252,0.14)] text-[#5b3fd6] font-medium">
                 AI – cannot be previewed
               </span>
@@ -1590,11 +2101,32 @@ function FieldRow({
               <span className="text-xs text-red-500 font-medium">Missing</span>
             ) : (
               <>
-                <span className="text-xs text-gray-300 shrink-0">→</span>
-                <span className="text-xs text-[var(--accent-purple)] break-all line-clamp-2">{previewValue}</span>
+                <span className="text-xs text-gray-300 shrink-0 pt-px">→</span>
+                <div className="flex-1 min-w-0 text-xs text-[var(--accent-purple)]">
+                  <PreviewValueText value={previewValue} />
+                </div>
               </>
             )}
           </div>
+        </div>
+      )}
+
+      {showTransforms && state.type !== '' && (
+        <div
+          className="mt-2.5 ml-52"
+          style={{
+            background: 'var(--bg-surface)',
+            border: '1px solid var(--hairline)',
+            borderLeft: '2px solid var(--accent-purple)',
+            borderRadius: '8px',
+            padding: '2px 14px 8px',
+          }}
+        >
+          <TransformsEditor
+            transforms={transforms}
+            onChange={(next) => onConfigChange({ ...state.config, transforms: next })}
+            onRemove={removeTransforms}
+          />
         </div>
       )}
 
@@ -1650,15 +2182,8 @@ function collectUsedFields(state: FieldState): string[] {
     }
   }
 
-  const onlyIf = cfg.onlyIf as OnlyIf | undefined
-  if (onlyIf) {
-    for (const c of onlyIf.conditions) {
-      if (c.field) used.push(c.field)
-    }
-    if (onlyIf.else.type === 'field' && onlyIf.else.value) {
-      used.push(onlyIf.else.value)
-    }
-  }
+  // Conditions, ELSE IF rules and the fallback all reference fields too.
+  used.push(...collectRuleFields(cfg.onlyIf as OnlyIf | undefined))
 
   return used
 }
@@ -2790,6 +3315,17 @@ function FieldPreviewSidebar({
     mappingLabel = `STATIC → "${(state.config.value as string) ?? ''}"`
   else if (state.type) mappingLabel = state.type
 
+  // Spell out the layers stacked on the mapping, so the values below aren't
+  // unexplained — they are what the rules and filters produced, not the raw field.
+  const sidebarRules = (state.config.onlyIf as OnlyIf | undefined)?.rules?.length ?? 0
+  const sidebarTransforms = configTransforms(state.config).length
+  const layerNotes: string[] = []
+  if (sidebarRules > 0) layerNotes.push(`${sidebarRules + 1} rules`)
+  if (sidebarTransforms > 0) {
+    layerNotes.push(`${sidebarTransforms} filter${sidebarTransforms > 1 ? 's' : ''}`)
+  }
+  if (layerNotes.length > 0) mappingLabel += ` · ${layerNotes.join(' · ')}`
+
   const displayField = field.startsWith('custom:') ? field.slice('custom:'.length) : field
 
   const activeFilterEntries = Object.entries(filters).filter(([, v]) => v) as [
@@ -2996,7 +3532,7 @@ function FieldPreviewSidebar({
                   className="px-3.5 py-2.5 flex items-start gap-3"
                   style={{ borderBottom: '1px solid var(--hairline)' }}
                 >
-                  <div className="flex-1 min-w-0">
+                  <div className="min-w-0" style={{ flex: '1 1 45%' }}>
                     <p
                       className="truncate"
                       style={{ fontSize: '12px', color: 'var(--ink)' }}
@@ -3012,15 +3548,18 @@ function FieldPreviewSidebar({
                     </p>
                   </div>
                   <div
-                    className="ff-mono shrink-0 text-right"
+                    className="ff-mono"
                     style={{
                       fontSize: '11px',
-                      maxWidth: '360px',
-                      wordBreak: 'break-word',
+                      // Long values (descriptions) need room to breathe; the
+                      // basis keeps short scalar values in a tidy right column.
+                      flex: '1 1 55%',
+                      minWidth: 0,
                     }}
                   >
                     {value === '' ? (
                       <span
+                        className="block text-right"
                         style={{
                           color: 'var(--ink-muted)',
                           fontStyle: 'italic',
@@ -3028,10 +3567,12 @@ function FieldPreviewSidebar({
                       >
                         —
                       </span>
-                    ) : value === '__AI__' ? (
+                    ) : value === AI_PLACEHOLDER ? (
                       <span className="ff-badge ff-badge-accent">AI</span>
                     ) : (
-                      <span style={{ color: 'var(--accent-purple)' }}>{value}</span>
+                      <div style={{ color: 'var(--accent-purple)' }}>
+                        <PreviewValueText value={value} align="right" />
+                      </div>
                     )}
                   </div>
                 </div>
@@ -3480,8 +4021,13 @@ export default function MappingClient({
   function updateType(field: string, type: MappingType) {
     setMappings((prev) => {
       const existing = prev[field]
-      const onlyIf = existing?.config?.onlyIf
-      return { ...prev, [field]: { type, config: onlyIf ? { onlyIf } : {} } }
+      // The rule stack and the filter layer sit ON TOP of the mapping type, so
+      // they survive a change of type — only the type's own config is reset.
+      const carried: Config = {}
+      if (existing?.config?.onlyIf) carried.onlyIf = existing.config.onlyIf
+      const transforms = configTransforms(existing?.config)
+      if (transforms.length > 0) carried.transforms = transforms
+      return { ...prev, [field]: { type, config: carried } }
     })
     if (status !== 'idle') setStatus('idle')
   }

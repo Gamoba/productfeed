@@ -1,13 +1,14 @@
 'use client'
 
 import Link from 'next/link'
-import { useState } from 'react'
+import { useEffect, useState } from 'react'
 import { FeedListClient } from '@/app/dashboard/FeedListClient'
 import {
   ProjectConnectModal,
   projectStatusBadge,
   type ConnectResult,
 } from '@/app/components/ProjectConnectModal'
+import type { MissingScope } from '@/lib/shopifyScopes'
 
 export function ProjectHomeClient({
   projectId,
@@ -26,16 +27,33 @@ export function ProjectHomeClient({
   const [status, setStatus] = useState(initialStatus)
   const [lastVerifiedAt, setLastVerifiedAt] = useState(initialVerifiedAt)
   const [connectOpen, setConnectOpen] = useState(false)
-  const [readMarketsMissing, setReadMarketsMissing] = useState(false)
+  const [missing, setMissing] = useState<MissingScope[]>([])
 
   const connected = status === 'connected'
   const badge = projectStatusBadge(status)
+
+  // Scopes are read live rather than stored (see GET on the connect route), so
+  // the warning survives a reload instead of only appearing in the seconds
+  // after connecting. Advisory: any failure leaves the list empty and silent.
+  useEffect(() => {
+    if (!connected) return
+    let cancelled = false
+    fetch(`/api/projects/${projectId}/connect`)
+      .then((r) => r.json())
+      .then((data: { missingScopes?: MissingScope[] }) => {
+        if (!cancelled) setMissing(data.missingScopes ?? [])
+      })
+      .catch(() => {})
+    return () => {
+      cancelled = true
+    }
+  }, [projectId, connected])
 
   function handleConnected(result: ConnectResult) {
     setStatus(result.connection_status)
     setLastVerifiedAt(result.last_verified_at)
     setShopUrl(result.shop)
-    setReadMarketsMissing(result.readMarketsMissing)
+    setMissing(result.missingScopes)
   }
 
   const statusDot =
@@ -110,12 +128,13 @@ export function ProjectHomeClient({
               </ConnNotice>
             )}
 
-            {connected && readMarketsMissing && (
-              <ConnNotice>
-                Connected, but the app is missing the <strong>read_markets</strong> scope. Product sync
-                works, but markets won’t load in the feed wizard.
-              </ConnNotice>
-            )}
+            {connected &&
+              missing.map((s) => (
+                <ConnNotice key={s.handle}>
+                  {s.required ? 'Connected, but missing the required scope ' : 'Connected, but missing the '}
+                  <strong>{s.handle}</strong> scope. {s.impact}
+                </ConnNotice>
+              ))}
           </div>
         </div>
 

@@ -112,8 +112,24 @@ export type ShopifyCollection = {
   admin_graphql_api_id: string
 }
 
+// What happened when metaobject references were translated from GIDs to their
+// display values. Carried out of the fetch so the sync can TELL the user when a
+// feed is about to be built on raw Shopify IDs, instead of silently emitting
+// "gid://shopify/Metaobject/123" where a region name belongs.
+export type MetaobjectSummary = {
+  // Distinct GIDs found across the fetched products.
+  total: number
+  // How many of those we got a display value for.
+  resolved: number
+  // Shopify refused the lookup outright: the token has no `read_metaobjects`
+  // scope. Nothing is resolvable until the token is re-issued, so this is a
+  // different (and fixable) problem from a handful of stragglers.
+  accessDenied: boolean
+}
+
 export type ShopifyData = {
   products: ShopifyProduct[]
+  metaobjects: MetaobjectSummary
 }
 
 // ── Shopify Markets types ──────────────────────────────────────────────────────
@@ -285,6 +301,7 @@ export type ShopifyClient = {
     country?: string
   ) => Promise<ShopifyData>
   fetchMarkets: () => Promise<ShopifyMarket[]>
+  fetchGrantedScopes: () => Promise<string[]>
   probeShopifyAccess: () => Promise<{
     httpStatus: number
     grantedScopesHeader: string | null
@@ -515,18 +532,30 @@ export function createShopifyClient({ shopUrl, accessToken }: ShopifyCredentials
     return map
   }
 
-  // Parse a list.metaobject_reference value (a JSON array of GIDs) into a GID
+  const METAOBJECT_GID = 'gid://shopify/Metaobject/'
+
+  // Parse a metaobject-reference LIST value (a JSON array of GIDs) into a GID
   // array. Returns [] if the value isn't a parseable array of Metaobject GIDs.
   function parseGidList(value: string): string[] {
     try {
       const arr = JSON.parse(value)
       if (!Array.isArray(arr)) return []
-      return arr.filter(
-        (g): g is string => typeof g === 'string' && g.startsWith('gid://shopify/Metaobject/')
-      )
+      return arr.filter((g): g is string => typeof g === 'string' && g.startsWith(METAOBJECT_GID))
     } catch {
       return []
     }
+  }
+
+  // Whether a metafield value is a single Metaobject GID.
+  //
+  // Deliberately checked on the VALUE, not on the declared metafield type. A
+  // metaobject reference reaches us under several type names —
+  // `metaobject_reference`, `mixed_reference`, and their `list.` variants — and
+  // gating on an allow-list of type strings silently leaks raw GIDs into the
+  // feed for every type not on it. The GID prefix is unambiguous, so the value
+  // is the reliable signal.
+  function isMetaobjectGid(value: string | null | undefined): value is string {
+    return typeof value === 'string' && value.startsWith(METAOBJECT_GID) && !/\s/.test(value)
   }
 
   // Picks the human-readable value of a resolved Metaobject node. displayName
@@ -546,65 +575,100 @@ export function createShopifyClient({ shopUrl, accessToken }: ShopifyCredentials
     return first?.value?.trim() ?? null
   }
 
-  // Resolves metaobject_reference / list.metaobject_reference metafield values
-  // from opaque GIDs (gid://shopify/Metaobject/...) to their real display
-  // values ("Pomerol", "Merlot"), in place. Each unique GID is fetched once and
-  // cached, since many products share the same region/grape/country. READ-ONLY:
-  // a single GraphQL `query`, no mutations. Unresolvable GIDs are left as-is so
-  // no data is silently dropped.
-  async function resolveMetaobjectReferences(products: ShopifyProduct[]): Promise<void> {
-    const REF = 'metaobject_reference'
-    const LIST_REF = 'list.metaobject_reference'
+  type MetaobjectNodesResponse = {
+    nodes: Array<{
+      id: string
+      displayName: string | null
+      fields: Array<{ key: string; value: string | null }>
+    } | null>
+  }
 
-    // 1. Collect unique GIDs across all products.
+  // Looks up a batch of Metaobject GIDs, writing id → display value into `out`.
+  //
+  // Batches are small on purpose. `nodes(ids:)` is billed per returned object
+  // plus its selections, and Shopify rejects any single query costing more than
+  // 1000 points outright — that rejection is NOT a THROTTLED error, so
+  // shopifyGraphQL throws instead of backing off and retrying. At the previous
+  // batch size of 250 a shop with many metaobjects could blow the cost ceiling
+  // and lose the whole batch to one caught error, which is exactly how a feed
+  // ends up showing `gid://shopify/Metaobject/123` where a region name belongs.
+  //
+  // A failed batch is split in half and retried rather than dropped, so a single
+  // unlucky id can't take its 49 neighbours down with it — EXCEPT when the token
+  // has no `read_metaobjects` scope. That failure is total and permanent, so
+  // splitting would just turn one denied request into fifty. `denied` latches the
+  // first time we see it and every later batch short-circuits.
+  async function resolveMetaobjectBatch(
+    ids: string[],
+    out: Map<string, string>,
+    state: { denied: boolean }
+  ): Promise<number> {
+    if (ids.length === 0 || state.denied) return 0
+    try {
+      const data = await shopifyGraphQL<MetaobjectNodesResponse>(
+        `query ResolveMetaobjects($ids: [ID!]!) {
+          nodes(ids: $ids) {
+            ... on Metaobject {
+              id
+              displayName
+              fields { key value }
+            }
+          }
+        }`,
+        { ids }
+      )
+      for (const node of data.nodes) {
+        if (!node) continue
+        const value = pickMetaobjectValue(node)
+        if (value) out.set(node.id, value)
+      }
+      return 0
+    } catch (err) {
+      const message = err instanceof Error ? err.message : String(err)
+      if (/read_metaobjects|ACCESS_DENIED/i.test(message)) {
+        state.denied = true
+        return ids.length
+      }
+      if (ids.length === 1) {
+        console.error(`Shopify: metaobject ${ids[0]} kunne ikke slås op — ${message}`)
+        return 1
+      }
+      const mid = Math.floor(ids.length / 2)
+      return (
+        (await resolveMetaobjectBatch(ids.slice(0, mid), out, state)) +
+        (await resolveMetaobjectBatch(ids.slice(mid), out, state))
+      )
+    }
+  }
+
+  // Resolves metaobject-reference metafield values from opaque GIDs
+  // (gid://shopify/Metaobject/...) to their real display values ("Pomerol",
+  // "Merlot"), in place. Each unique GID is fetched once and cached, since many
+  // products share the same region/grape/country. READ-ONLY: a single GraphQL
+  // `query`, no mutations. Unresolvable GIDs are left as-is so no data is
+  // silently dropped.
+  async function resolveMetaobjectReferences(
+    products: ShopifyProduct[]
+  ): Promise<MetaobjectSummary> {
+    // 1. Collect unique GIDs across all products, by value shape (see
+    //    isMetaobjectGid on why not by metafield type).
     const gidSet = new Set<string>()
     for (const p of products) {
       for (const mf of p.metafields) {
-        if (mf.type === REF && mf.value?.startsWith('gid://shopify/Metaobject/')) {
-          gidSet.add(mf.value)
-        } else if (mf.type === LIST_REF) {
-          for (const g of parseGidList(mf.value)) gidSet.add(g)
-        }
+        if (isMetaobjectGid(mf.value)) gidSet.add(mf.value)
+        else for (const g of parseGidList(mf.value)) gidSet.add(g)
       }
     }
-    if (gidSet.size === 0) return
+    if (gidSet.size === 0) return { total: 0, resolved: 0, accessDenied: false }
 
     // 2. Batch-resolve unique GIDs (cached in `resolved`).
-    type MetaobjectNodesResponse = {
-      nodes: Array<{
-        id: string
-        displayName: string | null
-        fields: Array<{ key: string; value: string | null }>
-      } | null>
-    }
     const resolved = new Map<string, string>()
     const ids = [...gidSet]
-    const BATCH = 250
+    const BATCH = 50
+    const state = { denied: false }
+    let hardFailures = 0
     for (let i = 0; i < ids.length; i += BATCH) {
-      const batch = ids.slice(i, i + BATCH)
-      try {
-        const data = await shopifyGraphQL<MetaobjectNodesResponse>(
-          `query ResolveMetaobjects($ids: [ID!]!) {
-            nodes(ids: $ids) {
-              ... on Metaobject {
-                id
-                displayName
-                fields { key value }
-              }
-            }
-          }`,
-          { ids: batch }
-        )
-        for (const node of data.nodes) {
-          if (!node) continue
-          const value = pickMetaobjectValue(node)
-          if (value) resolved.set(node.id, value)
-        }
-      } catch (err) {
-        console.error(
-          `Shopify: metaobject-batch ${Math.floor(i / BATCH) + 1} fejlede — ${err}`
-        )
-      }
+      hardFailures += await resolveMetaobjectBatch(ids.slice(i, i + BATCH), resolved, state)
     }
 
     // 3. Rewrite values in place. Single → resolved text; list → resolved
@@ -614,7 +678,7 @@ export function createShopifyClient({ shopUrl, accessToken }: ShopifyCredentials
     let unresolved = 0
     for (const p of products) {
       for (const mf of p.metafields) {
-        if (mf.type === REF && mf.value?.startsWith('gid://shopify/Metaobject/')) {
+        if (isMetaobjectGid(mf.value)) {
           const v = resolved.get(mf.value)
           if (v) {
             mf.value = v
@@ -622,21 +686,32 @@ export function createShopifyClient({ shopUrl, accessToken }: ShopifyCredentials
           } else {
             unresolved++
           }
-        } else if (mf.type === LIST_REF) {
-          const gids = parseGidList(mf.value)
-          if (!gids.length) continue
-          const vals = gids.map((g) => resolved.get(g)).filter((v): v is string => !!v)
-          unresolved += gids.length - vals.length
-          if (vals.length) {
-            mf.value = vals.join(', ')
-            rewritten++
-          }
+          continue
+        }
+        const gids = parseGidList(mf.value)
+        if (!gids.length) continue
+        const vals = gids.map((g) => resolved.get(g)).filter((v): v is string => !!v)
+        unresolved += gids.length - vals.length
+        if (vals.length) {
+          mf.value = vals.join(', ')
+          rewritten++
         }
       }
     }
     console.log(
       `[shopify] metaobjects resolved — ${resolved.size}/${gidSet.size} unikke GID'er, ${rewritten} metafield-værdier omskrevet${unresolved ? `, ${unresolved} uløste GID'er bevaret/sprunget` : ''}`
     )
+    if (resolved.size < gidSet.size) {
+      // Say it out loud — the symptom (a Shopify ID where a name belongs) is
+      // otherwise a mystery to whoever looks at the feed.
+      console.warn(
+        `[shopify] ${gidSet.size - resolved.size} metaobject-GID'er kunne ikke oversættes` +
+          `${hardFailures ? ` (${hardFailures} opslag fejlede)` : ''}` +
+          `${state.denied ? ' — tokenet mangler scopet "read_metaobjects"' : ''}`
+      )
+    }
+
+    return { total: gidSet.size, resolved: resolved.size, accessDenied: state.denied }
   }
 
   async function fetchProductsWithAllData(): Promise<ShopifyData> {
@@ -673,11 +748,11 @@ export function createShopifyClient({ shopUrl, accessToken }: ShopifyCredentials
     // Resolve metaobject-reference metafields (region, grape, country, …) from
     // opaque GIDs to real values, in place. One cached pass; read-only.
     const tResolveStart = Date.now()
-    await resolveMetaobjectReferences(enrichedProducts)
+    const metaobjects = await resolveMetaobjectReferences(enrichedProducts)
     console.log(`[shopify] metaobject resolution: ${Date.now() - tResolveStart}ms`)
 
     console.log(`[shopify] fetchProductsWithAllData total: ${Date.now() - t0}ms`)
-    return { products: enrichedProducts }
+    return { products: enrichedProducts, metaobjects }
   }
 
   async function fetchMarkets(): Promise<ShopifyMarket[]> {
@@ -801,6 +876,18 @@ export function createShopifyClient({ shopUrl, accessToken }: ShopifyCredentials
         countryCodes,
       }
     })
+  }
+
+  // The scopes actually granted to this access token.
+  //
+  // Split out from probeShopifyAccess because that one also introspects the
+  // Market schema — fine once, at connect time, but far too heavy for a page
+  // that only wants to know whether a scope is missing.
+  async function fetchGrantedScopes(): Promise<string[]> {
+    const data = await shopifyGraphQL<{
+      currentAppInstallation?: { accessScopes?: Array<{ handle: string }> }
+    }>('{ currentAppInstallation { accessScopes { handle } } }')
+    return (data.currentAppInstallation?.accessScopes ?? []).map((s) => s.handle)
   }
 
   // Probe to verify the access token works and to read which scopes have been granted.
@@ -961,7 +1048,7 @@ export function createShopifyClient({ shopUrl, accessToken }: ShopifyCredentials
   ): Promise<ShopifyData> {
     const t0 = Date.now()
 
-    const { products } = await fetchProductsWithAllData()
+    const { products, metaobjects } = await fetchProductsWithAllData()
     const tFetch = Date.now()
 
     const productIds = products.map((p) => p.id)
@@ -1011,13 +1098,14 @@ export function createShopifyClient({ shopUrl, accessToken }: ShopifyCredentials
           })
 
     console.log(`[shopify] fetchProductsLocalized total: ${Date.now() - t0}ms`)
-    return { products: finalProducts }
+    return { products: finalProducts, metaobjects }
   }
 
   return {
     fetchProductsWithAllData,
     fetchProductsLocalized,
     fetchMarkets,
+    fetchGrantedScopes,
     probeShopifyAccess,
   }
 }

@@ -238,6 +238,26 @@ export function ProductsClient({
           )}
         </header>
 
+        {/* Non-fatal sync warnings. The sync succeeded, but something in the
+            data it wrote is degraded — e.g. metaobject references that stayed
+            raw Shopify IDs. Amber, not red: nothing is broken, but a feed built
+            on this will carry IDs where names belong. */}
+        {(syncResult?.warnings ?? []).length > 0 && (
+          <div className="wl-card" style={{ padding: '16px' }}>
+            {(syncResult?.warnings ?? []).map((w) => (
+              <div key={w.code} className="flex items-start gap-2.5">
+                <span
+                  className="wl-dot shrink-0"
+                  style={{ background: 'var(--accent-amber)', marginTop: '5px' }}
+                />
+                <p style={{ fontSize: '12px', color: 'var(--ink-secondary)', lineHeight: 1.6 }}>
+                  {w.message}
+                </p>
+              </div>
+            ))}
+          </div>
+        )}
+
         {phase === 'error' && (
           <div className="wl-card" style={{ padding: '16px' }}>
             <div className="flex items-start gap-2.5">
