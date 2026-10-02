@@ -4,6 +4,7 @@ import { validateFeed, type ValidationResult } from '@/lib/feedValidator'
 import { adminDb, getOwnedFeed } from '@/lib/feeds'
 import { enforceRateLimit, RateLimitError } from '@/lib/rateLimit'
 import { errorResponse } from '@/lib/errors'
+import { regenerateFeedCache } from '@/lib/feedCache'
 
 const CACHE_TTL_MS = 6 * 60 * 60 * 1000 // 6 hours
 
@@ -100,38 +101,7 @@ export async function POST(
   }
 
   try {
-    const [{ xml, productCount }, validation] = await Promise.all([
-      generateFeed(feedId),
-      validateFeed(feedId).catch((err) => {
-        console.error('Validation failed during feed regeneration:', err)
-        return null as ValidationResult | null
-      }),
-    ])
-    const generatedAt = new Date().toISOString()
-    const db = adminDb()
-
-    const { error: upsertErr } = await db.from('feed_cache').upsert(
-      {
-        feed_id: feedId,
-        xml_content: xml,
-        generated_at: generatedAt,
-        product_count: productCount,
-        validation_status: validation?.status ?? null,
-        validation_errors: validation?.issues ?? null,
-      },
-      { onConflict: 'feed_id' }
-    )
-
-    if (upsertErr) {
-      return errorResponse(upsertErr, 'POST /api/feed/generate/[feedId] cache upsert')
-    }
-
-    return Response.json({
-      generated_at: generatedAt,
-      product_count: productCount,
-      validation_status: validation?.status ?? null,
-      validation_errors: validation?.issues ?? null,
-    })
+    return Response.json(await regenerateFeedCache(feedId))
   } catch (err) {
     return errorResponse(err, 'POST /api/feed/generate/[feedId]')
   }

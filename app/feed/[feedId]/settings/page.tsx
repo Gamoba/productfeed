@@ -2,6 +2,11 @@ import { redirect, notFound } from 'next/navigation'
 import { createSupabaseServerClient } from '@/lib/supabase-server'
 import { adminDb, getOwnedFeed } from '@/lib/feeds'
 import { SettingsClient } from '@/app/settings/SettingsClient'
+import {
+  DEFAULT_AUTO_SYNC_FREQUENCY,
+  DEFAULT_AUTO_SYNC_TIME,
+  isAutoSyncFrequency,
+} from '@/lib/syncSchedule'
 
 export default async function FeedSettingsPage({
   params,
@@ -33,6 +38,15 @@ export default async function FeedSettingsPage({
       .maybeSingle(),
   ])
 
+  // getOwnedFeed selects *, so the schedule columns are already on the row.
+  const schedule = feed as typeof feed & {
+    auto_sync_frequency?: string
+    auto_sync_time?: string
+    last_auto_sync_at?: string | null
+    last_auto_sync_status?: string | null
+    last_auto_sync_error?: string | null
+  }
+
   const initialFeedMode = (feedSettings?.feed_mode as 'product' | 'variant') ?? 'product'
 
   return (
@@ -52,6 +66,15 @@ export default async function FeedSettingsPage({
           : null
       }
       initialFeedMode={initialFeedMode}
+      initialAutoSync={{
+        frequency: isAutoSyncFrequency(schedule.auto_sync_frequency)
+          ? schedule.auto_sync_frequency
+          : DEFAULT_AUTO_SYNC_FREQUENCY,
+        time: schedule.auto_sync_time ?? DEFAULT_AUTO_SYNC_TIME,
+        lastRunAt: schedule.last_auto_sync_at ?? null,
+        lastStatus: schedule.last_auto_sync_status ?? null,
+        lastError: schedule.last_auto_sync_error ?? null,
+      }}
     />
   )
 }

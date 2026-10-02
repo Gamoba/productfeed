@@ -2,7 +2,20 @@
 
 import { useEffect, useState } from 'react'
 import type { ShopifyMarket, ShopifyMarketLocale } from '@/lib/shopify'
-import { saveFeedMode } from '@/app/dashboard/actions'
+import { saveAutoSyncSchedule, saveFeedMode } from '@/app/dashboard/actions'
+import {
+  AUTO_SYNC_FREQUENCIES,
+  AUTO_SYNC_LABELS,
+  type AutoSyncFrequency,
+} from '@/lib/syncSchedule'
+
+export type AutoSyncSettings = {
+  frequency: AutoSyncFrequency
+  time: string
+  lastRunAt: string | null
+  lastStatus: string | null
+  lastError: string | null
+}
 
 type SavedSettings = {
   selected_market_id: string | null
@@ -85,12 +98,14 @@ export function SettingsClient({
   projectId,
   initialSettings,
   initialFeedMode,
+  initialAutoSync,
 }: {
   feedId: string
   feedName: string
   projectId: string | null
   initialSettings: SavedSettings | null
   initialFeedMode: 'product' | 'variant'
+  initialAutoSync: AutoSyncSettings
 }) {
   const [markets, setMarkets] = useState<ShopifyMarket[]>([])
   const [loadingMarkets, setLoadingMarkets] = useState(true)
@@ -117,6 +132,11 @@ export function SettingsClient({
   const [savedLocale, setSavedLocale] = useState<string>(initialSettings?.selected_locale ?? 'en')
   const [savedFeedMode, setSavedFeedMode] = useState<'product' | 'variant'>(initialFeedMode)
 
+  const [syncFrequency, setSyncFrequency] = useState<AutoSyncFrequency>(initialAutoSync.frequency)
+  const [syncTime, setSyncTime] = useState<string>(initialAutoSync.time)
+  const [savedSyncFrequency, setSavedSyncFrequency] = useState<AutoSyncFrequency>(initialAutoSync.frequency)
+  const [savedSyncTime, setSavedSyncTime] = useState<string>(initialAutoSync.time)
+
   const [saving, setSaving] = useState(false)
   const [saveStatus, setSaveStatus] = useState<'idle' | 'saved' | 'error'>('idle')
   const [saveError, setSaveError] = useState<string | null>(null)
@@ -126,7 +146,8 @@ export function SettingsClient({
   const shopSettingsDirty =
     selectedMarketId !== savedMarketId || selectedLocale !== savedLocale
   const feedModeDirty = feedMode !== savedFeedMode
-  const dirty = shopSettingsDirty || feedModeDirty
+  const autoSyncDirty = syncFrequency !== savedSyncFrequency || syncTime !== savedSyncTime
+  const dirty = shopSettingsDirty || feedModeDirty || autoSyncDirty
 
   useEffect(() => {
     const marketsUrl = projectId
@@ -201,10 +222,17 @@ export function SettingsClient({
         if (result.error) throw new Error(result.error)
       }
 
+      if (autoSyncDirty) {
+        const result = await saveAutoSyncSchedule(feedId, syncFrequency, syncTime)
+        if (result.error) throw new Error(result.error)
+      }
+
       // Update baselines so the buttons go back to disabled until next change.
       setSavedMarketId(selectedMarketId)
       setSavedLocale(selectedLocale)
       setSavedFeedMode(feedMode)
+      setSavedSyncFrequency(syncFrequency)
+      setSavedSyncTime(syncTime)
 
       setSaveStatus('saved')
       setTimeout(() => setSaveStatus('idle'), 2500)
@@ -450,6 +478,73 @@ export function SettingsClient({
                 onClick={() => setFeedMode('variant')}
               />
             </div>
+          </div>
+        </div>
+
+        {/* Automatic sync */}
+        <div className="ff-panel">
+          <div className="ff-panel-header" style={{ textTransform: 'none', letterSpacing: 0, fontSize: '11px' }}>
+            <div>
+              <span style={{ fontSize: '12px', fontWeight: 500, color: 'var(--color-text-primary)' }}>Automatic sync</span>
+              <span className="ml-2" style={{ fontSize: '11px', color: 'var(--color-text-tertiary)' }}>
+                Fetch products from Shopify on a schedule
+              </span>
+            </div>
+          </div>
+
+          <div className="p-3.5 space-y-3">
+            <div className="grid grid-cols-2 gap-3">
+              <div>
+                <label className="ff-label block mb-1.5">Frequency</label>
+                <select
+                  value={syncFrequency}
+                  onChange={(e) => setSyncFrequency(e.target.value as AutoSyncFrequency)}
+                  className="ff-select"
+                >
+                  {AUTO_SYNC_FREQUENCIES.map((f) => (
+                    <option key={f} value={f}>
+                      {AUTO_SYNC_LABELS[f]}
+                    </option>
+                  ))}
+                </select>
+              </div>
+
+              {syncFrequency !== 'off' && (
+                <div>
+                  <label className="ff-label block mb-1.5">
+                    {syncFrequency === 'daily' ? 'Time (Danish time)' : 'Starting at (Danish time)'}
+                  </label>
+                  <input
+                    type="time"
+                    value={syncTime}
+                    onChange={(e) => e.target.value && setSyncTime(e.target.value)}
+                    className="ff-input"
+                  />
+                </div>
+              )}
+            </div>
+
+            <p style={{ fontSize: '11px', color: 'var(--color-text-tertiary)' }}>
+              {syncFrequency === 'off'
+                ? 'Products are only fetched when you press Sync.'
+                : 'Runs within 5 minutes of the scheduled time. The feed file is refreshed right after each sync (feeds with AI mappings keep their regular 6-hour refresh).'}
+            </p>
+
+            {initialAutoSync.lastRunAt && (
+              <div className="flex items-center gap-2 flex-wrap" style={{ fontSize: '11px', color: 'var(--color-text-secondary)' }}>
+                <span>Last automatic sync: {new Date(initialAutoSync.lastRunAt).toLocaleString('da-DK')}</span>
+                {initialAutoSync.lastStatus === 'ok' && <span className="ff-badge ff-badge-success">OK</span>}
+                {initialAutoSync.lastStatus === 'running' && <span className="ff-badge ff-badge-neutral">Running</span>}
+                {initialAutoSync.lastStatus === 'error' && (
+                  <>
+                    <span className="ff-badge ff-badge-danger">Failed</span>
+                    {initialAutoSync.lastError && (
+                      <span style={{ color: 'var(--color-badge-danger-text)' }}>{initialAutoSync.lastError}</span>
+                    )}
+                  </>
+                )}
+              </div>
+            )}
           </div>
         </div>
 
