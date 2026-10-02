@@ -1,0 +1,33 @@
+# Ticks the scheduled product sync. Vercel Hobby only allows daily crons, so
+# GitHub Actions does the ticking instead; /api/cron/sync decides per feed
+# whether it is due (Settings → Automatic sync).
+#
+# Needs in the repo settings:
+#   secrets.CRON_SECRET  — same value as CRON_SECRET in Vercel
+#   vars.APP_URL         — production URL, e.g. https://feed.example.com
+#
+# GitHub may delay scheduled runs by a few minutes under load.
+name: Scheduled product sync
+
+on:
+  schedule:
+    - cron: '*/5 * * * *'
+  workflow_dispatch:
+
+concurrency:
+  group: cron-sync
+  cancel-in-progress: false
+
+jobs:
+  tick:
+    runs-on: ubuntu-latest
+    timeout-minutes: 6
+    steps:
+      - name: Call /api/cron/sync
+        env:
+          CRON_SECRET: ${{ secrets.CRON_SECRET }}
+          APP_URL: ${{ vars.APP_URL }}
+        run: |
+          curl --fail-with-body -sS --max-time 320 \
+            -H "Authorization: Bearer $CRON_SECRET" \
+            "$APP_URL/api/cron/sync"

@@ -527,7 +527,7 @@ export function SettingsClient({
             <p style={{ fontSize: '11px', color: 'var(--color-text-tertiary)' }}>
               {syncFrequency === 'off'
                 ? 'Products are only fetched when you press Sync.'
-                : 'Runs within 5 minutes of the scheduled time. The feed file is refreshed right after each sync (feeds with AI mappings keep their regular 6-hour refresh).'}
+                : 'Usually runs within a few minutes of the scheduled time. The feed file is refreshed right after each sync (feeds with AI mappings keep their regular 6-hour refresh).'}
             </p>
 
             {initialAutoSync.lastRunAt && (

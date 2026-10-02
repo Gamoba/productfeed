@@ -10,18 +10,20 @@ import {
   type AutoSyncFrequency,
 } from '@/lib/syncSchedule'
 
-// Scheduled product sync. Vercel Cron calls this every 5 minutes (vercel.json);
+// Scheduled product sync. A GitHub Actions workflow calls this every 5 minutes
+// (.github/workflows/cron-sync.yml — Vercel Hobby only allows daily crons);
 // each call syncs the feeds whose own schedule (Settings → Automatic sync) is
 // due. The cron only ticks — the per-feed schedule decides.
 //
 // Read-only towards Shopify: it runs the exact same syncProducts() as the Sync
 // button.
 
-export const maxDuration = 800
+// Hobby-plan ceiling.
+export const maxDuration = 300
 
 // Stop STARTING new syncs after this long, so the one in flight can finish
 // inside maxDuration. Feeds left over are picked up by the next tick.
-const START_BUDGET_MS = 8 * 60 * 1000
+const START_BUDGET_MS = 2 * 60 * 1000
 
 type FeedScheduleRow = {
   id: string
@@ -30,7 +32,7 @@ type FeedScheduleRow = {
   last_auto_sync_at: string | null
 }
 
-// Vercel sends `Authorization: Bearer <CRON_SECRET>`. Constant-time compare,
+// The caller sends `Authorization: Bearer <CRON_SECRET>`. Constant-time compare,
 // and fail closed when the secret isn't configured.
 function isAuthorized(req: Request): boolean {
   const secret = process.env.CRON_SECRET
