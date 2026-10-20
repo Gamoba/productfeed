@@ -9,6 +9,7 @@
     "start": "next start",
     "lint": "eslint",
     "migrate": "tsx scripts/migrate.ts",
+    "shopify:scopes": "tsx scripts/shopify-scopes.ts",
     "check:shopify-readonly": "tsx scripts/check-shopify-readonly.ts"
   },
   "dependencies": {

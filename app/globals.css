@@ -161,6 +161,26 @@
 }
 .wl-btn-secondary:disabled { opacity: 0.5; cursor: not-allowed; }
 
+/* Inline-editable text — a name that sits in the layout rather than in a form.
+   Reads as plain text until pointed at, then admits it is a field. Without this
+   the name looks static and nobody discovers they can rename it. */
+.wl-inline-edit {
+  background: transparent;
+  border: 1px solid transparent;
+  border-radius: 8px;
+  padding: 3px 7px;
+  margin-left: -7px; /* keeps the text optically aligned when the frame appears */
+  color: var(--ink);
+  transition: border-color 120ms ease, background-color 120ms ease;
+}
+.wl-inline-edit:hover { border-color: var(--hairline); }
+.wl-inline-edit:focus {
+  outline: none;
+  border-color: var(--accent-purple);
+  background: var(--bg-base);
+}
+.wl-inline-edit::placeholder { color: var(--ink-muted); font-weight: 400; }
+
 /* Status pill — neutral, a small coloured status dot does the colour work. */
 .wl-pill {
   display: inline-flex;

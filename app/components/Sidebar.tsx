@@ -16,6 +16,12 @@ const FEED_NAV = [
   { label: 'Mapping', href: 'mapping', icon: 'sliders' },
   { label: 'Filters', href: 'filters', icon: 'filter' },
   { label: 'AI Titles', href: 'optimize', icon: 'sparkles' },
+  // `exact` because /google-ads/labels is a sibling nav item, not a sub-page of
+  // this one — without it prefix matching would light both up at once.
+  { label: 'Ads Performance', href: 'google-ads', icon: 'chart', exact: true },
+  { label: 'Campaigns', href: 'google-ads/campaigns', icon: 'megaphone' },
+  { label: 'Custom labels', href: 'google-ads/labels', icon: 'layers' },
+  { label: 'Wasted spend', href: 'google-ads/waste', icon: 'trend-down' },
   { label: 'Preview', href: 'preview', icon: 'eye' },
   { label: 'Settings', href: 'settings', icon: 'settings' },
 ] as const
@@ -102,6 +108,27 @@ function NavIcon({ name }: { name: string }) {
       return svg(cls, <>
         <path d="M12 3l1.9 4.8L18.7 9.7 13.9 11.6 12 16.4 10.1 11.6 5.3 9.7 10.1 7.8z"/>
         <path d="M19 14l.7 1.8 1.8.7-1.8.7-.7 1.8-.7-1.8-1.8-.7 1.8-.7z"/>
+      </>)
+    case 'layers':
+      return svg(cls, <>
+        <path d="M12 3l9 5-9 5-9-5 9-5z"/>
+        <path d="M3 13l9 5 9-5"/>
+      </>)
+    case 'chart':
+      return svg(cls, <>
+        <path d="M3 3v18h18"/>
+        <path d="M7 15l3.5-4 3 3L20 7"/>
+      </>)
+    case 'megaphone':
+      return svg(cls, <>
+        <path d="M3 11v2a1 1 0 001 1h2l5 4V6L6 10H4a1 1 0 00-1 1z"/>
+        <path d="M16 8.5a4 4 0 010 7"/>
+        <path d="M19 6a8 8 0 010 12"/>
+      </>)
+    case 'trend-down':
+      return svg(cls, <>
+        <polyline points="3,7 9,13 13,9 21,17"/>
+        <polyline points="21,11 21,17 15,17"/>
       </>)
     case 'settings':
       return svg(cls, <>
@@ -230,7 +257,7 @@ export function Sidebar() {
         // Overview (empty href) is the feed root and a prefix of every sibling,
         // so it must match exactly; the rest keep prefix matching (e.g. AI Titles
         // stays active inside a bucket editor).
-        return navLink(fullHref, item.icon, item.label, item.href === '')
+        return navLink(fullHref, item.icon, item.label, item.href === '' || 'exact' in item)
       })}
     </>
   ) : null
