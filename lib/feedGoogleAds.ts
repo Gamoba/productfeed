@@ -110,7 +110,13 @@ export async function saveConnection(
   const row = {
     user_id: userId,
     account_label: params.accountLabel ?? null,
-    login_customer_id: params.loginCustomerId ? params.loginCustomerId.replace(/\D/g, '') : null,
+    // A reconnect (OAuth callback) passes no manager — it is unknown until an
+    // account is picked. Keep the one already resolved instead of wiping it:
+    // clearing it made every feed on this grant fail with "no access" until
+    // someone re-picked the account.
+    login_customer_id: params.loginCustomerId
+      ? params.loginCustomerId.replace(/\D/g, '')
+      : (existing?.login_customer_id ?? null),
     refresh_token_ciphertext: enc.ciphertext,
     refresh_token_iv: enc.iv,
     refresh_token_tag: enc.tag,
