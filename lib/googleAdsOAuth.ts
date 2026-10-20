@@ -42,7 +42,10 @@ export function buildAuthUrl(params: {
     scope: ADWORDS_SCOPE,
     access_type: 'offline',
     prompt: 'select_account consent',
-    include_granted_scopes: 'true',
+    // No include_granted_scopes: with it, Google folds every scope this OAuth
+    // client was EVER granted on the account (Drive, Cloud from earlier
+    // tooling) into the new token. We only ever call the Ads API, so the stored
+    // refresh token should carry the Ads scope and nothing else.
     state: params.nonce,
   }
   if (params.loginHint) q.login_hint = params.loginHint
