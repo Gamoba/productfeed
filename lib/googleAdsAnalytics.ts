@@ -176,14 +176,22 @@ export type AvailableAction = {
   conversions: number
   value: number
   items: number
+  // False for an action with stored data, but none inside the window.
+  inWindow: boolean
 }
 
 /**
- * Every conversion action with data in the window, largest value first.
+ * Every conversion action stored for the feed: those with data in the window
+ * first, largest value first, then those that have none in it.
  *
  * The magnitudes are the point, not decoration: an action reporting ten times
  * the account's real revenue is self-evidently a view tracker, and showing that
  * next to the name is what stops someone picking it.
+ *
+ * Actions without data in the window are listed too. Listing only the window's
+ * actions hid the feed's own saved choice the moment its source went quiet
+ * (CoffeeTools' ProfitMetrics actions stopped on 9 Sep 2026): the numbers read
+ * 0 with no visible reason, and the choice could not be seen or changed.
  */
 export async function getAvailableActions(
   db: SupabaseClient,
@@ -191,19 +199,32 @@ export async function getAvailableActions(
   days: number
 ): Promise<AvailableAction[]> {
   const { from, to } = windowRange(days)
-  const { data, error } = await db.rpc('google_ads_conversion_actions', {
-    p_feed_id: feedId,
-    p_from: from,
-    p_to: to,
-  })
-  if (error) dbError('getAvailableActions', error)
+  const actionsFrom = async (pFrom: string) => {
+    const { data, error } = await db.rpc('google_ads_conversion_actions', {
+      p_feed_id: feedId,
+      p_from: pFrom,
+      p_to: to,
+    })
+    if (error) dbError('getAvailableActions', error)
+    return (data ?? []) as Record<string, unknown>[]
+  }
+  const [inWindow, everStored] = await Promise.all([actionsFrom(from), actionsFrom('1970-01-01')])
 
-  return ((data ?? []) as Record<string, unknown>[]).map((r) => ({
+  const listed: AvailableAction[] = inWindow.map((r) => ({
     name: String(r.conversion_action ?? ''),
     conversions: num(r.conversions),
     value: num(r.conversions_value),
     items: num(r.items),
+    inWindow: true,
   }))
+  const seen = new Set(listed.map((a) => a.name))
+  for (const r of everStored) {
+    const name = String(r.conversion_action ?? '')
+    if (!name || seen.has(name)) continue
+    seen.add(name)
+    listed.push({ name, conversions: 0, value: 0, items: 0, inWindow: false })
+  }
+  return listed
 }
 
 export async function getProductPerformance(

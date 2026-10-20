@@ -1400,6 +1400,15 @@ function MetricPicker({
     setDraft(null)
   }
 
+  // A saved choice can name an action with no stored data at all; list it
+  // anyway so it can always be seen and unticked.
+  const listed: AvailableAction[] = [
+    ...actions,
+    ...selected
+      .filter((n) => !actions.some((a) => a.name === n))
+      .map((name) => ({ name, conversions: 0, value: 0, items: 0, inWindow: false })),
+  ]
+
   const summary =
     current.length === 0
       ? 'Not selected'
@@ -1457,7 +1466,7 @@ function MetricPicker({
                 borderRadius: '10px',
               }}
             >
-              {actions.map((a) => {
+              {listed.map((a) => {
                 const on = current.includes(a.name)
                 return (
                   <label
@@ -1489,7 +1498,9 @@ function MetricPicker({
                         {a.name}
                       </span>
                       <span style={{ fontSize: '11px', color: 'var(--ink-muted)' }}>
-                        {formatMoney(a.value, currency)} · {a.items} items
+                        {a.inWindow
+                          ? `${formatMoney(a.value, currency)} · ${a.items} items`
+                          : 'No data in this period'}
                       </span>
                     </span>
                   </label>
