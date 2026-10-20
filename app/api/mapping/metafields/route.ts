@@ -60,7 +60,16 @@ export async function GET(req: Request) {
   const nameMap = await getMetafieldNameMap(feedId)
   for (const mf of metafields) {
     const name = nameMap.get(`${mf.namespace}.${mf.key}`)
-    if (name) mf.name = name
+    if (name) {
+      mf.name = name
+      continue
+    }
+    // A metaobject field exposed by the sync ("bundle.price" under the
+    // metafield "bundle") has no definition of its own; label it after its
+    // parent so it reads "Bundle › price" next to "Bundle" in the pickers.
+    const dot = mf.key.indexOf('.')
+    const parentName = dot === -1 ? undefined : nameMap.get(`${mf.namespace}.${mf.key.slice(0, dot)}`)
+    if (parentName) mf.name = `${parentName} › ${mf.key.slice(dot + 1)}`
   }
 
   return Response.json({ metafields })

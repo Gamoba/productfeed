@@ -3,6 +3,7 @@
 import Link from 'next/link'
 import { useEffect, useRef, useState } from 'react'
 import { useRouter } from 'next/navigation'
+import { supabase } from '@/lib/supabase'
 import { projectStatusBadge } from '@/app/components/ProjectConnectModal'
 
 type ProjectSummary = {
@@ -28,6 +29,10 @@ type FeedRollupRow = { productCount?: number; validationStatus?: 'ok' | 'warning
 type PatchedProject = { id: string; name: string; description: string | null }
 
 export function ProjectListClient() {
+  const router = useRouter()
+  // The overview has no sidebar (AppShell's NO_SIDEBAR), so the account and
+  // its log-out live in the topbar here instead.
+  const [userEmail, setUserEmail] = useState('')
   const [projects, setProjects] = useState<ProjectSummary[] | null>(null)
   const [aggregates, setAggregates] = useState<Map<string, ProjectAggregate>>(new Map())
   const [error, setError] = useState<string | null>(null)
@@ -78,7 +83,15 @@ export function ProjectListClient() {
 
   useEffect(() => {
     load()
+    supabase.auth.getUser().then(({ data }) => {
+      setUserEmail(data.user?.email ?? '')
+    })
   }, [])
+
+  async function handleSignOut() {
+    await supabase.auth.signOut()
+    router.push('/login')
+  }
 
   function handlePatched(updated: PatchedProject) {
     setProjects((prev) =>
@@ -105,9 +118,17 @@ export function ProjectListClient() {
             </span>
           )}
         </div>
-        <button onClick={() => setShowCreate(true)} className="ff-btn-primary">
-          Create project
-        </button>
+        <div className="flex items-center gap-3">
+          <button onClick={() => setShowCreate(true)} className="ff-btn-primary">
+            Create project
+          </button>
+          {userEmail && (
+            <span style={{ fontSize: '11px', color: 'var(--color-text-tertiary)' }}>{userEmail}</span>
+          )}
+          <button onClick={handleSignOut} className="ff-btn-secondary">
+            Log out
+          </button>
+        </div>
       </header>
 
       <main className="px-4 py-4 max-w-6xl">
