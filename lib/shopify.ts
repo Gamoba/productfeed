@@ -1,3 +1,5 @@
+import { readVariantStock } from '@/lib/inventoryAnalytics'
+
 // Pin to a version Shopify still supports. 2025-07 has been retired: requests
 // against it are answered by 2025-10 anyway (verified via the served
 // X-Shopify-Api-Version header), so the old value only hid which schema we were
@@ -1013,14 +1015,15 @@ export function createShopifyClient({ shopUrl, accessToken }: ShopifyCredentials
   }
 
   const METAOBJECT_GID = 'gid://shopify/Metaobject/'
+  const PRODUCT_GID = 'gid://shopify/Product/'
 
-  // Parse a metaobject-reference LIST value (a JSON array of GIDs) into a GID
-  // array. Returns [] if the value isn't a parseable array of Metaobject GIDs.
-  function parseGidList(value: string): string[] {
+  // Parse a reference LIST value (a JSON array of GIDs) into a GID array.
+  // Returns [] if the value isn't a parseable array of GIDs with that prefix.
+  function parseGidList(value: string, prefix: string = METAOBJECT_GID): string[] {
     try {
       const arr = JSON.parse(value)
       if (!Array.isArray(arr)) return []
-      return arr.filter((g): g is string => typeof g === 'string' && g.startsWith(METAOBJECT_GID))
+      return arr.filter((g): g is string => typeof g === 'string' && g.startsWith(prefix))
     } catch {
       return []
     }
@@ -1099,6 +1102,45 @@ export function createShopifyClient({ shopUrl, accessToken }: ShopifyCredentials
         type: f.type,
         description: null,
       }))
+  }
+
+  // A metaobject that points at products (Sorelle's bundle lists the products
+  // the customer picks from) also yields `<parent key>.products_in_stock`:
+  // "true" while every referenced product has at least one sellable variant,
+  // "false" once one of them is sold out or no longer active. That mirrors the
+  // storefront: a sold-out variant just drops out of the bundle's picker, but a
+  // product with nothing left takes the whole bundle with it. The bundle's own
+  // variant is a shell with no stock, so this is the only stock signal it has.
+  //
+  // Computed from the products already fetched, so it costs no extra calls.
+  // `products` holds active products only, which is why a referenced product
+  // that isn't in it counts as sold out.
+  function productsInStockMetafield(
+    parent: ShopifyMetafield,
+    metaobject: ResolvedMetaobject,
+    productsByGid: Map<string, ShopifyProduct>
+  ): ShopifyMetafield[] {
+    const gids = metaobject.fields
+      .filter((f) => f.value && (f.type === 'product_reference' || f.type === 'list.product_reference'))
+      .flatMap((f) => {
+        const value = f.value as string
+        return value.startsWith(PRODUCT_GID) ? [value] : parseGidList(value, PRODUCT_GID)
+      })
+    if (!gids.length) return []
+    const inStock = gids.every((gid) => {
+      const product = productsByGid.get(gid)
+      return !!product && product.variants.some((v) => readVariantStock(String(product.id), v)?.sellable)
+    })
+    return [
+      {
+        ...parent,
+        id: 0,
+        key: `${parent.key}.products_in_stock`,
+        value: String(inStock),
+        type: 'boolean',
+        description: null,
+      },
+    ]
   }
 
   // Looks up a batch of Metaobject GIDs, writing id → resolved metaobject into `out`.
@@ -1198,6 +1240,7 @@ export function createShopifyClient({ shopUrl, accessToken }: ShopifyCredentials
     let rewritten = 0
     let unresolved = 0
     let fieldMetafields = 0
+    const productsByGid = new Map(products.map((p) => [`${PRODUCT_GID}${p.id}`, p]))
     for (const p of products) {
       // Collected and appended after the loop — pushing onto p.metafields
       // while iterating it would walk into the new entries.
@@ -1208,7 +1251,10 @@ export function createShopifyClient({ shopUrl, accessToken }: ShopifyCredentials
           if (mo) {
             mf.value = mo.value
             rewritten++
-            extra.push(...metaobjectFieldMetafields(mf, mo))
+            extra.push(
+              ...metaobjectFieldMetafields(mf, mo),
+              ...productsInStockMetafield(mf, mo, productsByGid)
+            )
           } else {
             unresolved++
           }
