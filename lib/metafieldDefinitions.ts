@@ -25,6 +25,11 @@ async function fetchDefinitions(feedId: string): Promise<Map<string, string>> {
   const projectId = (feed as { project_id: string | null } | null)?.project_id
   if (!projectId) return new Map()
 
+  // Feed-URL projects have no Shopify definitions — their feed.* metafield keys
+  // are already the source feed's readable field names.
+  const { data: project } = await db.from('projects').select('source_type').eq('id', projectId).maybeSingle()
+  if ((project as { source_type?: string } | null)?.source_type === 'feed_url') return new Map()
+
   const { shopUrl, accessToken } = await getProjectCredentials(db, projectId)
   const map = new Map<string, string>()
   let cursor: string | null = null

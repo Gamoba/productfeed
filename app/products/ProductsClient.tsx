@@ -286,7 +286,7 @@ export function ProductsClient({
               className="w-6 h-6 rounded-full animate-spin"
               style={{ border: '2px solid var(--accent-purple)', borderTopColor: 'transparent' }}
             />
-            <p style={{ fontSize: '13px', color: 'var(--ink-muted)' }}>Fetching from Shopify and saving…</p>
+            <p style={{ fontSize: '13px', color: 'var(--ink-muted)' }}>Fetching products from the source and saving…</p>
           </div>
         )}
 

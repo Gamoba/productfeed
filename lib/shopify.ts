@@ -117,6 +117,9 @@ export type ShopifyProduct = {
   // Enriched
   metafields: ShopifyMetafield[]
   collections: string[]
+  // Full product URL carried by non-Shopify sources (feed-URL projects), set
+  // when rows are read back via toShopifyData. Never present on Shopify data.
+  link?: string | null
 }
 
 export type ShopifyCollection = {

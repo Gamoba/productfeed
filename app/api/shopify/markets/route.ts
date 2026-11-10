@@ -20,6 +20,12 @@ export async function GET(req: Request) {
   const owned = await getOwnedProject(user.id, projectId)
   if (!owned) return NextResponse.json({ error: 'Project not found' }, { status: 404 })
 
+  // Feed-URL projects have no Shopify markets: language and currency are
+  // whatever the source feed contains. `source` lets the UI say so.
+  if (owned.source_type === 'feed_url') {
+    return NextResponse.json({ markets: [], source: 'feed_url' })
+  }
+
   try {
     const shopify = await createShopifyClientForProject(adminDb(), projectId)
     const markets = await shopify.fetchMarkets()

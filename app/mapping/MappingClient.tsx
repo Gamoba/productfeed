@@ -286,6 +286,8 @@ type PreviewProduct = {
   images: Record<string, unknown>[]
   metafields: { namespace: string; key: string; value: string; type: string }[]
   collections: string[]
+  // Full product URL from a feed-URL source; absent/null for Shopify products.
+  link?: string | null
 }
 
 // `marketUrl` may be a subdomain (https://shop.fr) or a subfolder (https://shop.com/fr) —
@@ -308,6 +310,8 @@ function resolveClientField(
   if (!field) return ''
 
   if (field === 'url') {
+    // Mirrors resolveField: a feed-URL source's own link wins.
+    if (product.link) return product.link
     return buildClientProductUrl(product.handle, marketUrl)
   }
 
@@ -2259,7 +2263,7 @@ function ShopifyFieldsModal({
         onClick={(e) => e.stopPropagation()}
       >
         <div className="px-6 py-4 border-b border-gray-100 shrink-0">
-          <h2 className="text-base font-semibold text-gray-900">Shopify fields</h2>
+          <h2 className="text-base font-semibold text-gray-900">Source fields</h2>
           <p className="text-sm text-gray-500 mt-0.5">
             {totalMapped} of {totalFields} fields are used in a mapping
             {product ? ` — example values from "${product.title}"` : ''}

@@ -1,6 +1,8 @@
 import { createClient } from '@supabase/supabase-js'
 import { createShopifyClientForProject } from '@/lib/projectShopify'
-import type { ShopifyData } from '@/lib/shopify'
+import { fetchFeedUrlProducts } from '@/lib/feedUrlSource'
+import { AppError } from '@/lib/errors'
+import type { ShopifyClient, ShopifyData, ShopifyProduct } from '@/lib/shopify'
 import { readVariantStock } from '@/lib/inventoryAnalytics'
 
 function adminClient() {
@@ -82,6 +84,9 @@ export type SupabaseProduct = {
   product_type: string | null
   status: string | null
   handle: string | null
+  // Full product URL from the source (feed-URL projects); null for Shopify.
+  // Optional: rows read before migration 046 don't carry it.
+  link?: string | null
   published_at: string | null
   tags: string | null
   images: unknown[]
@@ -94,40 +99,108 @@ export type SupabaseProduct = {
   metafields: SupabaseMetafield[]
 }
 
-// Sync products into a specific feed. Locale/currency comes from that feed's
-// shop_settings (now per-feed). Products are scoped by feed_id so the same
-// Shopify product can exist in multiple feeds independently.
-export async function syncProducts(feedId: string): Promise<SyncResult> {
-  const t0 = Date.now()
-  const db = adminClient()
+// Source-agnostic product as written to the products table. Both sources map
+// into this: Shopify (shopifyToSource below) and feed URLs (lib/feedUrlSource).
+// `id` lands in products.shopify_id — the column name predates feed-URL
+// projects; for those it holds the source feed's g:id.
+export type SourceProduct = {
+  id: string
+  title: string | null
+  body_html: string | null
+  vendor: string | null
+  product_type: string | null
+  status: string | null
+  handle: string | null
+  link: string | null
+  published_at: string | null
+  tags: string | null
+  images: unknown[]
+  variants: unknown[]
+  options: unknown[]
+  collections: unknown[]
+  metafields: { namespace: string; key: string; value: string | null; type: string | null }[]
+}
 
-  console.log(`[sync] syncProducts feedId=${feedId}`)
+function shopifyToSource(p: ShopifyProduct): SourceProduct {
+  return {
+    id: String(p.id),
+    title: p.title,
+    body_html: p.body_html,
+    vendor: p.vendor,
+    product_type: p.product_type,
+    status: p.status,
+    handle: p.handle,
+    link: null, // built at generation time from market URL + handle
+    published_at: p.published_at,
+    tags: p.tags,
+    images: p.images,
+    variants: p.variants,
+    // Option DEFINITIONS ("Size", "Colour"). Already present in the Shopify
+    // response; migration 034 gives it somewhere to live.
+    options: p.options ?? [],
+    collections: p.collections,
+    metafields: p.metafields.map((mf) => ({
+      namespace: mf.namespace,
+      key: mf.key,
+      value: mf.value,
+      type: mf.type,
+    })),
+  }
+}
 
+// Splits `items` into chunks and runs `fn` over them with bounded parallelism.
+// Keeps PostgREST requests below URL-length / payload limits on large catalogs
+// (a feed-URL project can carry tens of thousands of products), and each
+// statement under Supabase's statement timeout — 5000-row metafield upserts
+// four at a time timed out on a 28k-product feed, so sizes stay small.
+async function inChunks<T>(
+  items: T[],
+  size: number,
+  concurrency: number,
+  fn: (chunk: T[]) => Promise<void>
+): Promise<void> {
+  const chunks: T[][] = []
+  for (let i = 0; i < items.length; i += size) chunks.push(items.slice(i, i + size))
+  let next = 0
+  const workers = Array.from({ length: Math.min(concurrency, chunks.length) }, async () => {
+    while (next < chunks.length) {
+      const chunk = chunks[next++]
+      await fn(chunk)
+    }
+  })
+  await Promise.all(workers)
+}
+
+type ProjectSourceRow = {
+  source_type: string | null
+  feed_url: string | null
+}
+
+// What a source fetch hands back to syncProducts. `shopify` is set only for
+// Shopify projects — stock snapshots and locations are Shopify data.
+type SourceFetch = {
+  products: SourceProduct[]
+  warnings: SyncWarning[]
+  shopify: ShopifyClient | null
+}
+
+// Fetches a Shopify project's products, localized when the feed has a
+// selected locale / market. Read-only Shopify access via lib/shopify.ts.
+async function fetchShopifySource(
+  db: ReturnType<typeof adminClient>,
+  feedId: string,
+  projectId: string
+): Promise<SourceFetch> {
   const { data: settings, error: settingsErr } = await db
     .from('shop_settings')
     .select('selected_country, selected_locale, currency, selected_market_id')
     .eq('feed_id', feedId)
     .maybeSingle()
-  const tSettings = Date.now()
   console.log(
-    `[sync] shop_settings: ${tSettings - t0}ms — ${JSON.stringify(settings)} — fejl: ${settingsErr?.message ?? 'ingen'}`
+    `[sync] shop_settings — ${JSON.stringify(settings)} — fejl: ${settingsErr?.message ?? 'ingen'}`
   )
 
-  // Credentials come from the feed's project. We derive the project from the
-  // feed itself (authoritative link) rather than taking a separate projectId —
-  // getOwnedFeed already guarantees the feed's project is owned by the caller.
-  // feeds.project_id is NOT NULL, so a missing one is a hard error.
-  const { data: feedRow } = await db
-    .from('feeds')
-    .select('project_id')
-    .eq('id', feedId)
-    .maybeSingle()
-  const projectId = (feedRow as { project_id: string | null } | null)?.project_id ?? null
-  if (!projectId) {
-    throw new Error(`Feed ${feedId} har intet project_id — kan ikke synkronisere`)
-  }
   const shopify = await createShopifyClientForProject(db, projectId)
-  console.log(`[sync] credentials: project ${projectId}`)
 
   let shopifyData: ShopifyData
   if (settings?.selected_locale) {
@@ -143,84 +216,123 @@ export async function syncProducts(feedId: string): Promise<SyncResult> {
     console.log(`[sync] Standard sync (ingen selected_locale)`)
     shopifyData = await shopify.fetchProductsWithAllData()
   }
-  const tFetch = Date.now()
-  console.log(
-    `[sync] shopify fetch total: ${tFetch - tSettings}ms — ${shopifyData.products.length} produkter`
-  )
+  return {
+    products: shopifyData.products.map(shopifyToSource),
+    warnings: metaobjectWarnings(shopifyData.metaobjects),
+    shopify,
+  }
+}
 
-  const { products } = shopifyData
-  const syncedShopifyIds = new Set(products.map((p) => String(p.id)))
+// Fetches a feed-URL project's products from its public product feed.
+async function fetchFeedUrlSource(project: ProjectSourceRow, projectId: string): Promise<SourceFetch> {
+  if (!project.feed_url) {
+    throw new AppError('Projektet har ingen feed-URL konfigureret endnu')
+  }
+  const result = await fetchFeedUrlProducts(project.feed_url)
+  console.log(
+    `[sync] feed URL (project ${projectId}): ${result.itemCount} items → ${result.products.length} produkter` +
+      (result.duplicateIds ? `, ${result.duplicateIds} dublet-id'er sprunget over` : '') +
+      (result.skippedNoId ? `, ${result.skippedNoId} uden id sprunget over` : '')
+  )
+  return { products: result.products, warnings: [], shopify: null }
+}
+
+// Sync products into a specific feed. The source comes from the feed's project:
+// Shopify (credentials + per-feed locale/market in shop_settings) or a public
+// feed URL. Products are scoped by feed_id so the same source product can exist
+// in multiple feeds independently.
+export async function syncProducts(feedId: string): Promise<SyncResult> {
+  const t0 = Date.now()
+  const db = adminClient()
+
+  console.log(`[sync] syncProducts feedId=${feedId}`)
+
+  // The project is derived from the feed itself (authoritative link) rather
+  // than taken as a separate projectId — getOwnedFeed already guarantees the
+  // feed's project is owned by the caller. feeds.project_id is NOT NULL, so a
+  // missing one is a hard error.
+  const { data: feedRow } = await db
+    .from('feeds')
+    .select('project_id')
+    .eq('id', feedId)
+    .maybeSingle()
+  const projectId = (feedRow as { project_id: string | null } | null)?.project_id ?? null
+  if (!projectId) {
+    throw new Error(`Feed ${feedId} har intet project_id — kan ikke synkronisere`)
+  }
+
+  const { data: project, error: projectErr } = await db
+    .from('projects')
+    .select('source_type, feed_url')
+    .eq('id', projectId)
+    .maybeSingle<ProjectSourceRow>()
+  if (projectErr) throw new Error(`Project lookup failed: ${projectErr.message}`)
+  if (!project) throw new AppError('Projektet blev ikke fundet', 404)
+
+  const source =
+    project.source_type === 'feed_url'
+      ? await fetchFeedUrlSource(project, projectId)
+      : await fetchShopifySource(db, feedId, projectId)
+  const { products, shopify } = source
+  const tFetch = Date.now()
+  console.log(`[sync] fetch total: ${tFetch - t0}ms — ${products.length} produkter`)
+
+  const syncedIds = new Set(products.map((p) => p.id))
   const now = new Date().toISOString()
 
-  // ── 1. Bulk upsert all products in one round-trip ───────────────────────
-  // .select('id, shopify_id') returns the UUIDs we need to attach metafields,
-  // avoiding the per-product RT that the old loop required.
+  // ── 1. Upsert products in chunks ────────────────────────────────────────
+  // .select('id, shopify_id') returns the UUIDs we need to attach metafields.
+  // Chunked so a large catalog stays under PostgREST's payload limit and each
+  // returned set stays under its 1000-row cap.
   const productRows = products.map((p) => ({
     feed_id: feedId,
-    shopify_id: String(p.id),
+    shopify_id: p.id,
     title: p.title,
     body_html: p.body_html,
     vendor: p.vendor,
     product_type: p.product_type,
     status: p.status,
     handle: p.handle,
+    link: p.link,
     published_at: p.published_at,
     tags: p.tags,
     images: p.images,
     variants: p.variants,
-    // Option DEFINITIONS ("Size", "Colour"). Already present in the Shopify
-    // response; migration 034 gives it somewhere to live.
-    options: p.options ?? [],
+    options: p.options,
     collections: p.collections,
     synced_at: now,
     updated_at: now,
   }))
 
-  let upserted: { id: string; shopify_id: string }[] = []
-  if (productRows.length > 0) {
-    const { data, error: upsertErr } = await db
+  const idBySourceId = new Map<string, string>()
+  await inChunks(productRows, 500, 3, async (chunk) => {
+    const { data, error } = await db
       .from('products')
-      .upsert(productRows, { onConflict: 'feed_id,shopify_id' })
+      .upsert(chunk, { onConflict: 'feed_id,shopify_id' })
       .select('id, shopify_id')
-    if (upsertErr) throw new Error(`Bulk upsert of products failed: ${upsertErr.message}`)
-    upserted = data ?? []
-  }
-  const tUpsertProducts = Date.now()
-  console.log(
-    `[sync] bulk upsert ${productRows.length} produkter → 1 RT: ${tUpsertProducts - tFetch}ms`
-  )
-
-  const idByShopifyId = new Map<string, string>()
-  for (const row of upserted) {
-    idByShopifyId.set(row.shopify_id, row.id)
-  }
-
-  // ── 2. Bulk delete all metafields for these products ────────────────────
-  // PostgREST sender .in()-værdier i URL'en (?product_id=in.(uuid1,uuid2,...))
-  // og ved nogle tusinde UUID'er rammer URL-længde-grænsen / IN-clause-loftet.
-  // Chunk derfor i grupper på max 500 og kør parallelt.
-  const allUuids = Array.from(idByShopifyId.values())
-  const DELETE_CHUNK_SIZE = 500
-  const deleteChunks: string[][] = []
-  for (let i = 0; i < allUuids.length; i += DELETE_CHUNK_SIZE) {
-    deleteChunks.push(allUuids.slice(i, i + DELETE_CHUNK_SIZE))
-  }
-  if (deleteChunks.length > 0) {
-    const results = await Promise.all(
-      deleteChunks.map((chunk) =>
-        db.from('product_metafields').delete().eq('feed_id', feedId).in('product_id', chunk)
-      )
-    )
-    for (const r of results) {
-      if (r.error) throw new Error(`Bulk delete of metafields failed: ${r.error.message}`)
+    if (error) throw new Error(`Upsert of products failed: ${error.message}`)
+    for (const row of (data ?? []) as { id: string; shopify_id: string }[]) {
+      idBySourceId.set(row.shopify_id, row.id)
     }
-  }
-  const tDeleteMfs = Date.now()
-  console.log(
-    `[sync] bulk delete metafields → ${deleteChunks.length} chunk(s) parallelt: ${tDeleteMfs - tUpsertProducts}ms`
-  )
+  })
+  const tUpsertProducts = Date.now()
+  console.log(`[sync] upsert ${productRows.length} produkter: ${tUpsertProducts - tFetch}ms`)
 
-  // ── 3. Bulk upsert all metafields ───────────────────────────────────────
+  // ── 2. Delete existing metafields for these products ────────────────────
+  // PostgREST sends .in() values in the URL; chunk at 500 UUIDs to stay under
+  // the URL-length limit.
+  await inChunks(Array.from(idBySourceId.values()), 500, 3, async (chunk) => {
+    const { error } = await db
+      .from('product_metafields')
+      .delete()
+      .eq('feed_id', feedId)
+      .in('product_id', chunk)
+    if (error) throw new Error(`Delete of metafields failed: ${error.message}`)
+  })
+  const tDeleteMfs = Date.now()
+  console.log(`[sync] delete metafields: ${tDeleteMfs - tUpsertProducts}ms`)
+
+  // ── 3. Upsert all metafields ────────────────────────────────────────────
   const allMetafields: Array<{
     feed_id: string
     product_id: string
@@ -230,7 +342,7 @@ export async function syncProducts(feedId: string): Promise<SyncResult> {
     type: string | null
   }> = []
   for (const p of products) {
-    const productUuid = idByShopifyId.get(String(p.id))
+    const productUuid = idBySourceId.get(p.id)
     if (!productUuid) continue
     for (const mf of p.metafields) {
       allMetafields.push({
@@ -244,51 +356,47 @@ export async function syncProducts(feedId: string): Promise<SyncResult> {
     }
   }
 
-  if (allMetafields.length > 0) {
-    const { error: mfErr } = await db
+  await inChunks(allMetafields, 1000, 2, async (chunk) => {
+    const { error } = await db
       .from('product_metafields')
-      .upsert(allMetafields, { onConflict: 'feed_id,product_id,namespace,key' })
-    if (mfErr) throw new Error(`Bulk upsert of metafields failed: ${mfErr.message}`)
-  }
+      .upsert(chunk, { onConflict: 'feed_id,product_id,namespace,key' })
+    if (error) throw new Error(`Upsert of metafields failed: ${error.message}`)
+  })
   const tUpsertMfs = Date.now()
-  console.log(
-    `[sync] bulk upsert ${allMetafields.length} metafields → ${allMetafields.length > 0 ? 1 : 0} RT: ${tUpsertMfs - tDeleteMfs}ms`
-  )
+  console.log(`[sync] upsert ${allMetafields.length} metafields: ${tUpsertMfs - tDeleteMfs}ms`)
 
-  // ── Cleanup: delete Shopify products that disappeared (per feed) ────────
-  const { data: existingProducts, error: fetchErr } = await db
-    .from('products')
-    .select('id, shopify_id')
-    .eq('feed_id', feedId)
-
-  if (fetchErr) throw new Error(`Fetch for cleanup failed: ${fetchErr.message}`)
-
-  const staleIds = (existingProducts ?? [])
-    .filter((row) => !syncedShopifyIds.has(row.shopify_id))
-    .map((row) => row.id)
-
-  // Samme PostgREST URL-længde-grænse som ved metafield-delete: chunk i 500
-  // og slet parallelt. Med MAX_PRODUCTS-cap'en kan staleIds nemt være tusinder
-  // (alt i DB der ikke kom med i denne syncs page-cap).
-  const STALE_CHUNK_SIZE = 500
-  const staleChunks: string[][] = []
-  for (let i = 0; i < staleIds.length; i += STALE_CHUNK_SIZE) {
-    staleChunks.push(staleIds.slice(i, i + STALE_CHUNK_SIZE))
-  }
-  if (staleChunks.length > 0) {
-    const results = await Promise.all(
-      staleChunks.map((chunk) => db.from('products').delete().in('id', chunk))
-    )
-    for (const r of results) {
-      if (r.error) throw new Error(`Cleanup of stale products failed: ${r.error.message}`)
+  // ── Cleanup: delete products that disappeared from the source (per feed) ─
+  // Paged read: PostgREST caps a response at 1000 rows, so an unpaged select
+  // would only ever see (and clean up) the first 1000 products.
+  const staleIds: string[] = []
+  const PAGE_SIZE = 1000
+  for (let from = 0; ; from += PAGE_SIZE) {
+    const { data, error } = await db
+      .from('products')
+      .select('id, shopify_id')
+      .eq('feed_id', feedId)
+      .order('id', { ascending: true })
+      .range(from, from + PAGE_SIZE - 1)
+    if (error) throw new Error(`Fetch for cleanup failed: ${error.message}`)
+    const rows = (data ?? []) as { id: string; shopify_id: string }[]
+    for (const row of rows) {
+      if (!syncedIds.has(row.shopify_id)) staleIds.push(row.id)
     }
+    if (rows.length < PAGE_SIZE) break
   }
+
+  await inChunks(staleIds, 250, 3, async (chunk) => {
+    const { error } = await db.from('products').delete().in('id', chunk)
+    if (error) throw new Error(`Cleanup of stale products failed: ${error.message}`)
+  })
   const tCleanup = Date.now()
-  console.log(
-    `[sync] cleanup (${staleIds.length} stale produkter, ${staleChunks.length} chunk(s) parallelt): ${tCleanup - tUpsertMfs}ms`
-  )
+  console.log(`[sync] cleanup (${staleIds.length} stale produkter): ${tCleanup - tUpsertMfs}ms`)
 
   // ── Stock: record what changed, and where the shop stocks from ──────────
+  //
+  // Shopify projects only. A feed URL says in/out of stock, not a quantity, and
+  // has no locations — snapshotting its 1/0 placeholders would invent stock
+  // history.
   //
   // Deliberately LAST and deliberately non-fatal. Neither of these is part of
   // the catalogue this function exists to deliver: the products are already
@@ -300,57 +408,58 @@ export async function syncProducts(feedId: string): Promise<SyncResult> {
   // stock that this sync actually observed rather than re-reading a table that
   // another process could have moved underneath it.
   let stockChanges = 0
-  try {
-    const observedAt = now
-    const stockRows: {
-      product_ref: string
-      variant_ref: string
-      quantity: number | null
-      tracked: boolean
-      policy: string | null
-    }[] = []
+  if (shopify) {
+    try {
+      const observedAt = now
+      const stockRows: {
+        product_ref: string
+        variant_ref: string
+        quantity: number | null
+        tracked: boolean
+        policy: string | null
+      }[] = []
 
-    for (const p of products) {
-      const productRef = String(p.id)
-      for (const v of p.variants ?? []) {
-        const stock = readVariantStock(productRef, v as unknown as Record<string, unknown>)
-        if (!stock) continue
-        stockRows.push({
-          product_ref: stock.productRef,
-          variant_ref: stock.variantRef,
-          quantity: stock.quantity,
-          tracked: stock.tracked,
-          policy: stock.oversell ? 'continue' : 'deny',
-        })
+      for (const p of products) {
+        const productRef = p.id
+        for (const v of p.variants ?? []) {
+          const stock = readVariantStock(productRef, v as Record<string, unknown>)
+          if (!stock) continue
+          stockRows.push({
+            product_ref: stock.productRef,
+            variant_ref: stock.variantRef,
+            quantity: stock.quantity,
+            tracked: stock.tracked,
+            policy: stock.oversell ? 'continue' : 'deny',
+          })
+        }
       }
-    }
 
-    if (stockRows.length > 0) {
-      const { data: written, error: stockErr } = await db.rpc('record_variant_stock', {
-        p_feed_id: feedId,
-        p_observed_at: observedAt,
-        p_rows: stockRows,
-      })
-      if (stockErr) throw new Error(stockErr.message)
-      stockChanges = Number(written ?? 0)
-    }
+      if (stockRows.length > 0) {
+        const { data: written, error: stockErr } = await db.rpc('record_variant_stock', {
+          p_feed_id: feedId,
+          p_observed_at: observedAt,
+          p_rows: stockRows,
+        })
+        if (stockErr) throw new Error(stockErr.message)
+        stockChanges = Number(written ?? 0)
+      }
 
-    // Shop-wide, so it lands on the project rather than on this feed. Cheap
-    // enough (one request, no pagination) to refresh on every sync, which keeps
-    // it honest as merchants open and close locations.
-    const locations = await shopify.fetchLocations()
-    if (locations.length > 0) {
-      const { error: locErr } = await db
-        .from('projects')
-        .update({ shopify_locations: locations, locations_synced_at: observedAt })
-        .eq('id', projectId)
-      if (locErr) throw new Error(locErr.message)
+      // Shop-wide, so it lands on the project rather than on this feed. Cheap
+      // enough (one request, no pagination) to refresh on every sync, which keeps
+      // it honest as merchants open and close locations.
+      const locations = await shopify.fetchLocations()
+      if (locations.length > 0) {
+        const { error: locErr } = await db
+          .from('projects')
+          .update({ shopify_locations: locations, locations_synced_at: observedAt })
+          .eq('id', projectId)
+        if (locErr) throw new Error(locErr.message)
+      }
+    } catch (err) {
+      console.error(`[sync] stock/locations fejlede (produkter er gemt) — ${err}`)
     }
-  } catch (err) {
-    console.error(`[sync] stock/locations fejlede (produkter er gemt) — ${err}`)
+    console.log(`[sync] stock: ${stockChanges} ændring(er), ${Date.now() - tCleanup}ms`)
   }
-  const tStock = Date.now()
-  console.log(`[sync] stock: ${stockChanges} ændring(er), ${tStock - tCleanup}ms`)
 
   const totalMs = Date.now() - t0
   console.log(`[sync] TOTAL: ${totalMs}ms`)
@@ -359,7 +468,7 @@ export async function syncProducts(feedId: string): Promise<SyncResult> {
     synced: products.length,
     metafields: allMetafields.length,
     durationMs: totalMs,
-    warnings: metaobjectWarnings(shopifyData.metaobjects),
+    warnings: source.warnings,
     stockChanges,
   }
 }
@@ -393,6 +502,7 @@ export function toShopifyData(products: SupabaseProduct[]): ShopifyData {
       updated_at: p.updated_at,
       published_at: p.published_at,
       handle: p.handle ?? '',
+      link: p.link ?? null,
       status: (p.status as 'active' | 'draft' | 'archived') ?? 'active',
       tags: p.tags ?? '',
       published_scope: '',

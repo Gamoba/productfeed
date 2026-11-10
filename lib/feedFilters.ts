@@ -49,6 +49,9 @@ export function resolveField(
   if (!field) return ''
 
   if (field === 'url') {
+    // Feed-URL sources carry the product's real URL; their URL scheme isn't
+    // Shopify's /products/<handle>, so it's used verbatim.
+    if (product.link) return product.link
     return buildProductUrl(product.handle, marketUrl)
   }
 

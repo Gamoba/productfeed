@@ -4,6 +4,10 @@ import { getOwnedFeed } from '@/lib/feeds'
 import { enforceRateLimit } from '@/lib/rateLimit'
 import { errorResponse } from '@/lib/errors'
 
+// A full sync of a large catalog (a ~28k-product feed URL takes 30–40 s) must
+// not hit the platform default limit. 300 s = Hobby-plan ceiling, as in cron/sync.
+export const maxDuration = 300
+
 export async function POST(req: Request) {
   const supabase = await createSupabaseServerClient()
   const {

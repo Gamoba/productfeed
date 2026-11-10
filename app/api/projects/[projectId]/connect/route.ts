@@ -112,6 +112,10 @@ export async function POST(
   const { error: updateErr } = await db
     .from('projects')
     .update({
+      // Connecting Shopify (re)makes it the project's source; any feed URL from
+      // a previous feed-URL setup is dropped.
+      source_type: 'shopify',
+      feed_url: null,
       shop_url: shopUrl,
       primary_domain: primaryDomain,
       access_token_ciphertext: enc.ciphertext,

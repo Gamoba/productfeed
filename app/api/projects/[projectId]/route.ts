@@ -1,6 +1,6 @@
 import { NextResponse } from 'next/server'
 import { createSupabaseServerClient } from '@/lib/supabase-server'
-import { adminDb, getOwnedProject } from '@/lib/feeds'
+import { adminDb, getOwnedProject, purgeFeedProducts } from '@/lib/feeds'
 import { errorResponse } from '@/lib/errors'
 
 // DELETE — remove a project. ON DELETE CASCADE on feeds.project_id (migration
@@ -22,6 +22,15 @@ export async function DELETE(
   if (!owned) return NextResponse.json({ error: 'Not found' }, { status: 404 })
 
   const db = adminDb()
+  // Each feed's products first, in batches — one cascading delete of a large
+  // catalog times out (see purgeFeedProducts).
+  try {
+    const { data: feeds, error: feedsErr } = await db.from('feeds').select('id').eq('project_id', projectId)
+    if (feedsErr) throw new Error(feedsErr.message)
+    for (const f of (feeds ?? []) as { id: string }[]) await purgeFeedProducts(db, f.id)
+  } catch (err) {
+    return errorResponse(err, 'DELETE /api/projects/[projectId] purge')
+  }
   const { error } = await db
     .from('projects')
     .delete()

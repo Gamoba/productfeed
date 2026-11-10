@@ -7,6 +7,7 @@ import {
   ProjectConnectModal,
   projectStatusBadge,
   type ConnectResult,
+  type ProjectSource,
 } from '@/app/components/ProjectConnectModal'
 import type { MissingScope } from '@/lib/shopifyScopes'
 
@@ -14,29 +15,37 @@ export function ProjectHomeClient({
   projectId,
   projectName,
   shopUrl: initialShopUrl,
+  sourceType: initialSourceType,
+  feedUrl: initialFeedUrl,
   connectionStatus: initialStatus,
   lastVerifiedAt: initialVerifiedAt,
 }: {
   projectId: string
   projectName: string
   shopUrl: string | null
+  sourceType: ProjectSource
+  feedUrl: string | null
   connectionStatus: string
   lastVerifiedAt: string | null
 }) {
   const [shopUrl, setShopUrl] = useState(initialShopUrl)
+  const [sourceType, setSourceType] = useState<ProjectSource>(initialSourceType)
+  const [feedUrl, setFeedUrl] = useState(initialFeedUrl)
   const [status, setStatus] = useState(initialStatus)
   const [lastVerifiedAt, setLastVerifiedAt] = useState(initialVerifiedAt)
   const [connectOpen, setConnectOpen] = useState(false)
   const [missing, setMissing] = useState<MissingScope[]>([])
+  const [productCount, setProductCount] = useState<number | null>(null)
 
   const connected = status === 'connected'
-  const badge = projectStatusBadge(status)
+  const isFeedUrl = sourceType === 'feed_url'
 
   // Scopes are read live rather than stored (see GET on the connect route), so
   // the warning survives a reload instead of only appearing in the seconds
   // after connecting. Advisory: any failure leaves the list empty and silent.
+  // Shopify only — a feed URL has no token or scopes.
   useEffect(() => {
-    if (!connected) return
+    if (!connected || isFeedUrl) return
     let cancelled = false
     fetch(`/api/projects/${projectId}/connect`)
       .then((r) => r.json())
@@ -47,12 +56,23 @@ export function ProjectHomeClient({
     return () => {
       cancelled = true
     }
-  }, [projectId, connected])
+  }, [projectId, connected, isFeedUrl])
+  const badge = projectStatusBadge(status)
+  // One "where products come from" value for the hero and the info grid.
+  const sourceLabel = isFeedUrl ? feedUrl : shopUrl
 
   function handleConnected(result: ConnectResult) {
     setStatus(result.connection_status)
     setLastVerifiedAt(result.last_verified_at)
-    setShopUrl(result.shop)
+    setSourceType(result.source_type)
+    if (result.source_type === 'feed_url') {
+      setFeedUrl(result.feedUrl)
+      setShopUrl(null)
+    } else {
+      setShopUrl(result.shop)
+      setFeedUrl(null)
+    }
+    setProductCount(result.productCount)
     setMissing(result.missingScopes)
   }
 
@@ -83,15 +103,15 @@ export function ProjectHomeClient({
                 {projectName}
               </h1>
               <p style={{ fontSize: '15px', lineHeight: 1.6, color: 'var(--ink-secondary)' }}>
-                {shopUrl ? (
-                  <span className="ff-mono">{shopUrl}</span>
+                {sourceLabel ? (
+                  <span className="ff-mono break-all">{sourceLabel}</span>
                 ) : (
-                  'Connect this project to a Shopify store to start building feeds.'
+                  'Connect this project to a Shopify store or a product feed URL to start building feeds.'
                 )}
               </p>
             </div>
             <button onClick={() => setConnectOpen(true)} className="wl-btn-secondary shrink-0">
-              {connected ? 'Replace token' : 'Connect Shopify'}
+              {connected ? 'Change source' : 'Connect source'}
             </button>
           </div>
         </header>
@@ -99,12 +119,14 @@ export function ProjectHomeClient({
         {/* Connection panel */}
         <div className="wl-card">
           <div style={{ padding: '14px 18px', borderBottom: '1px solid var(--hairline)' }}>
-            <span style={{ fontSize: '15px', fontWeight: 500, color: 'var(--ink)' }}>Shopify connection</span>
+            <span style={{ fontSize: '15px', fontWeight: 500, color: 'var(--ink)' }}>
+              {connected ? (isFeedUrl ? 'Feed URL source' : 'Shopify connection') : 'Product source'}
+            </span>
           </div>
           <div className="p-4">
             <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
               <ConnInfo label="Status" value={badge.label} />
-              <ConnInfo label="Shop URL" value={shopUrl ?? '—'} mono />
+              <ConnInfo label={isFeedUrl ? 'Feed URL' : 'Shop URL'} value={sourceLabel ?? '—'} mono />
               <ConnInfo
                 label="Last verified"
                 value={
@@ -123,12 +145,20 @@ export function ProjectHomeClient({
 
             {!connected && (
               <ConnNotice>
-                Connect this project to Shopify before creating feeds — markets and product sync need a
-                verified access token.
+                Connect a product source before creating feeds — either a Shopify store (verified
+                access token) or a public product feed URL.
+              </ConnNotice>
+            )}
+
+            {connected && isFeedUrl && productCount !== null && (
+              <ConnNotice>
+                Feed checked — {productCount.toLocaleString('en-US')} products found. Feeds in this
+                project import them on sync.
               </ConnNotice>
             )}
 
             {connected &&
+              !isFeedUrl &&
               missing.map((s) => (
                 <ConnNotice key={s.handle}>
                   {s.required ? 'Connected, but missing the required scope ' : 'Connected, but missing the '}
@@ -146,7 +176,9 @@ export function ProjectHomeClient({
         <ProjectConnectModal
           projectId={projectId}
           mode={connected ? 'rotate' : 'connect'}
+          initialSource={sourceType}
           initialShopUrl={shopUrl}
+          initialFeedUrl={feedUrl}
           onClose={() => setConnectOpen(false)}
           onConnected={handleConnected}
         />

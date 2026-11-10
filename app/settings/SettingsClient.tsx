@@ -110,6 +110,7 @@ export function SettingsClient({
   const [markets, setMarkets] = useState<ShopifyMarket[]>([])
   const [loadingMarkets, setLoadingMarkets] = useState(true)
   const [marketsError, setMarketsError] = useState<string | null>(null)
+  const [fromFeedUrl, setFromFeedUrl] = useState(false)
 
   const [selectedMarketId, setSelectedMarketId] = useState<string>(
     initialSettings?.selected_market_id ?? ''
@@ -155,8 +156,9 @@ export function SettingsClient({
       : '/api/shopify/markets'
     fetch(marketsUrl)
       .then((r) => r.json())
-      .then((data: { markets?: ShopifyMarket[]; error?: string }) => {
+      .then((data: { markets?: ShopifyMarket[]; source?: 'feed_url'; error?: string }) => {
         if (data.error) throw new Error(data.error)
+        setFromFeedUrl(data.source === 'feed_url')
         const fetched = data.markets ?? []
         setMarkets(fetched)
         // Hydrér marketUrl + selectedCountry fra det allerede-valgte market hvis
@@ -361,7 +363,14 @@ export function SettingsClient({
               </div>
             )}
 
-            {!loadingMarkets && !marketsError && markets.length === 0 && (
+            {!loadingMarkets && !marketsError && fromFeedUrl && (
+              <p style={{ fontSize: '12px', color: 'var(--color-text-secondary)' }}>
+                This project imports products from a feed URL. Language and currency come from that
+                feed — there are no markets to choose.
+              </p>
+            )}
+
+            {!loadingMarkets && !marketsError && !fromFeedUrl && markets.length === 0 && (
               <p style={{ fontSize: '12px', color: 'var(--color-text-tertiary)' }}>
                 No markets found — your store may not have Shopify Markets enabled.
               </p>

@@ -3,6 +3,15 @@ import { createSupabaseServerClient } from '@/lib/supabase-server'
 import { adminDb, type ProjectRow } from '@/lib/feeds'
 import { errorResponse } from '@/lib/errors'
 
+function hostOf(url: string | null): string | null {
+  if (!url) return null
+  try {
+    return new URL(url).host
+  } catch {
+    return url
+  }
+}
+
 // GET — list the user's projects with feed counts + connection status.
 // Never returns the encrypted token columns.
 export async function GET() {
@@ -16,7 +25,7 @@ export async function GET() {
 
   const { data: projects, error } = await db
     .from('projects')
-    .select('id, name, description, shop_url, connection_status, last_verified_at, created_at, updated_at')
+    .select('id, name, description, shop_url, source_type, feed_url, primary_domain, connection_status, last_verified_at, created_at, updated_at')
     .eq('user_id', user.id)
     .order('created_at', { ascending: true })
 
@@ -55,7 +64,10 @@ export async function GET() {
     id: p.id,
     name: p.name,
     description: p.description,
-    shopUrl: p.shop_url,
+    // The list shows one "where products come from" label: the Shopify admin
+    // domain, or for feed-URL projects the storefront host the feed points at.
+    shopUrl: p.source_type === 'feed_url' ? hostOf(p.primary_domain ?? p.feed_url) : p.shop_url,
+    sourceType: p.source_type ?? 'shopify',
     connectionStatus: p.connection_status,
     lastVerifiedAt: p.last_verified_at,
     created_at: p.created_at,

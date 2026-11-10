@@ -154,7 +154,7 @@ export function ProjectListClient() {
         ) : projects.length === 0 ? (
           <div className="ff-panel py-16 flex flex-col items-center gap-3">
             <p style={{ fontSize: '12px', color: 'var(--color-text-tertiary)' }}>
-              No projects yet — a project holds one Shopify connection.
+              No projects yet — a project holds one product source: a Shopify store or a feed URL.
             </p>
             <button onClick={() => setShowCreate(true)} className="ff-btn-primary">
               Create your first project

@@ -1,6 +1,6 @@
 import { NextResponse } from 'next/server'
 import { createSupabaseServerClient } from '@/lib/supabase-server'
-import { adminDb, getOwnedFeed } from '@/lib/feeds'
+import { adminDb, getOwnedFeed, purgeFeedProducts } from '@/lib/feeds'
 import { errorResponse } from '@/lib/errors'
 
 export async function DELETE(
@@ -19,7 +19,13 @@ export async function DELETE(
   if (!owned) return NextResponse.json({ error: 'Not found' }, { status: 404 })
 
   const db = adminDb()
-  // ON DELETE CASCADE on feed_id FKs handles all child rows.
+  // Products first, in batches — a single cascading delete of a large catalog
+  // times out. ON DELETE CASCADE on feed_id FKs then handles the rest.
+  try {
+    await purgeFeedProducts(db, feedId)
+  } catch (err) {
+    return errorResponse(err, 'DELETE /api/feeds/[feedId] purge')
+  }
   const { error } = await db.from('feeds').delete().eq('id', feedId).eq('user_id', user.id)
   if (error) return errorResponse(error, 'DELETE /api/feeds/[feedId]')
 

@@ -35,6 +35,9 @@ export function FeedWizardModal({
   const [markets, setMarkets] = useState<ShopifyMarket[]>([])
   const [loadingMarkets, setLoadingMarkets] = useState(false)
   const [marketsError, setMarketsError] = useState<string | null>(null)
+  // Set once markets have loaded: 'feed_url' projects have no markets to pick.
+  // Also stops the lazy-load effect from refetching when the list is empty.
+  const [marketsSource, setMarketsSource] = useState<'shopify' | 'feed_url' | null>(null)
   const [marketId, setMarketId] = useState('')
   const [locale, setLocale] = useState('en')
   const [currency, setCurrency] = useState('USD')
@@ -50,19 +53,20 @@ export function FeedWizardModal({
 
   // Lazy-load markets when the user actually reaches step 2.
   useEffect(() => {
-    if (step !== 2 || markets.length > 0 || loadingMarkets || marketsError) return
+    if (step !== 2 || marketsSource !== null || loadingMarkets || marketsError) return
     setLoadingMarkets(true)
     fetch(`/api/shopify/markets?projectId=${encodeURIComponent(projectId)}`)
       .then((r) => r.json())
-      .then((d: { markets?: ShopifyMarket[]; error?: string }) => {
+      .then((d: { markets?: ShopifyMarket[]; source?: 'feed_url'; error?: string }) => {
         if (d.error) throw new Error(d.error)
         setMarkets(d.markets ?? [])
+        setMarketsSource(d.source ?? 'shopify')
       })
       .catch((e: unknown) =>
         setMarketsError(e instanceof Error ? e.message : 'Could not fetch markets')
       )
       .finally(() => setLoadingMarkets(false))
-  }, [step, markets.length, loadingMarkets, marketsError, projectId])
+  }, [step, marketsSource, loadingMarkets, marketsError, projectId])
 
   function selectMarket(m: ShopifyMarket) {
     setMarketId(m.id)
@@ -218,6 +222,7 @@ export function FeedWizardModal({
               markets={markets}
               loading={loadingMarkets}
               error={marketsError}
+              fromFeedUrl={marketsSource === 'feed_url'}
               marketId={marketId}
               locale={locale}
               currency={currency}
@@ -378,6 +383,7 @@ function Step2Market({
   markets,
   loading,
   error,
+  fromFeedUrl,
   marketId,
   locale,
   currency,
@@ -389,6 +395,7 @@ function Step2Market({
   markets: ShopifyMarket[]
   loading: boolean
   error: string | null
+  fromFeedUrl: boolean
   marketId: string
   locale: string
   currency: string
@@ -430,7 +437,14 @@ function Step2Market({
         </div>
       )}
 
-      {!loading && !error && markets.length === 0 && (
+      {!loading && !error && fromFeedUrl && (
+        <p style={{ fontSize: '12px', color: 'var(--color-text-secondary)' }}>
+          This project imports products from a feed URL. Language and currency come from that
+          feed, so there is nothing to choose here — continue to the next step.
+        </p>
+      )}
+
+      {!loading && !error && !fromFeedUrl && markets.length === 0 && (
         <p style={{ fontSize: '12px', color: 'var(--color-text-tertiary)' }}>
           No markets found — you can still create the feed and set it up later.
         </p>
