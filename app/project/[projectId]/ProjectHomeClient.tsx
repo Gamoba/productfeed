@@ -129,7 +129,8 @@ export function ProjectHomeClient({
               lineHeight: 1.6,
             }}
           >
-            <strong style={{ fontWeight: 500 }}>Shopify rejected the access token.</strong> None of this
+            <strong style={{ fontWeight: 500 }}>Shopify rejected the access token.</strong>{' '}
+            None of this
             project&apos;s feeds can sync until it is replaced. The custom app was probably uninstalled, or
             its token rotated, in Shopify Admin. Create a new read-only token there and paste it via{' '}
             <em>Connect source</em>.
