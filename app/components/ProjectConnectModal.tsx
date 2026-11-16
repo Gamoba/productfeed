@@ -45,6 +45,10 @@ export function ProjectConnectModal({
   const [shopUrl, setShopUrl] = useState(initialShopUrl ?? '')
   const [token, setToken] = useState('')
   const [feedUrl, setFeedUrl] = useState(initialFeedUrl ?? '')
+  // Optional HTTP Basic Auth login for a protected feed. Write-only, like the
+  // Shopify token: sent once, stored encrypted, never read back.
+  const [authUser, setAuthUser] = useState('')
+  const [authPass, setAuthPass] = useState('')
   const [submitting, setSubmitting] = useState(false)
   const [error, setError] = useState<string | null>(null)
   const [warning, setWarning] = useState<string | null>(null)
@@ -69,7 +73,14 @@ export function ProjectConnectModal({
         const res = await fetch(`/api/projects/${projectId}/connect-feed`, {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ feed_url: feedUrl.trim() }),
+          body: JSON.stringify({
+            feed_url: feedUrl.trim(),
+            auth_username: authUser.trim(),
+            auth_password: authPass,
+            // Re-saving a feed-URL project without retyping the login keeps the
+            // stored one (server-side, only for the same origin).
+            keep_auth: rotating && authUser.trim() === '',
+          }),
         })
         const data = (await res.json()) as {
           connection_status?: string
@@ -249,6 +260,35 @@ export function ProjectConnectModal({
                     className="ff-input"
                     required
                   />
+                </div>
+
+                <div>
+                  <label className="ff-label block mb-1.5">Login (optional)</label>
+                  <div className="grid grid-cols-2 gap-2">
+                    <input
+                      type="text"
+                      value={authUser}
+                      onChange={(e) => setAuthUser(e.target.value)}
+                      placeholder="Username"
+                      autoComplete="off"
+                      aria-label="Feed username"
+                      className="ff-input"
+                    />
+                    <input
+                      type="password"
+                      value={authPass}
+                      onChange={(e) => setAuthPass(e.target.value)}
+                      placeholder="Password"
+                      autoComplete="new-password"
+                      aria-label="Feed password"
+                      className="ff-input"
+                    />
+                  </div>
+                  <p className="mt-1.5" style={{ fontSize: '11px', color: 'var(--color-text-tertiary)' }}>
+                    {rotating
+                      ? 'Only for feeds behind a login (HTTP Basic Auth). Leave empty to keep the stored login on the same domain.'
+                      : 'Only for feeds behind a login (HTTP Basic Auth). Stored encrypted and never shown again.'}
+                  </p>
                 </div>
               </>
             )}

@@ -1,8 +1,9 @@
 import { createClient } from '@supabase/supabase-js'
 import { createShopifyClientForProject } from '@/lib/projectShopify'
 import { fetchFeedUrlProducts } from '@/lib/feedUrlSource'
+import { decryptFeedAuth, type FeedAuthColumns } from '@/lib/feedAuth'
 import { AppError } from '@/lib/errors'
-import type { ShopifyClient, ShopifyData, ShopifyProduct } from '@/lib/shopify'
+import { ShopifyAuthError, type ShopifyClient, type ShopifyData, type ShopifyProduct } from '@/lib/shopify'
 import { readVariantStock } from '@/lib/inventoryAnalytics'
 
 function adminClient() {
@@ -174,7 +175,7 @@ async function inChunks<T>(
 type ProjectSourceRow = {
   source_type: string | null
   feed_url: string | null
-}
+} & Partial<FeedAuthColumns>
 
 // What a source fetch hands back to syncProducts. `shopify` is set only for
 // Shopify projects — stock snapshots and locations are Shopify data.
@@ -223,12 +224,46 @@ async function fetchShopifySource(
   }
 }
 
+// fetchShopifySource, plus keeping projects.connection_status honest. Without
+// this a revoked token left the project showing "Connected" while every sync
+// failed (BWH, Oct–Nov 2026: three feeds stale for weeks unnoticed).
+//   • Shopify answers 401 → connection_status = 'error' (red on the project
+//     page and project list), then rethrow so the sync still fails.
+//   • A fetch succeeds while the status is 'error' → back to 'connected'.
+// These writes go to OUR database only; Shopify stays read-only.
+async function fetchShopifyAndTrackConnection(
+  db: ReturnType<typeof adminClient>,
+  feedId: string,
+  projectId: string
+): Promise<SourceFetch> {
+  let result: SourceFetch
+  try {
+    result = await fetchShopifySource(db, feedId, projectId)
+  } catch (err) {
+    if (err instanceof ShopifyAuthError) {
+      const { error } = await db
+        .from('projects')
+        .update({ connection_status: 'error' })
+        .eq('id', projectId)
+      if (error) console.error(`[sync] could not flag project ${projectId} as error:`, error)
+    }
+    throw err
+  }
+  const { error } = await db
+    .from('projects')
+    .update({ connection_status: 'connected', last_verified_at: new Date().toISOString() })
+    .eq('id', projectId)
+    .eq('connection_status', 'error')
+  if (error) console.error(`[sync] could not restore project ${projectId} to connected:`, error)
+  return result
+}
+
 // Fetches a feed-URL project's products from its public product feed.
 async function fetchFeedUrlSource(project: ProjectSourceRow, projectId: string): Promise<SourceFetch> {
   if (!project.feed_url) {
     throw new AppError('Projektet har ingen feed-URL konfigureret endnu')
   }
-  const result = await fetchFeedUrlProducts(project.feed_url)
+  const result = await fetchFeedUrlProducts(project.feed_url, decryptFeedAuth(project))
   console.log(
     `[sync] feed URL (project ${projectId}): ${result.itemCount} items → ${result.products.length} produkter` +
       (result.duplicateIds ? `, ${result.duplicateIds} dublet-id'er sprunget over` : '') +
@@ -263,7 +298,7 @@ export async function syncProducts(feedId: string): Promise<SyncResult> {
 
   const { data: project, error: projectErr } = await db
     .from('projects')
-    .select('source_type, feed_url')
+    .select('source_type, feed_url, feed_auth_ciphertext, feed_auth_iv, feed_auth_tag')
     .eq('id', projectId)
     .maybeSingle<ProjectSourceRow>()
   if (projectErr) throw new Error(`Project lookup failed: ${projectErr.message}`)
@@ -272,7 +307,7 @@ export async function syncProducts(feedId: string): Promise<SyncResult> {
   const source =
     project.source_type === 'feed_url'
       ? await fetchFeedUrlSource(project, projectId)
-      : await fetchShopifySource(db, feedId, projectId)
+      : await fetchShopifyAndTrackConnection(db, feedId, projectId)
   const { products, shopify } = source
   const tFetch = Date.now()
   console.log(`[sync] fetch total: ${tFetch - t0}ms — ${products.length} produkter`)
@@ -494,6 +529,7 @@ export function toShopifyData(products: SupabaseProduct[]): ShopifyData {
     metaobjects: { total: 0, resolved: 0, accessDenied: false },
     products: products.map((p) => ({
       id: parseInt(p.shopify_id, 10),
+      source_id: p.shopify_id,
       title: p.title ?? '',
       body_html: p.body_html ?? '',
       vendor: p.vendor ?? '',

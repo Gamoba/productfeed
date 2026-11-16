@@ -7,6 +7,7 @@ import { runFeedValidation } from './actions'
 import { FeedSection } from '../dashboard/FeedSection'
 import { FeedValidation } from './FeedValidation'
 import type { ValidationIssue, ValidationResult } from '@/lib/feedValidator'
+import { staleSyncDays } from '@/lib/syncSchedule'
 
 type CacheInfo = {
   generated_at: string | null
@@ -413,6 +414,7 @@ function StatisticsSection({
   lastSynced: string | null
   lastGenerated: string | null
 }) {
+  const staleDays = staleSyncDays(lastSynced)
   return (
     <div className="wl-card" style={{ overflow: 'hidden' }}>
       {/* Three confident numbers, separated by hairlines — no boxed tiles. */}
@@ -431,6 +433,21 @@ function StatisticsSection({
         <Meta label="Last synced" value={formatDateTime(lastSynced)} />
         <Meta label="Last generated" value={formatDateTime(lastGenerated)} />
       </div>
+      {staleDays != null && (
+        <div
+          style={{
+            padding: '11px 20px',
+            borderTop: '1px solid var(--hairline)',
+            background: 'var(--color-badge-warning-bg)',
+            color: 'var(--color-badge-warning-text)',
+            fontSize: '12px',
+            lineHeight: 1.5,
+          }}
+        >
+          Product data is {staleDays} days old — the sync has been failing. Check the error under
+          Settings → Automatic sync; a rejected Shopify token needs a new one via the project page.
+        </div>
+      )}
     </div>
   )
 }

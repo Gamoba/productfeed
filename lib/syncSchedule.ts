@@ -72,6 +72,21 @@ export function lastScheduledSlot(
   return new Date(now.getTime() - minutesBack * 60_000)
 }
 
+// Product data older than this is flagged in the UI. Every feed syncs at least
+// daily by default, so two missed days means something is broken (revoked
+// token, failing feed URL) — not just a slow schedule.
+export const STALE_SYNC_HOURS = 48
+
+// Whole days since the last successful product sync when that is past
+// STALE_SYNC_HOURS, otherwise null. Never-synced feeds return null: they have
+// no data to be stale, and their empty state already says so.
+export function staleSyncDays(lastSynced: string | null, now: Date = new Date()): number | null {
+  if (!lastSynced) return null
+  const ageMs = now.getTime() - new Date(lastSynced).getTime()
+  if (!Number.isFinite(ageMs) || ageMs < STALE_SYNC_HOURS * 3_600_000) return null
+  return Math.floor(ageMs / 86_400_000)
+}
+
 // A feed is due when its last claim predates the latest slot. A feed that has
 // never been auto-synced is due straight away.
 export function isAutoSyncDue(

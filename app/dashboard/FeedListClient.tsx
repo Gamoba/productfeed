@@ -3,6 +3,7 @@
 import Link from 'next/link'
 import { useEffect, useRef, useState } from 'react'
 import type { ValidationIssue } from '@/lib/feedValidator'
+import { staleSyncDays } from '@/lib/syncSchedule'
 import { FeedWizardModal } from './FeedWizardModal'
 
 type ValidationStatus = 'ok' | 'warnings' | 'errors' | null
@@ -176,6 +177,7 @@ function FeedCard({
   onDeleted: (id: string) => void
 }) {
   const [openModal, setOpenModal] = useState<'rename' | 'description' | 'delete' | null>(null)
+  const staleDays = staleSyncDays(feed.lastSynced)
 
   return (
     <div className="wl-card flex flex-col">
@@ -223,6 +225,7 @@ function FeedCard({
                 })
               : '—'
           }
+          warning={staleDays != null ? `${staleDays} days old — sync is failing` : undefined}
         />
         <Stat
           label="Feed updated"
@@ -497,11 +500,20 @@ function CopyLinkButton({ feedId }: { feedId: string }) {
   )
 }
 
-function Stat({ label, value }: { label: string; value: string }) {
+function Stat({ label, value, warning }: { label: string; value: string; warning?: string }) {
   return (
-    <div className="flex items-center justify-between gap-2">
-      <span style={{ fontSize: '11px', color: 'var(--ink-muted)' }}>{label}</span>
-      <span style={{ fontSize: '12px', fontWeight: 500, color: 'var(--ink)' }}>{value}</span>
+    <div>
+      <div className="flex items-center justify-between gap-2">
+        <span style={{ fontSize: '11px', color: 'var(--ink-muted)' }}>{label}</span>
+        <span style={{ fontSize: '12px', fontWeight: 500, color: warning ? 'var(--accent-amber)' : 'var(--ink)' }}>
+          {value}
+        </span>
+      </div>
+      {warning && (
+        <p className="text-right" style={{ fontSize: '11px', color: 'var(--accent-amber)', marginTop: '2px' }}>
+          {warning}
+        </p>
+      )}
     </div>
   )
 }

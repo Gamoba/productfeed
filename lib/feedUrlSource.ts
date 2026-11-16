@@ -12,6 +12,10 @@
 //     variants[0].compare_at_price the original price when on sale.
 //   g:availability → variants[0].inventory_quantity 1 / 0 (raw value is kept
 //     as metafield feed.availability for exact mapping).
+// ProfitMetrics feeds (pm: namespace) are read too: pm:price_currency fills a
+//   missing price currency, pm:num_stock gives the stock when there is no
+//   g:availability, pm:sku the SKU when there is no g:mpn. pm:price_buy and
+//   the rest stay feed.* metafields.
 //   g:link → products.link (used verbatim for the `url` source field).
 // Every other field is kept as a metafield in namespace "feed" (feed.gtin,
 // feed.mpn, feed.condition, …), so it can be mapped and filtered by name.
@@ -92,20 +96,35 @@ export async function assertPublicFeedUrl(raw: string): Promise<URL> {
   return url
 }
 
+// HTTP Basic Auth login for a protected feed. Stored encrypted on the project
+// (lib/feedAuth.ts); only ever held in plaintext server-side during a fetch.
+export type FeedAuth = { username: string; password: string }
+
+function basicAuthHeader(auth: FeedAuth): string {
+  return `Basic ${Buffer.from(`${auth.username}:${auth.password}`, 'utf8').toString('base64')}`
+}
+
 // GETs the feed and returns its body as text. Redirects are followed manually so
-// every hop is re-checked; the body is streamed with a size cap.
-export async function fetchFeedText(rawUrl: string): Promise<string> {
+// every hop is re-checked; the body is streamed with a size cap. A Basic Auth
+// login is sent only to the feed URL's own origin — a redirect to another origin
+// is followed without it, so the login can't leak to a third party.
+export async function fetchFeedText(rawUrl: string, auth?: FeedAuth | null): Promise<string> {
   let url = await assertPublicFeedUrl(rawUrl)
+  const authOrigin = url.origin
   const controller = new AbortController()
   const timer = setTimeout(() => controller.abort(), FETCH_TIMEOUT_MS)
   try {
     for (let hop = 0; ; hop++) {
       let res: Response
+      const headers: Record<string, string> = {
+        Accept: 'application/xml, text/xml, application/rss+xml, */*',
+      }
+      if (auth && url.origin === authOrigin) headers.Authorization = basicAuthHeader(auth)
       try {
         res = await fetch(url, {
           redirect: 'manual',
           signal: controller.signal,
-          headers: { Accept: 'application/xml, text/xml, application/rss+xml, */*' },
+          headers,
         })
       } catch (err) {
         const reason = controller.signal.aborted ? 'timeout' : err instanceof Error ? err.message : 'netværksfejl'
@@ -116,6 +135,16 @@ export async function fetchFeedText(rawUrl: string): Promise<string> {
         if (hop >= MAX_REDIRECTS) throw new AppError('Feed-URL’en redirecter for mange gange')
         url = await assertPublicFeedUrl(new URL(res.headers.get('location')!, url).toString())
         continue
+      }
+      if (res.status === 401 || res.status === 403) {
+        const wantsBasic = /^\s*basic\b/i.test(res.headers.get('www-authenticate') ?? '')
+        throw new AppError(
+          auth
+            ? `Feedet afviste login (HTTP ${res.status}) — tjek brugernavn og adgangskode`
+            : wantsBasic
+              ? 'Feedet kræver login (HTTP Basic Auth) — udfyld brugernavn og adgangskode'
+              : `Feedet svarede med HTTP ${res.status} (adgang nægtet)`
+        )
       }
       if (!res.ok) {
         throw new AppError(`Feedet svarede med HTTP ${res.status}`)
@@ -284,9 +313,25 @@ export function feedItemsToProducts(items: FeedItem[]): FeedConversion {
     const regular = parsePrice(first(item, 'price'))
     const sale = parsePrice(first(item, 'sale_price'))
     const onSale = !!(regular && sale && Number(sale.amount) < Number(regular.amount))
-    const currency = (onSale ? sale?.currency : regular?.currency) || regular?.currency || sale?.currency || null
+    // ProfitMetrics feeds (pm:) give a bare <g:price> and the currency in
+    // pm:price_currency — used only when the price itself carries none.
+    const fallbackCurrency = first(item, 'price_currency').toUpperCase()
+    const currency =
+      (onSale ? sale?.currency : regular?.currency) ||
+      regular?.currency ||
+      sale?.currency ||
+      (/^[A-Z]{3}$/.test(fallbackCurrency) ? fallbackCurrency : null)
+
+    // Stock: g:availability when present (unchanged behaviour: 1 / 0). Without
+    // it, a ProfitMetrics pm:num_stock gives the real quantity. With neither,
+    // the product counts as in stock, as before.
     const availability = first(item, 'availability').toLowerCase().replace(/\s+/g, '_')
-    const inStock = availability === '' || availability === 'in_stock' || availability === 'preorder' || availability === 'backorder'
+    const numStock = first(item, 'num_stock')
+    const stockQty = availability === '' && /^-?\d+(\.\d+)?$/.test(numStock) ? Math.max(0, Math.floor(Number(numStock))) : null
+    const inStock =
+      stockQty !== null
+        ? stockQty > 0
+        : availability === '' || availability === 'in_stock' || availability === 'preorder' || availability === 'backorder'
 
     const imageUrls = [...(item.image_link ?? []), ...(item.additional_image_link ?? [])]
       .map((s) => s.trim())
@@ -327,9 +372,9 @@ export function feedItemsToProducts(items: FeedItem[]): FeedConversion {
           price: onSale ? sale!.amount : (regular?.amount ?? sale?.amount ?? null),
           compare_at_price: onSale ? regular!.amount : null,
           currency,
-          sku: first(item, 'mpn') || null,
+          sku: first(item, 'mpn') || first(item, 'sku') || null,
           barcode: first(item, 'gtin') || null,
-          inventory_quantity: inStock ? 1 : 0,
+          inventory_quantity: stockQty ?? (inStock ? 1 : 0),
           option1: null,
           option2: null,
           option3: null,
@@ -347,8 +392,11 @@ export function feedItemsToProducts(items: FeedItem[]): FeedConversion {
 // Fetch + parse + convert. Throws an AppError when the URL yields no products,
 // so a wrong URL (an HTML page, an empty response) never wipes a feed's
 // existing products during sync.
-export async function fetchFeedUrlProducts(feedUrl: string): Promise<FeedConversion & { itemCount: number }> {
-  const xml = await fetchFeedText(feedUrl)
+export async function fetchFeedUrlProducts(
+  feedUrl: string,
+  auth?: FeedAuth | null
+): Promise<FeedConversion & { itemCount: number }> {
+  const xml = await fetchFeedText(feedUrl, auth)
   const items = parseProductFeed(xml)
   const conversion = feedItemsToProducts(items)
   if (conversion.products.length === 0) {

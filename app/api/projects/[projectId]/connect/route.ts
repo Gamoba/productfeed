@@ -116,6 +116,9 @@ export async function POST(
       // a previous feed-URL setup is dropped.
       source_type: 'shopify',
       feed_url: null,
+      feed_auth_ciphertext: null,
+      feed_auth_iv: null,
+      feed_auth_tag: null,
       shop_url: shopUrl,
       primary_domain: primaryDomain,
       access_token_ciphertext: enc.ciphertext,

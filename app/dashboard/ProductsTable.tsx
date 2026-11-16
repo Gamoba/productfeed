@@ -413,7 +413,7 @@ export function ProductsTable({
         style={{ opacity: loading ? 0.6 : 1, transition: 'opacity 0.15s ease' }}
       >
         {products.map((product) => (
-          <ProductRow key={product.id} product={product} />
+          <ProductRow key={product.source_id ?? product.id} product={product} />
         ))}
       </div>
 

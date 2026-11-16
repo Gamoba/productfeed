@@ -1,4 +1,21 @@
 import { readVariantStock } from '@/lib/inventoryAnalytics'
+import { AppError } from '@/lib/errors'
+
+// Shopify answered 401: the stored access token is no longer accepted — the
+// custom app was uninstalled/deleted, or its token rotated or revoked in
+// Shopify Admin. Nothing on our side can recover from this; a person has to
+// paste a new token. It is an AppError so the message reaches the UI verbatim
+// (feed settings, sync button) instead of the generic server-error text, and
+// sync uses the type to flag the project's connection as broken.
+export class ShopifyAuthError extends AppError {
+  constructor() {
+    super(
+      'Shopify afviste adgangstokenet (HTTP 401). Appen er sandsynligvis fjernet, eller tokenet er roteret i Shopify Admin — indsæt et nyt token via "Change source" på projektsiden.',
+      502
+    )
+    this.name = 'ShopifyAuthError'
+  }
+}
 
 // Pin to a version Shopify still supports. 2025-07 has been retired: requests
 // against it are answered by 2025-10 anyway (verified via the served
@@ -120,6 +137,10 @@ export type ShopifyProduct = {
   // Full product URL carried by non-Shopify sources (feed-URL projects), set
   // when rows are read back via toShopifyData. Never present on Shopify data.
   link?: string | null
+  // The product's source id as stored (products.shopify_id), set when rows are
+  // read back via toShopifyData. `id` is parseInt of it, which is NaN (→ null in
+  // JSON) for non-numeric feed-URL ids like "S-24340110" — use this for keys.
+  source_id?: string
 }
 
 export type ShopifyCollection = {
@@ -729,6 +750,8 @@ export function createShopifyClient({ shopUrl, accessToken }: ShopifyCredentials
         throw new Error('Shopify rate limit: too many attempts')
       }
 
+      if (res.status === 401) throw new ShopifyAuthError()
+
       if (!res.ok) {
         const body = await res.text().catch(() => '')
         throw new Error(`Shopify REST ${res.status} — ${body}`)
@@ -786,6 +809,7 @@ export function createShopifyClient({ shopUrl, accessToken }: ShopifyCredentials
         throw new Error('Shopify GraphQL rate limit: too many attempts')
       }
 
+      if (res.status === 401) throw new ShopifyAuthError()
       if (!res.ok) throw new Error(`Shopify GraphQL ${res.status}`)
       const json = await res.json()
       if (json.errors?.length) {

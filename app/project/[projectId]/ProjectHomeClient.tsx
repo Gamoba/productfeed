@@ -116,6 +116,26 @@ export function ProjectHomeClient({
           </div>
         </header>
 
+        {/* Set by sync when Shopify answers 401 (lib/sync.ts). Every feed in
+            the project stops updating until a new token is pasted. */}
+        {status === 'error' && !isFeedUrl && (
+          <div
+            className="wl-card"
+            style={{
+              padding: '14px 18px',
+              background: 'var(--color-badge-danger-bg)',
+              color: 'var(--color-badge-danger-text)',
+              fontSize: '13px',
+              lineHeight: 1.6,
+            }}
+          >
+            <strong style={{ fontWeight: 500 }}>Shopify rejected the access token.</strong> None of this
+            project&apos;s feeds can sync until it is replaced. The custom app was probably uninstalled, or
+            its token rotated, in Shopify Admin. Create a new read-only token there and paste it via{' '}
+            <em>Connect source</em>.
+          </div>
+        )}
+
         {/* Connection panel */}
         <div className="wl-card">
           <div style={{ padding: '14px 18px', borderBottom: '1px solid var(--hairline)' }}>
