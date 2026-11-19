@@ -65,6 +65,17 @@ export function resolveField(
     return product.title ?? ''
   }
 
+  // The bare "id" source field = the item id the generator would auto-inject
+  // (shopify_id in product mode, shopify_id_variantId in variant mode). The
+  // generator attaches it as `feed_item_id` before resolving mappings, so a
+  // mapping like Combine("shopify_ZZ_" + id) or the default FIELD "id" reads
+  // the same value the preview in MappingClient shows. Without it (filters,
+  // bucket examples) the legacy fall-through below is kept unchanged.
+  if (field === 'id') {
+    const fid = (product as Record<string, unknown>).feed_item_id
+    if (typeof fid === 'string' && fid !== '') return fid
+  }
+
   // item_group_id is the source-field name shown in the dropdown for the
   // product's Shopify ID. shopify_id is kept as a back-compat alias for
   // mappings saved before the rename.

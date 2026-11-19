@@ -218,6 +218,29 @@ function withVariantFirst(product: SupabaseProduct, variant: StoredVariant): Sup
   return { ...product, variants: [variant, ...rest] as unknown[] }
 }
 
+// The default <g:id> for one feed item: shopify_id in product mode,
+// shopify_id_variantId in variant mode. Used when id is unmapped, and exposed to
+// mappings as the "id" source field (resolveField reads feed_item_id).
+function withFeedItemId(product: SupabaseProduct, id: string): SupabaseProduct {
+  return { ...product, feed_item_id: id } as SupabaseProduct
+}
+
+// <g:id> for one item. An id mapping is honoured (e.g. Combine "shopify_ZZ_" +
+// Product ID + "_" + Variant ID to match the Shopify Google app's ids); with no
+// mapping, or one that resolves empty, the auto id is used. The default mapping
+// (FIELD "id") resolves to exactly the auto id, so existing feeds are unchanged.
+async function resolveItemId(
+  idMapping: FeedMapping | undefined,
+  product: SupabaseProduct,
+  anthropic: Anthropic | null,
+  marketUrl: string | null
+): Promise<string> {
+  const auto = String((product as Record<string, unknown>).feed_item_id ?? '')
+  if (!idMapping) return auto
+  const value = (await resolvedValue(idMapping, product, anthropic, marketUrl)).trim()
+  return value || auto
+}
+
 // ── Filter counts (used by dashboard) ──────────────────────────────────────
 
 export async function countFilteredProducts(
@@ -433,6 +456,7 @@ export async function generateFeed(feedId: string): Promise<FeedResult> {
   )
 
   const filterRows = (filtersData ?? []) as FeedFilter[]
+  const idMapping = mappings.find((m) => m.google_field === 'id')
 
   // Hydrate optimized_title onto every product before fields are resolved. Done
   // unconditionally — an accepted AI title overrides the title field regardless
@@ -463,14 +487,15 @@ export async function generateFeed(feedId: string): Promise<FeedResult> {
   const items: string[] = []
 
   if (feedMode === 'product') {
-    for (const product of products) {
+    for (const rawProduct of products) {
+      const product = withFeedItemId(rawProduct, String(rawProduct.shopify_id ?? ''))
       const lines: string[] = []
 
-      // Auto-inject g:id from shopify_id. User mappings for id and
-      // item_group_id are skipped: id is locked to shopify_id, and
-      // item_group_id has no meaning in product mode (no variant grouping).
+      // g:id: the id mapping if any, else shopify_id. item_group_id mappings are
+      // skipped — no meaning in product mode (no variant grouping).
       if (product.shopify_id) {
-        lines.push(xmlLine('id', String(product.shopify_id)))
+        const id = await resolveItemId(idMapping, product, anthropic, marketUrl)
+        if (id) lines.push(xmlLine('id', id))
       }
 
       for (const mapping of mappings) {
@@ -498,9 +523,13 @@ export async function generateFeed(feedId: string): Promise<FeedResult> {
       if (!variants.length) continue
 
       for (const variant of variants) {
-        const vProduct = withVariantFirst(product, variant)
+        const vProduct = withFeedItemId(
+          withVariantFirst(product, variant),
+          `${product.shopify_id}_${variant.id}`
+        )
 
-        // Apply mapping rules; id and item_group_id are always auto-computed
+        // Apply mapping rules; id is resolved separately below, item_group_id is
+        // always the product's shopify_id
         const mappedLines: string[] = []
         const addedFields = new Set<string>()
 
@@ -520,9 +549,9 @@ export async function generateFeed(feedId: string): Promise<FeedResult> {
         const clLine = customLabelLine(product)
         if (clLine) mappedLines.push(clLine)
 
-        // Always-inject: id and item_group_id
+        // Always-inject: id (mapping-aware) and item_group_id
         const autoLines: string[] = [
-          xmlLine('id', `${product.shopify_id}_${variant.id}`),
+          xmlLine('id', await resolveItemId(idMapping, vProduct, anthropic, marketUrl)),
           xmlLine('item_group_id', product.shopify_id),
         ]
 
@@ -613,6 +642,7 @@ export async function generatePreview(feedId: string, limit = 100): Promise<Prev
   )
   const rawProducts = (productsData ?? []) as SupabaseProduct[]
   const filterRows = (filtersData ?? []) as FeedFilter[]
+  const idMapping = mappings.find((m) => m.google_field === 'id')
 
   await attachOptimizedTitles(db, feedId, rawProducts)
   const filteredProducts = applyFeedFilters(rawProducts, filterRows, marketUrl)
@@ -623,9 +653,17 @@ export async function generatePreview(feedId: string, limit = 100): Promise<Prev
   if (feedMode === 'product') {
     googleFields = mappings.map((m) => m.google_field)
 
-    for (const product of filteredProducts.slice(0, limit)) {
+    for (const rawProduct of filteredProducts.slice(0, limit)) {
+      const product = withFeedItemId(rawProduct, String(rawProduct.shopify_id ?? ''))
       const fields: Record<string, string> = {}
       for (const mapping of mappings) {
+        if (mapping.google_field === 'id') {
+          // AI-type id mappings would need an API call; show the auto id then.
+          fields['id'] = await resolveItemId(
+            mapping.mapping_type === 'AI' ? undefined : mapping, product, null, marketUrl
+          )
+          continue
+        }
         // Mirror the generator's AI-title override, ahead of the '__AI__'
         // placeholder — otherwise a preview of an AI-mapped title would show a
         // placeholder where the feed emits a real optimized title.
@@ -653,10 +691,15 @@ export async function generatePreview(feedId: string, limit = 100): Promise<Prev
       const variants = product.variants as StoredVariant[]
       for (const variant of variants) {
         if (rows.length >= limit) break outer
-        const vProduct = withVariantFirst(product, variant)
+        const vProduct = withFeedItemId(
+          withVariantFirst(product, variant),
+          `${product.shopify_id}_${variant.id}`
+        )
         const fields: Record<string, string> = {}
 
-        fields['id'] = `${product.shopify_id}_${variant.id}`
+        fields['id'] = await resolveItemId(
+          idMapping?.mapping_type === 'AI' ? undefined : idMapping, vProduct, null, marketUrl
+        )
         fields['item_group_id'] = product.shopify_id
         const suffix = variant.title && variant.title !== 'Default Title' ? ` - ${variant.title}` : ''
         fields['title'] = `${aiTitleFor(product) ?? product.title ?? ''}${suffix}`.trim()
@@ -678,7 +721,7 @@ export async function generatePreview(feedId: string, limit = 100): Promise<Prev
         }
 
         rows.push({
-          productId: `${product.shopify_id}_${variant.id}`,
+          productId: fields['id'],
           title: fields['title'] || product.title || product.shopify_id,
           fields,
         })
