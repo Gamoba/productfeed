@@ -1,4 +1,4 @@
-import { timingSafeEqual } from 'crypto'
+import { isCronAuthorized } from '@/lib/cronAuth'
 import { adminDb } from '@/lib/feeds'
 import { syncProducts } from '@/lib/sync'
 import { SyncAlreadyRunningError } from '@/lib/syncProgress'
@@ -35,18 +35,8 @@ type FeedScheduleRow = {
   last_auto_sync_error: string | null
 }
 
-// The caller sends `Authorization: Bearer <CRON_SECRET>`. Constant-time compare,
-// and fail closed when the secret isn't configured.
-function isAuthorized(req: Request): boolean {
-  const secret = process.env.CRON_SECRET
-  if (!secret) return false
-  const got = Buffer.from(req.headers.get('authorization') ?? '')
-  const want = Buffer.from(`Bearer ${secret}`)
-  return got.length === want.length && timingSafeEqual(got, want)
-}
-
 export async function GET(req: Request) {
-  if (!isAuthorized(req)) {
+  if (!isCronAuthorized(req)) {
     return Response.json({ error: 'Unauthorized' }, { status: 401 })
   }
 

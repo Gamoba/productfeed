@@ -2,6 +2,11 @@
 # GitHub Actions does the ticking instead; /api/cron/sync decides per feed
 # whether it is due (Settings → Automatic sync).
 #
+# The same tick drives the Shopify order-archive sync (/api/cron/orders),
+# which syncs each Shopify project every 6 hours. Shopify only exposes the
+# last 60 days of orders, so this one must never lapse — see
+# lib/orderSyncSchedule.ts.
+#
 # Needs in the repo settings:
 #   secrets.CRON_SECRET  — same value as CRON_SECRET in Vercel
 #   vars.APP_URL         — production URL, e.g. https://feed.example.com
@@ -21,7 +26,8 @@ concurrency:
 jobs:
   tick:
     runs-on: ubuntu-latest
-    timeout-minutes: 6
+    # Two calls of up to ~5 min each.
+    timeout-minutes: 12
     steps:
       - name: Call /api/cron/sync
         env:
@@ -31,3 +37,14 @@ jobs:
           curl --fail-with-body -sS --max-time 320 \
             -H "Authorization: Bearer $CRON_SECRET" \
             "$APP_URL/api/cron/sync"
+      # always(): a failing product sync must not stop the order archive,
+      # which loses data for good if it lapses.
+      - name: Call /api/cron/orders
+        if: always()
+        env:
+          CRON_SECRET: ${{ secrets.CRON_SECRET }}
+          APP_URL: ${{ vars.APP_URL }}
+        run: |
+          curl --fail-with-body -sS --max-time 320 \
+            -H "Authorization: Bearer $CRON_SECRET" \
+            "$APP_URL/api/cron/orders"
