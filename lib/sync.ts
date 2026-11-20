@@ -22,8 +22,7 @@ const P = {
   fetchMetaobjects: [40, 47],
   fetchTranslations: [47, 50],
   saveProducts: [50, 60],
-  clearMetafields: [60, 70],
-  saveMetafields: [70, 90],
+  saveMetafields: [60, 90],
   cleanup: [90, 95],
   stock: [95, 99],
 } as const
@@ -439,40 +438,31 @@ async function runSync(
   const tUpsertProducts = Date.now()
   console.log(`[sync] upsert ${productRows.length} produkter: ${tUpsertProducts - tFetch}ms`)
 
-  // ── 2. Delete existing metafields for these products ────────────────────
-  // PostgREST sends .in() values in the URL; chunk at 500 UUIDs to stay under
-  // the URL-length limit.
-  const productUuids = Array.from(idBySourceId.values())
-  let cleared = 0
-  step(at(P.clearMetafields), 'Clearing old metafields')
-  await inChunks(productUuids, 500, 3, async (chunk) => {
-    const { error } = await db
-      .from('product_metafields')
-      .delete()
-      .eq('feed_id', feedId)
-      .in('product_id', chunk)
-    if (error) throw new Error(`Delete of metafields failed: ${error.message}`)
-    cleared += chunk.length
-    step(at(P.clearMetafields, cleared, productUuids.length), 'Clearing old metafields')
-  })
-  const tDeleteMfs = Date.now()
-  console.log(`[sync] delete metafields: ${tDeleteMfs - tUpsertProducts}ms`)
-
-  // ── 3. Upsert all metafields ────────────────────────────────────────────
-  const allMetafields: Array<{
-    feed_id: string
+  // ── 2. Write metafields as a diff ───────────────────────────────────────
+  // sync_product_metafields (migration 050) inserts new rows, updates changed
+  // ones, deletes ones no longer sent — and leaves identical rows untouched.
+  // It used to be delete-all + re-insert: ~60k rewritten rows per BWH sync,
+  // whose cleanup (autovacuum) starved the database for minutes afterwards.
+  //
+  // Grouped per product: the function deletes within the products it's given,
+  // so every chunk must carry each of its products' COMPLETE metafield set.
+  type MetafieldRow = {
     product_id: string
     namespace: string
     key: string
     value: string | null
     type: string | null
-  }> = []
+  }
+  const byProduct: { productId: string; rows: MetafieldRow[] }[] = []
+  let metafieldCount = 0
   for (const p of products) {
     const productUuid = idBySourceId.get(p.id)
     if (!productUuid) continue
+    // Last one wins on a repeated (namespace, key) — a duplicate in one
+    // statement would abort the whole chunk ("cannot affect row a second time").
+    const rows = new Map<string, MetafieldRow>()
     for (const mf of p.metafields) {
-      allMetafields.push({
-        feed_id: feedId,
+      rows.set(`${mf.namespace}\u0000${mf.key}`, {
         product_id: productUuid,
         namespace: mf.namespace,
         key: mf.key,
@@ -480,24 +470,42 @@ async function runSync(
         type: mf.type,
       })
     }
+    byProduct.push({ productId: productUuid, rows: [...rows.values()] })
+    metafieldCount += rows.size
   }
 
-  let savedMfs = 0
-  step(at(P.saveMetafields), 'Saving metafields', `0 / ${fmt(allMetafields.length)}`)
-  await inChunks(allMetafields, 1000, 2, async (chunk) => {
-    const { error } = await db
-      .from('product_metafields')
-      .upsert(chunk, { onConflict: 'feed_id,product_id,namespace,key' })
-    if (error) throw new Error(`Upsert of metafields failed: ${error.message}`)
-    savedMfs += chunk.length
+  const mfStats = { inserted: 0, updated: 0, deleted: 0 }
+  let doneMfs = 0
+  step(at(P.saveMetafields), 'Saving metafields', `0 / ${fmt(metafieldCount)}`)
+  // 100 products ≈ 2–3k rows per call: small enough for one statement, big
+  // enough that a 2.6k-product feed is ~27 calls.
+  await inChunks(byProduct, 100, 2, async (chunk) => {
+    const rows = chunk.flatMap((c) => c.rows)
+    const { data, error } = await db.rpc('sync_product_metafields', {
+      p_feed_id: feedId,
+      p_product_ids: chunk.map((c) => c.productId),
+      p_rows: rows,
+    })
+    if (error) throw new Error(`Metafield sync failed: ${error.message}`)
+    const r = (Array.isArray(data) ? data[0] : data) as
+      | { inserted: number; updated: number; deleted: number }
+      | null
+    mfStats.inserted += r?.inserted ?? 0
+    mfStats.updated += r?.updated ?? 0
+    mfStats.deleted += r?.deleted ?? 0
+    doneMfs += rows.length
     step(
-      at(P.saveMetafields, savedMfs, allMetafields.length),
+      at(P.saveMetafields, doneMfs, metafieldCount),
       'Saving metafields',
-      `${fmt(savedMfs)} / ${fmt(allMetafields.length)}`
+      `${fmt(doneMfs)} / ${fmt(metafieldCount)}`
     )
   })
   const tUpsertMfs = Date.now()
-  console.log(`[sync] upsert ${allMetafields.length} metafields: ${tUpsertMfs - tDeleteMfs}ms`)
+  console.log(
+    `[sync] metafields ${metafieldCount}: ${mfStats.inserted} nye, ${mfStats.updated} ændret, ` +
+      `${mfStats.deleted} slettet, ${metafieldCount - mfStats.inserted - mfStats.updated} uændret — ` +
+      `${tUpsertMfs - tUpsertProducts}ms`
+  )
 
   // ── Cleanup: delete products that disappeared from the source (per feed) ─
   // Paged read: PostgREST caps a response at 1000 rows, so an unpaged select
@@ -602,7 +610,7 @@ async function runSync(
 
   return {
     synced: products.length,
-    metafields: allMetafields.length,
+    metafields: metafieldCount,
     durationMs: totalMs,
     warnings: source.warnings,
     stockChanges,
