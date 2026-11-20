@@ -4,7 +4,7 @@ import { createSupabaseServerClient } from '@/lib/supabase-server'
 import { redirect } from 'next/navigation'
 import { adminDb, getOwnedFeed } from '@/lib/feeds'
 import { validateFeed } from '@/lib/feedValidator'
-import { generateFeed } from '@/lib/feedGenerator'
+import { generateFeed, loadFeedProducts } from '@/lib/feedGenerator'
 
 export type MappingEntry = {
   google_field: string
@@ -87,9 +87,11 @@ export async function saveMappings(
           console.error('Kunne ikke gemme auto-validation i feed_cache:', updateErr)
         }
       } else {
+        // One catalogue read shared by both.
+        const products = await loadFeedProducts(feedId)
         const [{ xml, productCount }, validation] = await Promise.all([
-          generateFeed(feedId),
-          validateFeed(feedId).catch((err) => {
+          generateFeed(feedId, { products }),
+          validateFeed(feedId, { products }).catch((err) => {
             console.error('Validering fejlede ved første generering:', err)
             return null as Awaited<ReturnType<typeof validateFeed>> | null
           }),

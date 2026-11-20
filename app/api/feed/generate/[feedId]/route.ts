@@ -1,5 +1,5 @@
 import { createSupabaseServerClient } from '@/lib/supabase-server'
-import { generateFeed } from '@/lib/feedGenerator'
+import { generateFeed, loadFeedProducts } from '@/lib/feedGenerator'
 import { validateFeed, type ValidationResult } from '@/lib/feedValidator'
 import { adminDb, getOwnedFeed } from '@/lib/feeds'
 import { enforceRateLimit, RateLimitError } from '@/lib/rateLimit'
@@ -47,9 +47,11 @@ export async function GET(
   }
 
   try {
+    // One catalogue read shared by both.
+    const products = await loadFeedProducts(feedId)
     const [{ xml, productCount }, validation] = await Promise.all([
-      generateFeed(feedId),
-      validateFeed(feedId).catch((err) => {
+      generateFeed(feedId, { products }),
+      validateFeed(feedId, { products }).catch((err) => {
         console.error('Validation failed during public feed generation:', err)
         return null as ValidationResult | null
       }),

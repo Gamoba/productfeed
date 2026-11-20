@@ -1,5 +1,5 @@
 import { createClient } from '@supabase/supabase-js'
-import { generatePreview, type PreviewRow } from '@/lib/feedGenerator'
+import { generatePreview, type FeedInput, type PreviewRow } from '@/lib/feedGenerator'
 
 function adminClient() {
   return createClient(
@@ -78,7 +78,9 @@ function collectFailing(
 
 // ── Main export ────────────────────────────────────────────────────────────
 
-export async function validateFeed(feedId: string): Promise<ValidationResult> {
+// `input.products`: the feed's products, when the caller already loaded them
+// for generateFeed (see loadFeedProducts) — saves a second full catalogue read.
+export async function validateFeed(feedId: string, input: FeedInput = {}): Promise<ValidationResult> {
   const db = adminClient()
 
   const { data: mappingsData } = await db
@@ -106,7 +108,7 @@ export async function validateFeed(feedId: string): Promise<ValidationResult> {
     }
   }
 
-  const preview = await generatePreview(feedId, 20)
+  const preview = await generatePreview(feedId, 20, input)
   const rows = preview.rows
 
   // 2. Empty-rate checks for required fields ──────────────────────────────

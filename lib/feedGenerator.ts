@@ -248,25 +248,26 @@ export async function countFilteredProducts(
 ): Promise<{ total: number; included: number }> {
   const db = adminClient()
 
-  const [
-    { data: shopSettingsData },
-    rawProducts,
-    { data: filtersData },
-  ] = await Promise.all([
+  const [{ data: shopSettingsData }, { data: filtersData }] = await Promise.all([
     db.from('shop_settings').select('market_url').eq('feed_id', feedId).maybeSingle(),
-    fetchAllActiveProducts(db, feedId),
     db.from('feed_filters').select('filter_type, operator, rules').eq('feed_id', feedId),
   ])
+  const filterRows = (filtersData ?? []) as FeedFilter[]
 
-  const marketUrl = await resolveFeedBaseUrl(
-    db,
-    feedId,
-    (shopSettingsData?.market_url as string | null) ?? null
+  // Metafields are only read by `metafield:` filter fields (resolveField). When
+  // no rule uses one, counting skips the embed — on BWH that's most of the
+  // read, and this runs on every overview / dashboard load.
+  const needsMetafields = filterRows.some((f) =>
+    (f.rules ?? []).some((r) => r.field?.startsWith('metafield:'))
   )
+
+  const [rawProducts, marketUrl] = await Promise.all([
+    fetchAllActiveProducts(db, feedId, { withMetafields: needsMetafields }),
+    resolveFeedBaseUrl(db, feedId, (shopSettingsData?.market_url as string | null) ?? null),
+  ])
   // Hydrate here too: a filter rule on ai_optimized_title must count the same
   // number of products as the generator actually emits.
   await attachOptimizedTitles(db, feedId, rawProducts)
-  const filterRows = (filtersData ?? []) as FeedFilter[]
   const filtered = applyFeedFilters(rawProducts, filterRows, marketUrl)
 
   return { total: rawProducts.length, included: filtered.length }
@@ -283,17 +284,25 @@ export async function countFilteredProducts(
 // metaobject resolution) took ~9 s for 1000 products → "statement timeout" →
 // 500 on feed generation. 250 is ~2.5 s there, leaving headroom for growth.
 const PAGE_SIZE = 250
+// Without the metafield embed a page is cheap; go up to PostgREST's cap.
+const PAGE_SIZE_NO_METAFIELDS = 1000
 
+// `withMetafields: false` skips the embed (metafields come back as []) — for
+// callers that provably never read them, e.g. counting a feed whose filter
+// rules reference no metafield. On a metaobject-heavy store the embed is the
+// bulk of the cost.
 async function fetchAllActiveProducts(
   db: ReturnType<typeof adminClient>,
-  feedId: string
+  feedId: string,
+  { withMetafields = true }: { withMetafields?: boolean } = {}
 ): Promise<SupabaseProduct[]> {
+  const pageSize = withMetafields ? PAGE_SIZE : PAGE_SIZE_NO_METAFIELDS
   const out: SupabaseProduct[] = []
   let from = 0
   while (true) {
     const { data, error } = await db
       .from('products')
-      .select('*, metafields:product_metafields(*)')
+      .select(withMetafields ? '*, metafields:product_metafields(*)' : '*')
       .eq('feed_id', feedId)
       .eq('status', 'active')
       // created_at alone is NOT stable across pages — bulk imports share a
@@ -301,15 +310,34 @@ async function fetchAllActiveProducts(
       // page boundaries (duplicate <item>s in the feed). id is the tiebreaker.
       .order('created_at', { ascending: true })
       .order('id', { ascending: true })
-      .range(from, from + PAGE_SIZE - 1)
+      .range(from, from + pageSize - 1)
     if (error) throw new Error(`Products failed: ${error.message}`)
     if (!data || data.length === 0) break
-    out.push(...(data as SupabaseProduct[]))
-    if (data.length < PAGE_SIZE) break
-    from += PAGE_SIZE
+    const rows = data as unknown as SupabaseProduct[]
+    if (!withMetafields) for (const p of rows) p.metafields = []
+    out.push(...rows)
+    if (data.length < pageSize) break
+    from += pageSize
   }
   return out
 }
+
+/**
+ * Every active product of a feed, with metafields — the input generateFeed,
+ * generatePreview and validateFeed all need. Load it ONCE and pass it to each
+ * (`{ products }`) when running them together: each one loading its own copy
+ * meant two or three full catalogue reads per "Generate" click, which on a
+ * metaobject-heavy store competed for the database's CPU for a minute.
+ *
+ * Sharing is safe: none of them mutates the products, except
+ * attachOptimizedTitles, which writes the same accepted title either way.
+ */
+export async function loadFeedProducts(feedId: string): Promise<SupabaseProduct[]> {
+  return fetchAllActiveProducts(adminClient(), feedId)
+}
+
+/** Preloaded input for generateFeed / generatePreview / validateFeed. */
+export type FeedInput = { products?: SupabaseProduct[] }
 
 // The AI-optimized title accepted for this feed, or null.
 //
@@ -431,7 +459,7 @@ function mappedCustomLabelIndices(mappings: FeedMapping[]): Set<number> {
   return set
 }
 
-export async function generateFeed(feedId: string): Promise<FeedResult> {
+export async function generateFeed(feedId: string, input: FeedInput = {}): Promise<FeedResult> {
   const db = adminClient()
 
   const [
@@ -444,7 +472,7 @@ export async function generateFeed(feedId: string): Promise<FeedResult> {
     db.from('feed_settings').select('feed_mode').eq('feed_id', feedId).maybeSingle(),
     db.from('shop_settings').select('market_url, selected_market_id, selected_locale').eq('feed_id', feedId).maybeSingle(),
     db.from('feed_mappings').select('google_field, mapping_type, config').eq('feed_id', feedId),
-    fetchAllActiveProducts(db, feedId),
+    input.products ?? fetchAllActiveProducts(db, feedId),
     db.from('feed_filters').select('filter_type, operator, rules').eq('feed_id', feedId),
   ])
 
@@ -620,7 +648,11 @@ export type PreviewData = {
   totalProducts: number
 }
 
-export async function generatePreview(feedId: string, limit = 100): Promise<PreviewData> {
+export async function generatePreview(
+  feedId: string,
+  limit = 100,
+  input: FeedInput = {}
+): Promise<PreviewData> {
   const db = adminClient()
 
   const [
@@ -635,7 +667,7 @@ export async function generatePreview(feedId: string, limit = 100): Promise<Prev
     db.from('feed_mappings').select('google_field, mapping_type, config').eq('feed_id', feedId),
     // Paged like generateFeed: a single unpaged select was capped at 1000 rows
     // and timed out on metafield-heavy feeds (silently → empty preview).
-    fetchAllActiveProducts(db, feedId),
+    input.products ?? fetchAllActiveProducts(db, feedId),
     db.from('feed_filters').select('filter_type, operator, rules').eq('feed_id', feedId),
   ])
 
