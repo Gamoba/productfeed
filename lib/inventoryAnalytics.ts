@@ -173,12 +173,13 @@ export async function getStockForFeed(
   if (opts.productRef) productQuery = productQuery.eq('shopify_id', opts.productRef)
 
   const [{ data: feedRow }, { data: productRows, error: productErr }] = await Promise.all([
-    db.from('feeds').select('project_id').eq('id', feedId).maybeSingle(),
+    db.from('feeds').select('project_id, last_synced_at').eq('id', feedId).maybeSingle(),
     productQuery,
   ])
   if (productErr) dbError('getStockForFeed products', productErr)
 
-  const projectId = (feedRow as { project_id: string | null } | null)?.project_id ?? null
+  const feedInfo = feedRow as { project_id: string | null; last_synced_at: string | null } | null
+  const projectId = feedInfo?.project_id ?? null
 
   const to = new Date()
   const from = new Date(to.getTime() - velocityDays * 86_400_000)
@@ -187,14 +188,20 @@ export async function getStockForFeed(
 
   // ── Stock state, straight from the synced catalogue ──────────────────────
   const stockByVariant = new Map<string, VariantStock>()
-  let syncedAt: string | null = null
+  // When stock was last read: the last successful sync (migration 051). The
+  // products' own synced_at only moves when a product changed, so the max over
+  // them is just the fallback for a feed with no recorded sync.
+  let syncedAt: string | null = feedInfo?.last_synced_at ?? null
+  const fromFeedRow = syncedAt !== null
 
   for (const row of (productRows ?? []) as {
     shopify_id: string
     variants: unknown
     synced_at: string | null
   }[]) {
-    if (row.synced_at && (syncedAt === null || row.synced_at > syncedAt)) syncedAt = row.synced_at
+    if (!fromFeedRow && row.synced_at && (syncedAt === null || row.synced_at > syncedAt)) {
+      syncedAt = row.synced_at
+    }
     const variants = Array.isArray(row.variants) ? row.variants : []
     for (const v of variants) {
       if (!v || typeof v !== 'object') continue

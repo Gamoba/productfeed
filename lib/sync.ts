@@ -392,12 +392,16 @@ async function runSync(
   const syncedIds = new Set(products.map((p) => p.id))
   const now = new Date().toISOString()
 
-  // ── 1. Upsert products in chunks ────────────────────────────────────────
-  // .select('id, shopify_id') returns the UUIDs we need to attach metafields.
-  // Chunked so a large catalog stays under PostgREST's payload limit and each
-  // returned set stays under its 1000-row cap.
+  // ── 1. Write products as a diff ─────────────────────────────────────────
+  // sync_products (migration 051) inserts new products, updates changed ones
+  // and leaves identical ones untouched — no new row version, so nothing for
+  // autovacuum to clean up. It returns every sent product's uuid (unchanged
+  // ones included), which the metafield step needs. Products gone from the
+  // source are removed by the cleanup below.
+  //
+  // 250 per call keeps each statement small and each returned set under
+  // PostgREST's 1000-row cap.
   const productRows = products.map((p) => ({
-    feed_id: feedId,
     shopify_id: p.id,
     title: p.title,
     body_html: p.body_html,
@@ -412,21 +416,29 @@ async function runSync(
     variants: p.variants,
     options: p.options,
     collections: p.collections,
-    synced_at: now,
-    updated_at: now,
   }))
 
   const idBySourceId = new Map<string, string>()
+  const productStats = { inserted: 0, updated: 0 }
   let savedProducts = 0
   step(at(P.saveProducts), 'Saving products', `0 / ${fmt(productRows.length)}`)
-  await inChunks(productRows, 500, 3, async (chunk) => {
-    const { data, error } = await db
-      .from('products')
-      .upsert(chunk, { onConflict: 'feed_id,shopify_id' })
-      .select('id, shopify_id')
-    if (error) throw new Error(`Upsert of products failed: ${error.message}`)
-    for (const row of (data ?? []) as { id: string; shopify_id: string }[]) {
+  await inChunks(productRows, 250, 3, async (chunk) => {
+    const { data, error } = await db.rpc('sync_products', {
+      p_feed_id: feedId,
+      p_synced_at: now,
+      p_rows: chunk,
+    })
+    if (error) throw new Error(`Product sync failed: ${error.message}`)
+    const rows = (data ?? []) as {
+      shopify_id: string
+      id: string
+      was_insert: boolean
+      was_written: boolean
+    }[]
+    for (const row of rows) {
       idBySourceId.set(row.shopify_id, row.id)
+      if (row.was_insert) productStats.inserted++
+      else if (row.was_written) productStats.updated++
     }
     savedProducts += chunk.length
     step(
@@ -436,7 +448,18 @@ async function runSync(
     )
   })
   const tUpsertProducts = Date.now()
-  console.log(`[sync] upsert ${productRows.length} produkter: ${tUpsertProducts - tFetch}ms`)
+  console.log(
+    `[sync] produkter ${productRows.length}: ${productStats.inserted} nye, ${productStats.updated} ændret, ` +
+      `${productRows.length - productStats.inserted - productStats.updated} uændret — ` +
+      `${tUpsertProducts - tFetch}ms`
+  )
+  // Every sent product must come back with an id, or its metafields would be
+  // silently skipped below.
+  if (idBySourceId.size !== new Set(productRows.map((r) => r.shopify_id)).size) {
+    throw new Error(
+      `Product sync returned ${idBySourceId.size} ids for ${productRows.length} products`
+    )
+  }
 
   // ── 2. Write metafields as a diff ───────────────────────────────────────
   // sync_product_metafields (migration 050) inserts new rows, updates changed

@@ -102,13 +102,17 @@ export async function startSyncRun(db: SupabaseClient, feedId: string): Promise<
   }
 
   const finish: SyncRun['finish'] = async (outcome) => {
+    const finishedAt = new Date().toISOString()
     await write(
       outcome.ok
         ? {
             sync_status: 'ok',
             sync_progress: 100,
             sync_phase: 'Done',
-            sync_finished_at: new Date().toISOString(),
+            sync_finished_at: finishedAt,
+            // "Last synced" everywhere (migration 051). max(products.synced_at)
+            // no longer moves for products that didn't change.
+            last_synced_at: finishedAt,
           }
         : {
             sync_status: 'error',

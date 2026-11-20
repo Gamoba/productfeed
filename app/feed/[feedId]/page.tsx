@@ -48,14 +48,9 @@ export default async function FeedDetailPage({
       .select('feed_id', { count: 'exact', head: true })
       .eq('feed_id', feedId)
       .neq('mapping_type', ''),
-    db
-      .from('products')
-      .select('synced_at')
-      .eq('feed_id', feedId)
-      .not('synced_at', 'is', null)
-      .order('synced_at', { ascending: false })
-      .limit(1)
-      .maybeSingle(),
+    // Set when a sync succeeds (migration 051) — max(products.synced_at) no
+    // longer moves for products that didn't change.
+    db.from('feeds').select('last_synced_at').eq('id', feedId).maybeSingle(),
     // Optimized-title count for the AI Titles card (rows with an applied title).
     db
       .from('product_title_optimizations')
@@ -92,7 +87,7 @@ export default async function FeedDetailPage({
       initialValidation={initialValidation}
       mappingCount={mappingsCountRes.count ?? 0}
       totalFields={TOTAL_GOOGLE_FIELDS}
-      lastSynced={lastSyncRow?.synced_at ?? null}
+      lastSynced={(lastSyncRow?.last_synced_at as string | null) ?? null}
       optimizedCount={optimizedCountRes.count ?? 0}
     />
   )

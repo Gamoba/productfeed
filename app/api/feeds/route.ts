@@ -18,7 +18,7 @@ export async function GET(req: Request) {
   const projectId = new URL(req.url).searchParams.get('projectId')
   let feedsQuery = db
     .from('feeds')
-    .select('id, name, description, project_id, created_at, updated_at')
+    .select('id, name, description, project_id, created_at, updated_at, last_synced_at')
     .eq('user_id', user.id)
   if (projectId) feedsQuery = feedsQuery.eq('project_id', projectId)
 
@@ -44,15 +44,13 @@ export async function GET(req: Request) {
   // cache + last-sync. The slow per-feed countFilteredProducts call moved
   // to /api/feeds/counts so it doesn't hold back the dashboard render.
   // Per-feed product count uses head:true so PostgREST returns just a count
-  // header. Last-sync uses ORDER BY synced_at LIMIT 1 per feed for the same
-  // reason: a single .in() query across feeds would hit the 1000-row cap
-  // and silently drop the newest feed.
+  // header. Last-sync is feeds.last_synced_at (migration 051), already on the
+  // feed rows above.
   const productCount = new Map<string, number>()
-  const lastSyncByFeed = new Map<string, string>()
   let caches: CacheRow[] | null = []
 
   try {
-    const [productCountResults, cacheResult, lastSyncResults] = await Promise.all([
+    const [productCountResults, cacheResult] = await Promise.all([
       Promise.allSettled(
         feedIds.map(
           async (id) =>
@@ -71,22 +69,6 @@ export async function GET(req: Request) {
             .select('feed_id, generated_at, product_count, validation_status, validation_errors')
             .in('feed_id', feedIds)
         : Promise.resolve({ data: [] as CacheRow[] }),
-      Promise.allSettled(
-        feedIds.map(
-          async (id) =>
-            [
-              id,
-              await db
-                .from('products')
-                .select('synced_at')
-                .eq('feed_id', id)
-                .not('synced_at', 'is', null)
-                .order('synced_at', { ascending: false })
-                .limit(1)
-                .maybeSingle(),
-            ] as const
-        )
-      ),
     ])
 
     for (const r of productCountResults) {
@@ -95,16 +77,6 @@ export async function GET(req: Request) {
         productCount.set(id, res.count ?? 0)
       } else {
         console.error('[/api/feeds] product count failed for one feed:', r.reason)
-      }
-    }
-
-    for (const r of lastSyncResults) {
-      if (r.status === 'fulfilled') {
-        const [id, res] = r.value
-        const syncedAt = (res.data as { synced_at: string } | null)?.synced_at
-        if (syncedAt) lastSyncByFeed.set(id, syncedAt)
-      } else {
-        console.error('[/api/feeds] last-sync lookup failed for one feed:', r.reason)
       }
     }
 
@@ -128,7 +100,7 @@ export async function GET(req: Request) {
       created_at: f.created_at,
       updated_at: f.updated_at,
       productCount: productCount.get(f.id) ?? 0,
-      lastSynced: lastSyncByFeed.get(f.id) ?? null,
+      lastSynced: (f.last_synced_at as string | null) ?? null,
       feedGenerated: cache?.generated_at ?? null,
       feedProductCount: cache?.product_count ?? null,
       // null = LAG 2 still loading; FeedListClient fills these from
