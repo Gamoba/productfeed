@@ -276,12 +276,18 @@ export async function countFilteredProducts(
 
 // PostgREST defaults to a 1000-row cap (Supabase's db-max-rows). For a feed
 // that needs every active product, page through with .range() until exhausted.
-// PAGE_SIZE = 1000 matches the server cap so each request returns the maximum.
+//
+// PAGE_SIZE is well BELOW that cap on purpose: each page embeds every product's
+// metafields, and the whole page is one statement under the 8 s statement
+// timeout. A metaobject-heavy store (BWH, ~24 metafields/product after
+// metaobject resolution) took ~9 s for 1000 products → "statement timeout" →
+// 500 on feed generation. 250 is ~2.5 s there, leaving headroom for growth.
+const PAGE_SIZE = 250
+
 async function fetchAllActiveProducts(
   db: ReturnType<typeof adminClient>,
   feedId: string
 ): Promise<SupabaseProduct[]> {
-  const PAGE_SIZE = 1000
   const out: SupabaseProduct[] = []
   let from = 0
   while (true) {
@@ -621,13 +627,15 @@ export async function generatePreview(feedId: string, limit = 100): Promise<Prev
     { data: settingsData },
     { data: shopSettingsData },
     { data: mappingsData },
-    { data: productsData },
+    rawProducts,
     { data: filtersData },
   ] = await Promise.all([
     db.from('feed_settings').select('feed_mode').eq('feed_id', feedId).maybeSingle(),
     db.from('shop_settings').select('market_url, selected_market_id, selected_locale').eq('feed_id', feedId).maybeSingle(),
     db.from('feed_mappings').select('google_field, mapping_type, config').eq('feed_id', feedId),
-    db.from('products').select('*, metafields:product_metafields(*)').eq('feed_id', feedId).eq('status', 'active').order('created_at', { ascending: true }).order('id', { ascending: true }),
+    // Paged like generateFeed: a single unpaged select was capped at 1000 rows
+    // and timed out on metafield-heavy feeds (silently → empty preview).
+    fetchAllActiveProducts(db, feedId),
     db.from('feed_filters').select('filter_type, operator, rules').eq('feed_id', feedId),
   ])
 
@@ -640,7 +648,6 @@ export async function generatePreview(feedId: string, limit = 100): Promise<Prev
   const mappings = ((mappingsData ?? []) as FeedMapping[]).filter(
     (m) => m.mapping_type && m.mapping_type !== ('' as MappingType)
   )
-  const rawProducts = (productsData ?? []) as SupabaseProduct[]
   const filterRows = (filtersData ?? []) as FeedFilter[]
   const idMapping = mappings.find((m) => m.google_field === 'id')
 

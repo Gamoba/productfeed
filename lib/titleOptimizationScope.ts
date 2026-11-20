@@ -45,7 +45,9 @@ export async function fetchAllActiveProducts(
   db: ReturnType<typeof adminDb>,
   feedId: string
 ): Promise<SupabaseProduct[]> {
-  const PAGE_SIZE = 1000
+  // Below the 1000-row cap on purpose — each page embeds metafields and must
+  // stay under the 8 s statement timeout (see feedGenerator's PAGE_SIZE).
+  const PAGE_SIZE = 250
   const out: SupabaseProduct[] = []
   let from = 0
   while (true) {
