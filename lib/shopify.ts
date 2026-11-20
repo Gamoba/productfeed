@@ -1115,12 +1115,20 @@ export function createShopifyClient({ shopUrl, accessToken }: ShopifyCredentials
   //
   // Reference fields are skipped: their value is another GID (a product, a
   // file), which is no use as feed text and would only clutter the pickers.
+  //
+  // `json` fields are skipped too: structured data, never a feed value — and
+  // potentially huge. BWH's region metaobjects carry a `geojson` map outline
+  // (up to 25 kB), copied onto every wine of that region: 14 MB of the CZ
+  // feed's 19 MB of metafields. Every product read embeds metafields, so that
+  // payload alone pushed feed generation past the 8 s statement timeout.
   function metaobjectFieldMetafields(
     parent: ShopifyMetafield,
     metaobject: ResolvedMetaobject
   ): ShopifyMetafield[] {
     return metaobject.fields
-      .filter((f) => f.value && f.value.trim() && !f.type.endsWith('_reference'))
+      .filter(
+        (f) => f.value && f.value.trim() && !f.type.endsWith('_reference') && f.type !== 'json'
+      )
       .map((f) => ({
         ...parent,
         id: 0,
