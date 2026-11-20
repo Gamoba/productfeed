@@ -3,8 +3,53 @@ import { createShopifyClientForProject } from '@/lib/projectShopify'
 import { fetchFeedUrlProducts } from '@/lib/feedUrlSource'
 import { decryptFeedAuth, type FeedAuthColumns } from '@/lib/feedAuth'
 import { AppError } from '@/lib/errors'
-import { ShopifyAuthError, type ShopifyClient, type ShopifyData, type ShopifyProduct } from '@/lib/shopify'
+import {
+  ShopifyAuthError,
+  type ShopifyClient,
+  type ShopifyData,
+  type ShopifyFetchProgress,
+  type ShopifyProduct,
+} from '@/lib/shopify'
 import { readVariantStock } from '@/lib/inventoryAnalytics'
+import { startSyncRun, type SyncStep } from '@/lib/syncProgress'
+
+// Where each part of a sync sits on the 0–100 progress bar. Weighted by how
+// long the parts take on a real catalogue (BWH CZ, ~2.6k products, ~110 s):
+// fetching from Shopify is roughly half, the metafield save the next biggest.
+const P = {
+  fetchList: [0, 3],
+  fetchDetails: [3, 40],
+  fetchMetaobjects: [40, 47],
+  fetchTranslations: [47, 50],
+  saveProducts: [50, 60],
+  clearMetafields: [60, 70],
+  saveMetafields: [70, 90],
+  cleanup: [90, 95],
+  stock: [95, 99],
+} as const
+
+// Position within a weighted range, for a step that is `done` of `total` through.
+function at(range: readonly [number, number], done = 0, total = 1): number {
+  const frac = total > 0 ? Math.min(1, done / total) : 1
+  return range[0] + (range[1] - range[0]) * frac
+}
+
+const fmt = (n: number) => n.toLocaleString('en-US')
+
+// Translates the Shopify client's fetch milestones into sync progress.
+function shopifyProgress(step: SyncStep): ShopifyFetchProgress {
+  return (s, done, total) => {
+    if (s === 'products') step(at(P.fetchList), 'Fetching product list from Shopify')
+    else if (s === 'details')
+      step(
+        at(P.fetchDetails, done, total),
+        'Fetching product details from Shopify',
+        total ? `${fmt(done ?? 0)} / ${fmt(total)}` : undefined
+      )
+    else if (s === 'metaobjects') step(at(P.fetchMetaobjects), 'Resolving metaobjects')
+    else step(at(P.fetchTranslations), 'Fetching translations and market prices')
+  }
+}
 
 function adminClient() {
   return createClient(
@@ -190,7 +235,8 @@ type SourceFetch = {
 async function fetchShopifySource(
   db: ReturnType<typeof adminClient>,
   feedId: string,
-  projectId: string
+  projectId: string,
+  step: SyncStep
 ): Promise<SourceFetch> {
   const { data: settings, error: settingsErr } = await db
     .from('shop_settings')
@@ -211,11 +257,12 @@ async function fetchShopifySource(
     shopifyData = await shopify.fetchProductsLocalized(
       settings.selected_locale,
       settings.currency ?? undefined,
-      settings.selected_country ?? undefined
+      settings.selected_country ?? undefined,
+      shopifyProgress(step)
     )
   } else {
     console.log(`[sync] Standard sync (ingen selected_locale)`)
-    shopifyData = await shopify.fetchProductsWithAllData()
+    shopifyData = await shopify.fetchProductsWithAllData(shopifyProgress(step))
   }
   return {
     products: shopifyData.products.map(shopifyToSource),
@@ -234,11 +281,12 @@ async function fetchShopifySource(
 async function fetchShopifyAndTrackConnection(
   db: ReturnType<typeof adminClient>,
   feedId: string,
-  projectId: string
+  projectId: string,
+  step: SyncStep
 ): Promise<SourceFetch> {
   let result: SourceFetch
   try {
-    result = await fetchShopifySource(db, feedId, projectId)
+    result = await fetchShopifySource(db, feedId, projectId, step)
   } catch (err) {
     if (err instanceof ShopifyAuthError) {
       const { error } = await db
@@ -276,9 +324,36 @@ async function fetchFeedUrlSource(project: ProjectSourceRow, projectId: string):
 // Shopify (credentials + per-feed locale/market in shop_settings) or a public
 // feed URL. Products are scoped by feed_id so the same source product can exist
 // in multiple feeds independently.
+//
+// Every trigger (Sync buttons, Save & sync, the new-feed wizard, cron) comes
+// through here, so this is where the feed is claimed: a second sync of the same
+// feed while one runs throws SyncAlreadyRunningError (409) instead of racing
+// the first over the same rows. Progress is recorded on the feed row for the UI
+// to poll (GET /api/feeds/[feedId]/sync-status).
 export async function syncProducts(feedId: string): Promise<SyncResult> {
-  const t0 = Date.now()
   const db = adminClient()
+  const run = await startSyncRun(db, feedId)
+  try {
+    const result = await runSync(db, feedId, run.step)
+    await run.finish({ ok: true })
+    return result
+  } catch (err) {
+    // Shown in the UI next to the bar: AppError text is written for users;
+    // anything else stays generic (the caller logs the raw error).
+    await run.finish({
+      ok: false,
+      message: err instanceof AppError ? err.message : 'The sync failed unexpectedly. Try again.',
+    })
+    throw err
+  }
+}
+
+async function runSync(
+  db: ReturnType<typeof adminClient>,
+  feedId: string,
+  step: SyncStep
+): Promise<SyncResult> {
+  const t0 = Date.now()
 
   console.log(`[sync] syncProducts feedId=${feedId}`)
 
@@ -304,10 +379,13 @@ export async function syncProducts(feedId: string): Promise<SyncResult> {
   if (projectErr) throw new Error(`Project lookup failed: ${projectErr.message}`)
   if (!project) throw new AppError('Projektet blev ikke fundet', 404)
 
-  const source =
-    project.source_type === 'feed_url'
-      ? await fetchFeedUrlSource(project, projectId)
-      : await fetchShopifyAndTrackConnection(db, feedId, projectId)
+  let source: SourceFetch
+  if (project.source_type === 'feed_url') {
+    step(at(P.fetchList), 'Fetching the product feed')
+    source = await fetchFeedUrlSource(project, projectId)
+  } else {
+    source = await fetchShopifyAndTrackConnection(db, feedId, projectId, step)
+  }
   const { products, shopify } = source
   const tFetch = Date.now()
   console.log(`[sync] fetch total: ${tFetch - t0}ms — ${products.length} produkter`)
@@ -340,6 +418,8 @@ export async function syncProducts(feedId: string): Promise<SyncResult> {
   }))
 
   const idBySourceId = new Map<string, string>()
+  let savedProducts = 0
+  step(at(P.saveProducts), 'Saving products', `0 / ${fmt(productRows.length)}`)
   await inChunks(productRows, 500, 3, async (chunk) => {
     const { data, error } = await db
       .from('products')
@@ -349,6 +429,12 @@ export async function syncProducts(feedId: string): Promise<SyncResult> {
     for (const row of (data ?? []) as { id: string; shopify_id: string }[]) {
       idBySourceId.set(row.shopify_id, row.id)
     }
+    savedProducts += chunk.length
+    step(
+      at(P.saveProducts, savedProducts, productRows.length),
+      'Saving products',
+      `${fmt(savedProducts)} / ${fmt(productRows.length)}`
+    )
   })
   const tUpsertProducts = Date.now()
   console.log(`[sync] upsert ${productRows.length} produkter: ${tUpsertProducts - tFetch}ms`)
@@ -356,13 +442,18 @@ export async function syncProducts(feedId: string): Promise<SyncResult> {
   // ── 2. Delete existing metafields for these products ────────────────────
   // PostgREST sends .in() values in the URL; chunk at 500 UUIDs to stay under
   // the URL-length limit.
-  await inChunks(Array.from(idBySourceId.values()), 500, 3, async (chunk) => {
+  const productUuids = Array.from(idBySourceId.values())
+  let cleared = 0
+  step(at(P.clearMetafields), 'Clearing old metafields')
+  await inChunks(productUuids, 500, 3, async (chunk) => {
     const { error } = await db
       .from('product_metafields')
       .delete()
       .eq('feed_id', feedId)
       .in('product_id', chunk)
     if (error) throw new Error(`Delete of metafields failed: ${error.message}`)
+    cleared += chunk.length
+    step(at(P.clearMetafields, cleared, productUuids.length), 'Clearing old metafields')
   })
   const tDeleteMfs = Date.now()
   console.log(`[sync] delete metafields: ${tDeleteMfs - tUpsertProducts}ms`)
@@ -391,11 +482,19 @@ export async function syncProducts(feedId: string): Promise<SyncResult> {
     }
   }
 
+  let savedMfs = 0
+  step(at(P.saveMetafields), 'Saving metafields', `0 / ${fmt(allMetafields.length)}`)
   await inChunks(allMetafields, 1000, 2, async (chunk) => {
     const { error } = await db
       .from('product_metafields')
       .upsert(chunk, { onConflict: 'feed_id,product_id,namespace,key' })
     if (error) throw new Error(`Upsert of metafields failed: ${error.message}`)
+    savedMfs += chunk.length
+    step(
+      at(P.saveMetafields, savedMfs, allMetafields.length),
+      'Saving metafields',
+      `${fmt(savedMfs)} / ${fmt(allMetafields.length)}`
+    )
   })
   const tUpsertMfs = Date.now()
   console.log(`[sync] upsert ${allMetafields.length} metafields: ${tUpsertMfs - tDeleteMfs}ms`)
@@ -403,6 +502,7 @@ export async function syncProducts(feedId: string): Promise<SyncResult> {
   // ── Cleanup: delete products that disappeared from the source (per feed) ─
   // Paged read: PostgREST caps a response at 1000 rows, so an unpaged select
   // would only ever see (and clean up) the first 1000 products.
+  step(at(P.cleanup), 'Removing products no longer in the source')
   const staleIds: string[] = []
   const PAGE_SIZE = 1000
   for (let from = 0; ; from += PAGE_SIZE) {
@@ -444,6 +544,7 @@ export async function syncProducts(feedId: string): Promise<SyncResult> {
   // another process could have moved underneath it.
   let stockChanges = 0
   if (shopify) {
+    step(at(P.stock), 'Recording stock levels')
     try {
       const observedAt = now
       const stockRows: {

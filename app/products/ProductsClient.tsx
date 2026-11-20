@@ -4,6 +4,7 @@ import { useEffect, useRef, useState } from 'react'
 import type { ShopifyProduct } from '@/lib/shopify'
 import type { SyncResult } from '@/lib/sync'
 import { ProductsTable } from '../dashboard/ProductsTable'
+import { SyncProgressBar, useFeedSync } from '../components/SyncProgress'
 
 type Phase = 'loading' | 'empty' | 'syncing' | 'ready' | 'error'
 
@@ -159,27 +160,27 @@ export function ProductsClient({
     }
   }
 
+  // Follows the sync's progress from the feed row — including one already
+  // running when the page opens (another tab, the cron, the wizard).
+  const sync = useFeedSync(feedId, {
+    onFinished: async (outcome) => {
+      if (!outcome.ok) {
+        setError(outcome.error)
+        setPhase('error')
+        return
+      }
+      setSyncResult(outcome.result)
+      setPage(1)
+      // Refetch both tiers; phase will be set by fetchProducts based on results.
+      await Promise.all([fetchProducts({ initial: true }), fetchMeta()])
+    },
+  })
+
   async function runSync() {
     setPhase('syncing')
     setSyncResult(null)
     setError(null)
-    try {
-      const res = await fetch(`/api/shopify/sync?feedId=${encodeURIComponent(feedId)}`, {
-        method: 'POST',
-      })
-      if (!res.ok) {
-        const json = await res.json().catch(() => ({}))
-        throw new Error((json as { error?: string }).error ?? `HTTP ${res.status}`)
-      }
-      const result: SyncResult = await res.json()
-      setSyncResult(result)
-      setPage(1)
-      // Refetch both tiers; phase will be set by fetchProducts based on results.
-      await Promise.all([fetchProducts({ initial: true }), fetchMeta()])
-    } catch (err) {
-      setError(err instanceof Error ? err.message : 'Unknown error')
-      setPhase('error')
-    }
+    await sync.start()
   }
 
   // Initial load: kick off both tiers in parallel.
@@ -231,7 +232,7 @@ export function ProductsClient({
             </h1>
             {statusLine && <p style={{ fontSize: '13px', color: 'var(--ink-muted)' }}>{statusLine}</p>}
           </div>
-          {(phase === 'ready' || phase === 'empty') && (
+          {(phase === 'ready' || phase === 'empty') && !sync.running && (
             <button onClick={runSync} className="wl-btn-primary shrink-0">
               Sync again
             </button>
@@ -280,17 +281,11 @@ export function ProductsClient({
           </div>
         )}
 
-        {phase === 'syncing' && (
-          <div className="wl-card py-16 flex flex-col items-center gap-3">
-            <div
-              className="w-6 h-6 rounded-full animate-spin"
-              style={{ border: '2px solid var(--accent-purple)', borderTopColor: 'transparent' }}
-            />
-            <p style={{ fontSize: '13px', color: 'var(--ink-muted)' }}>Fetching products from the source and saving…</p>
-          </div>
-        )}
+        {/* Shown for a sync started here AND one found running on load; in the
+            latter case the current products stay visible below it. */}
+        {sync.running && sync.status && <SyncProgressBar status={sync.status} />}
 
-        {phase === 'empty' && (
+        {phase === 'empty' && !sync.running && (
           <div className="wl-card py-16 flex flex-col items-center gap-3">
             <p style={{ fontSize: '14px', color: 'var(--ink-secondary)' }}>No products yet</p>
             <button onClick={runSync} className="wl-btn-primary">

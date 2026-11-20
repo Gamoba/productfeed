@@ -3,6 +3,7 @@
 import { useEffect, useState } from 'react'
 import type { ShopifyMarket, ShopifyMarketLocale } from '@/lib/shopify'
 import { saveAutoSyncSchedule, saveFeedMode } from '@/app/dashboard/actions'
+import { SyncProgressBar, useFeedSync } from '@/app/components/SyncProgress'
 import {
   AUTO_SYNC_FREQUENCIES,
   AUTO_SYNC_LABELS,
@@ -246,20 +247,31 @@ export function SettingsClient({
     }
   }
 
+  // Progress comes from the feed row, so a sync already running when the page
+  // opens shows up here too (and blocks starting a second one).
+  const sync = useFeedSync(feedId, {
+    onFinished: (outcome) => {
+      if (!outcome.ok) {
+        setSyncMsg(outcome.error)
+        setSyncState('error')
+        return
+      }
+      const r = outcome.result
+      setSyncMsg(
+        r
+          ? `Sync complete — ${r.synced} products in ${(r.durationMs / 1000).toFixed(1)}s`
+          : 'Sync complete'
+      )
+      setSyncState('done')
+    },
+  })
+  const syncRunning = syncState === 'running' || sync.running
+
   async function saveAndSync() {
     await saveSettings()
     setSyncState('running')
     setSyncMsg('')
-    try {
-      const res = await fetch(`/api/shopify/sync?feedId=${encodeURIComponent(feedId)}`, { method: 'POST' })
-      const data = (await res.json()) as { synced?: number; durationMs?: number; error?: string }
-      if (data.error) throw new Error(data.error)
-      setSyncMsg(`Sync complete — ${data.synced ?? 0} products in ${((data.durationMs ?? 0) / 1000).toFixed(1)}s`)
-      setSyncState('done')
-    } catch (err) {
-      setSyncMsg(err instanceof Error ? err.message : 'Sync failed')
-      setSyncState('error')
-    }
+    await sync.start()
   }
 
   return (
@@ -290,32 +302,27 @@ export function SettingsClient({
           )}
           <button
             onClick={saveSettings}
-            disabled={saving || syncState === 'running' || !selectedMarket || !dirty}
+            disabled={saving || syncRunning || !selectedMarket || !dirty}
             className="ff-btn-secondary"
           >
             {saving ? 'Saving…' : 'Save'}
           </button>
           <button
             onClick={saveAndSync}
-            disabled={saving || syncState === 'running' || !selectedMarket || !dirty}
+            disabled={saving || syncRunning || !selectedMarket || !dirty}
             className="ff-btn-primary"
           >
-            {syncState === 'running' ? (
-              <>
-                <svg className="w-3.5 h-3.5 animate-spin" fill="none" viewBox="0 0 24 24">
-                  <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4" />
-                  <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8v8H4z" />
-                </svg>
-                Syncing…
-              </>
-            ) : (
-              'Save & sync'
-            )}
+            {syncRunning ? `Syncing… ${sync.status?.progress ?? 0}%` : 'Save & sync'}
           </button>
         </div>
       </header>
 
       <main className="px-4 py-4 max-w-3xl mx-auto space-y-3">
+        {sync.running && sync.status && (
+          <div className="wl-card" style={{ padding: '14px 18px' }}>
+            <SyncProgressBar status={sync.status} variant="inline" />
+          </div>
+        )}
 
         {/* Step 1: Select market */}
         <div className="ff-panel">

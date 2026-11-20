@@ -1,6 +1,7 @@
 import { timingSafeEqual } from 'crypto'
 import { adminDb } from '@/lib/feeds'
 import { syncProducts } from '@/lib/sync'
+import { SyncAlreadyRunningError } from '@/lib/syncProgress'
 import { regenerateFeedCache } from '@/lib/feedCache'
 import { clientMessage } from '@/lib/errors'
 import {
@@ -30,6 +31,8 @@ type FeedScheduleRow = {
   auto_sync_frequency: string
   auto_sync_time: string
   last_auto_sync_at: string | null
+  last_auto_sync_status: string | null
+  last_auto_sync_error: string | null
 }
 
 // The caller sends `Authorization: Bearer <CRON_SECRET>`. Constant-time compare,
@@ -53,7 +56,7 @@ export async function GET(req: Request) {
 
   const { data, error } = await db
     .from('feeds')
-    .select('id, auto_sync_frequency, auto_sync_time, last_auto_sync_at')
+    .select('id, auto_sync_frequency, auto_sync_time, last_auto_sync_at, last_auto_sync_status, last_auto_sync_error')
     .neq('auto_sync_frequency', 'off')
   if (error) {
     console.error('[cron/sync] could not load feed schedules:', error)
@@ -94,7 +97,24 @@ export async function GET(req: Request) {
     }
 
     try {
-      await syncProducts(feed.id)
+      try {
+        await syncProducts(feed.id)
+      } catch (err) {
+        if (!(err instanceof SyncAlreadyRunningError)) throw err
+        // Someone pressed Sync and it is still running. Not a failure: hand the
+        // schedule claim back (restore the previous timestamp/status) so the
+        // next tick retries once that sync is done, and move on.
+        await db
+          .from('feeds')
+          .update({
+            last_auto_sync_at: feed.last_auto_sync_at,
+            last_auto_sync_status: feed.last_auto_sync_status,
+            last_auto_sync_error: feed.last_auto_sync_error,
+          })
+          .eq('id', feed.id)
+        results.push({ feedId: feed.id, status: 'skipped' })
+        continue
+      }
 
       // Refresh the served XML so Google picks up the new data on its next
       // fetch, instead of a cache that can be up to 6 hours old. Skipped for

@@ -687,12 +687,22 @@ export type ShopifyCredentials = {
   accessToken: string
 }
 
+// Progress of a product fetch, for the sync progress bar (lib/syncProgress.ts).
+// `details` is the long part — per-product metafields, batch by batch — so it
+// carries done/total; the other steps are single milestones.
+export type ShopifyFetchProgress = (
+  step: 'products' | 'details' | 'metaobjects' | 'translations',
+  done?: number,
+  total?: number
+) => void
+
 export type ShopifyClient = {
-  fetchProductsWithAllData: () => Promise<ShopifyData>
+  fetchProductsWithAllData: (onProgress?: ShopifyFetchProgress) => Promise<ShopifyData>
   fetchProductsLocalized: (
     locale: string,
     currency?: string,
-    country?: string
+    country?: string,
+    onProgress?: ShopifyFetchProgress
   ) => Promise<ShopifyData>
   fetchMarkets: () => Promise<ShopifyMarket[]>
   fetchGrantedScopes: () => Promise<string[]>
@@ -836,7 +846,8 @@ export function createShopifyClient({ shopUrl, accessToken }: ShopifyCredentials
   }
 
   async function fetchProductMetafieldsBulk(
-    productIds: number[]
+    productIds: number[],
+    onBatch?: (done: number, total: number) => void
   ): Promise<Map<number, ShopifyMetafield[]>> {
     const map = new Map<number, ShopifyMetafield[]>()
     if (productIds.length === 0) return map
@@ -894,6 +905,7 @@ export function createShopifyClient({ shopUrl, accessToken }: ShopifyCredentials
           `Shopify: metafield-batch ${Math.floor(i / BATCH_SIZE) + 1} fejlede — ${err}`
         )
       }
+      onBatch?.(Math.min(i + BATCH_SIZE, gids.length), gids.length)
     }
 
     return map
@@ -1323,9 +1335,10 @@ export function createShopifyClient({ shopUrl, accessToken }: ShopifyCredentials
     return { total: gidSet.size, resolved: resolved.size, accessDenied: state.denied }
   }
 
-  async function fetchProductsWithAllData(): Promise<ShopifyData> {
+  async function fetchProductsWithAllData(onProgress?: ShopifyFetchProgress): Promise<ShopifyData> {
     const t0 = Date.now()
 
+    onProgress?.('products')
     const products = await fetchAllPages<ShopifyProduct>(
       `/products.json?limit=${PRODUCT_LIMIT}&status=active`,
       'products'
@@ -1337,8 +1350,11 @@ export function createShopifyClient({ shopUrl, accessToken }: ShopifyCredentials
     // Metafields and collections are independent enrichment passes — run in
     // parallel. Each is a sequential series of throttle-aware GraphQL calls;
     // shopifyGraphQL handles the bucket back-off if both series compete for it.
+    // Progress follows the metafields series: it runs alongside collections and
+    // takes about as long, so it stands in for the whole enrichment step.
+    onProgress?.('details', 0, productIds.length)
     const [productMetafieldsMap, productCollectionsMap] = await Promise.all([
-      fetchProductMetafieldsBulk(productIds),
+      fetchProductMetafieldsBulk(productIds, (done, total) => onProgress?.('details', done, total)),
       fetchProductCollectionsBulk(productIds),
     ])
     const tEnrich = Date.now()
@@ -1357,6 +1373,7 @@ export function createShopifyClient({ shopUrl, accessToken }: ShopifyCredentials
     // Resolve metaobject-reference metafields (region, grape, country, …) from
     // opaque GIDs to real values, in place. One cached pass; read-only.
     const tResolveStart = Date.now()
+    onProgress?.('metaobjects')
     const metaobjects = await resolveMetaobjectReferences(enrichedProducts)
     console.log(`[shopify] metaobject resolution: ${Date.now() - tResolveStart}ms`)
 
@@ -1653,14 +1670,16 @@ export function createShopifyClient({ shopUrl, accessToken }: ShopifyCredentials
   async function fetchProductsLocalized(
     locale: string,
     currency?: string,
-    country?: string
+    country?: string,
+    onProgress?: ShopifyFetchProgress
   ): Promise<ShopifyData> {
     const t0 = Date.now()
 
-    const { products, metaobjects } = await fetchProductsWithAllData()
+    const { products, metaobjects } = await fetchProductsWithAllData(onProgress)
     const tFetch = Date.now()
 
     const productIds = products.map((p) => p.id)
+    onProgress?.('translations')
 
     // Translations and market prices both need data from the products fetch but
     // are independent of each other — run in parallel.

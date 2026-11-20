@@ -8,6 +8,8 @@ import { FeedSection } from '../dashboard/FeedSection'
 import { FeedValidation } from './FeedValidation'
 import type { ValidationIssue, ValidationResult } from '@/lib/feedValidator'
 import { staleSyncDays } from '@/lib/syncSchedule'
+import type { SyncStatus } from '@/lib/syncProgress'
+import { SyncProgressBar, fetchSyncStatus } from '../components/SyncProgress'
 
 type CacheInfo = {
   generated_at: string | null
@@ -560,28 +562,35 @@ function NextStepRow({ n, children }: { n: number; children: React.ReactNode }) 
 
 // ── Sync banner (existing — unchanged) ─────────────────────────────────────
 
-// Polls /api/products until the new feed has products (sync wrote them),
+// Follows the wizard's sync via the feed's sync status (lib/syncProgress.ts),
 // then auto-regenerates the feed so feed_cache.xml_content reflects the new
 // rows. Triggered by the wizard navigating with ?syncing=1. Existing feeds
 // (no query param) never see this.
 //
+// It used to poll /api/products until total > 0 — which fired after the FIRST
+// saved batch of a multi-minute sync, so the feed was generated from a partial
+// catalogue. The sync status says when the sync is actually over.
+//
 // Phase machine:
-//   syncing    → polling /api/products until total > 0 (or timeout)
-//   sync-done  → brief acknowledgement: "Synkronisering færdig"
+//   syncing    → polling sync-status (progress bar) until ok / error
+//   sync-done  → brief acknowledgement
 //   generating → POST /api/feed/generate/[feedId] in flight
 //   ready      → generation finished; ?syncing=1 is stripped after a moment
-//   timeout    → no products detected within 90 s
-//   error      → generation request failed
+//   timeout    → the sync never started within SYNC_START_MAX_MS
+//   error      → the sync or generation failed
 type Phase = 'syncing' | 'sync-done' | 'generating' | 'ready' | 'timeout' | 'error'
 
-const SYNC_POLL_MAX_MS = 90_000
-const SYNC_POLL_INTERVAL_MS = 3_000
+// The wizard fires the sync request just before navigating here, so the claim
+// usually lands within a second; this only catches a request that never ran.
+const SYNC_START_MAX_MS = 30_000
+const SYNC_POLL_INTERVAL_MS = 1_500
 const SYNC_DONE_DISPLAY_MS = 1_200
 const READY_DISPLAY_MS = 3_000
 
 function SyncStatusBanner({ feedId }: { feedId: string }) {
   const router = useRouter()
   const [phase, setPhase] = useState<Phase>('syncing')
+  const [syncStatus, setSyncStatus] = useState<SyncStatus | null>(null)
   const [syncedCount, setSyncedCount] = useState<number | null>(null)
   const [feedItemCount, setFeedItemCount] = useState<number | null>(null)
 
@@ -591,25 +600,31 @@ function SyncStatusBanner({ feedId }: { feedId: string }) {
     let cancelled = false
 
     async function tick() {
-      try {
-        const res = await fetch(
-          `/api/products?feedId=${encodeURIComponent(feedId)}&pageSize=1&page=1`,
-          { cache: 'no-store' }
-        )
-        if (res.ok) {
-          const data = (await res.json()) as { total?: number }
-          if (!cancelled && (data.total ?? 0) > 0) {
-            setSyncedCount(data.total ?? 0)
-            setPhase('sync-done')
-            return
-          }
+      const s = await fetchSyncStatus(feedId)
+      if (cancelled || !s) return
+      setSyncStatus(s)
+      if (s.status === 'error') {
+        setPhase('error')
+        return
+      }
+      if (s.status === 'ok') {
+        // The count for the acknowledgement; the status row doesn't carry it.
+        try {
+          const res = await fetch(
+            `/api/products?feedId=${encodeURIComponent(feedId)}&pageSize=1&page=1`,
+            { cache: 'no-store' }
+          )
+          if (res.ok) setSyncedCount(((await res.json()) as { total?: number }).total ?? null)
+        } catch {
+          // Count is cosmetic — proceed without it.
         }
-      } catch {
-        // Next tick retries.
+        if (!cancelled) setPhase('sync-done')
+        return
       }
-      if (!cancelled && Date.now() - startedAt > SYNC_POLL_MAX_MS) {
-        setPhase('timeout')
-      }
+      // 'idle' = the claim hasn't landed yet. 'running' has no time limit
+      // here — the progress bar shows it moving, and a dead run turns into
+      // 'error' server-side once stale.
+      if (s.status === 'idle' && Date.now() - startedAt > SYNC_START_MAX_MS) setPhase('timeout')
     }
 
     void tick()
@@ -662,9 +677,15 @@ function SyncStatusBanner({ feedId }: { feedId: string }) {
   if (phase === 'syncing') {
     return (
       <PendingBanner
-        title="Syncing products from Shopify…"
+        title="Syncing products…"
         subtitle="You can navigate away — the sync continues in the background."
-      />
+      >
+        {syncStatus?.status === 'running' && (
+          <div className="mt-2.5">
+            <SyncProgressBar status={syncStatus} variant="inline" />
+          </div>
+        )}
+      </PendingBanner>
     )
   }
 
@@ -695,7 +716,15 @@ function SyncStatusBanner({ feedId }: { feedId: string }) {
   return null
 }
 
-function PendingBanner({ title, subtitle }: { title: string; subtitle?: string }) {
+function PendingBanner({
+  title,
+  subtitle,
+  children,
+}: {
+  title: string
+  subtitle?: string
+  children?: React.ReactNode
+}) {
   return (
     <div
       className="ff-panel p-3 flex items-center gap-2.5"
@@ -725,6 +754,7 @@ function PendingBanner({ title, subtitle }: { title: string; subtitle?: string }
             {subtitle}
           </p>
         )}
+        {children}
       </div>
     </div>
   )
