@@ -155,6 +155,29 @@ export function stocksFromMultipleLocations(locations: ShopifyLocation[] | null)
   return locations.filter((l) => l.active && l.shipsInventory).length > 1
 }
 
+// PostgREST's per-request row cap (Supabase db-max-rows). A page shorter than
+// this is the last one.
+const PAGE_SIZE = 1000
+
+// Reads every row of a query page by page. `page(from, to)` must apply a stable,
+// unique ordering, or offset paging can repeat/skip rows at page boundaries.
+async function fetchAllPages<T>(
+  context: string,
+  page: (
+    from: number,
+    to: number
+  ) => PromiseLike<{ data: unknown; error: { message: string; code?: string; hint?: string | null } | null }>
+): Promise<T[]> {
+  const out: T[] = []
+  for (let from = 0; ; from += PAGE_SIZE) {
+    const { data, error } = await page(from, from + PAGE_SIZE - 1)
+    if (error) dbError(context, error)
+    const rows = (data ?? []) as T[]
+    out.push(...rows)
+    if (rows.length < PAGE_SIZE) return out
+  }
+}
+
 export async function getStockForFeed(
   db: SupabaseClient,
   feedId: string,
@@ -165,18 +188,28 @@ export async function getStockForFeed(
 ): Promise<StockResult> {
   const velocityDays = opts.velocityDays ?? DEFAULT_VELOCITY_DAYS
 
-  let productQuery = db
-    .from('products')
-    .select('shopify_id, variants, synced_at')
-    .eq('feed_id', feedId)
-    .eq('status', 'active')
-  if (opts.productRef) productQuery = productQuery.eq('shopify_id', opts.productRef)
+  // Paged: PostgREST returns at most 1000 rows per request, and an unpaged
+  // select silently stopped there — BWH (~2.6k active products per feed) got
+  // stock for barely a third of its catalogue. Ordered by the unique
+  // shopify_id so pages neither overlap nor skip.
+  const productRowsPromise = fetchAllPages<{
+    shopify_id: string
+    variants: unknown
+    synced_at: string | null
+  }>('getStockForFeed products', (from, to) => {
+    let q = db
+      .from('products')
+      .select('shopify_id, variants, synced_at')
+      .eq('feed_id', feedId)
+      .eq('status', 'active')
+    if (opts.productRef) q = q.eq('shopify_id', opts.productRef)
+    return q.order('shopify_id', { ascending: true }).range(from, to)
+  })
 
-  const [{ data: feedRow }, { data: productRows, error: productErr }] = await Promise.all([
+  const [{ data: feedRow }, productRows] = await Promise.all([
     db.from('feeds').select('project_id, last_synced_at').eq('id', feedId).maybeSingle(),
-    productQuery,
+    productRowsPromise,
   ])
-  if (productErr) dbError('getStockForFeed products', productErr)
 
   const feedInfo = feedRow as { project_id: string | null; last_synced_at: string | null } | null
   const projectId = feedInfo?.project_id ?? null
@@ -194,11 +227,7 @@ export async function getStockForFeed(
   let syncedAt: string | null = feedInfo?.last_synced_at ?? null
   const fromFeedRow = syncedAt !== null
 
-  for (const row of (productRows ?? []) as {
-    shopify_id: string
-    variants: unknown
-    synced_at: string | null
-  }[]) {
+  for (const row of productRows) {
     if (!fromFeedRow && row.synced_at && (syncedAt === null || row.synced_at > syncedAt)) {
       syncedAt = row.synced_at
     }
@@ -211,24 +240,31 @@ export async function getStockForFeed(
   }
 
   // ── Velocity, and the shop's locations ───────────────────────────────────
-  const [velocityResult, locationResult] = await Promise.all([
+  // The velocity summary is one row per sold variant across the whole shop —
+  // the same 1000-row cap applies to a set-returning function, so it's paged
+  // too, ordered by its grouping key (product_ref, variant_ref).
+  const [velocityRows, locationResult] = await Promise.all([
     projectId
-      ? db.rpc('shopify_velocity_variant_summary', {
-          p_project_id: projectId,
-          p_country: null,
-          p_from: from.toISOString(),
-          p_to: to.toISOString(),
-        })
-      : Promise.resolve({ data: [], error: null }),
+      ? fetchAllPages<VelocityRow>('getStockForFeed velocity', (pFrom, pTo) =>
+          db
+            .rpc('shopify_velocity_variant_summary', {
+              p_project_id: projectId,
+              p_country: null,
+              p_from: from.toISOString(),
+              p_to: to.toISOString(),
+            })
+            .order('product_ref', { ascending: true })
+            .order('variant_ref', { ascending: true })
+            .range(pFrom, pTo)
+        )
+      : Promise.resolve([] as VelocityRow[]),
     projectId
       ? db.from('projects').select('shopify_locations').eq('id', projectId).maybeSingle()
       : Promise.resolve({ data: null, error: null }),
   ])
 
-  if (velocityResult.error) dbError('getStockForFeed velocity', velocityResult.error)
-
   const soldByVariant = new Map<string, number>()
-  for (const r of (velocityResult.data ?? []) as VelocityRow[]) {
+  for (const r of velocityRows) {
     if (!r.variant_ref) continue
     soldByVariant.set(r.variant_ref, num(r.units_sold))
   }
