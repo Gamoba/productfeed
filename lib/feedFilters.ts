@@ -188,3 +188,63 @@ export function applyFeedFilters(
   }
   return result
 }
+
+// ── Why a product is in or out of the feed ──────────────────────────────────
+
+const OP_LABEL: Record<string, string> = {
+  contains: 'indeholder',
+  does_not_contain: 'indeholder ikke',
+  equals: 'er',
+  not_equals: 'er ikke',
+  starts_with: 'starter med',
+  ends_with: 'slutter med',
+  is_empty: 'er tom',
+  is_not_empty: 'er ikke tom',
+  greater_than: 'er over',
+  less_than: 'er under',
+}
+
+function describeRule(rule: FeedFilterRule): string {
+  const op = OP_LABEL[rule.operator] ?? rule.operator
+  return NO_VALUE_OPS.has(rule.operator) ? `${rule.field} ${op}` : `${rule.field} ${op} ${rule.value}`
+}
+
+export type ScopeExplanation = { inFeed: true } | { inFeed: false; reason: string }
+
+// Whether one product makes it into the feed, and if not, why — in the same
+// order the generator decides it: only active products, then the include
+// filter, then the exclude filter. Mirrors applyFeedFilters exactly; used by
+// the Products page to label rows without generating the feed.
+export function explainScope(
+  product: SupabaseProduct,
+  filters: FeedFilter[],
+  marketUrl: string | null
+): ScopeExplanation {
+  if (product.status !== 'active') return { inFeed: false, reason: 'Ikke aktiv i shoppen' }
+
+  const includeFilter = filters.find((f) => f.filter_type === 'include')
+  if (includeFilter && includeFilter.rules.length > 0 && !matchesFilter(product, includeFilter, marketUrl)) {
+    return { inFeed: false, reason: 'Uden for reglerne for inkludering' }
+  }
+
+  const excludeFilter = filters.find((f) => f.filter_type === 'exclude')
+  if (excludeFilter && matchesExclude(product, excludeFilter, marketUrl)) {
+    const active = excludeFilter.rules.filter((r) => NO_VALUE_OPS.has(r.operator) || r.value !== '')
+    // OR: name the first rule that matched. AND: every rule matched together,
+    // so name them all.
+    if (excludeFilter.operator === 'OR') {
+      const hit = active.find((r) => evalFilterRule(r, product, marketUrl))
+      if (hit) return { inFeed: false, reason: `Regel: ${describeRule(hit)}` }
+    }
+    return {
+      inFeed: false,
+      reason: `${active.length === 1 ? 'Regel' : 'Regler'}: ${active.map(describeRule).join(' og ')}`,
+    }
+  }
+  return { inFeed: true }
+}
+
+function matchesExclude(product: SupabaseProduct, filter: FeedFilter, marketUrl: string | null): boolean {
+  if (!filter.rules.some((r) => NO_VALUE_OPS.has(r.operator) || r.value !== '')) return false
+  return matchesFilter(product, filter, marketUrl)
+}

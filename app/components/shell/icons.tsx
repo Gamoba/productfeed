@@ -3,7 +3,7 @@
 export type IconName =
   | 'bolt' | 'overview' | 'box' | 'setup' | 'mapping' | 'filter' | 'titles' | 'tag'
   | 'eye' | 'chart' | 'megaphone' | 'drop' | 'settings' | 'feeds' | 'shops'
-  | 'chevron' | 'chevron-down' | 'back' | 'logout' | 'check' | 'menu'
+  | 'chevron' | 'chevron-down' | 'back' | 'logout' | 'check' | 'menu' | 'search'
 
 const PATHS: Record<IconName, React.ReactNode> = {
   bolt: <path d="M13 2 4 14h7l-1 8 9-12h-7l1-8z" />,
@@ -78,6 +78,12 @@ const PATHS: Record<IconName, React.ReactNode> = {
   logout: <path d="M9 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h4M16 17l5-5-5-5M21 12H9" />,
   check: <path d="m5 12 5 5L20 7" />,
   menu: <path d="M4 7h16M4 12h16M4 17h16" />,
+  search: (
+    <>
+      <circle cx="11" cy="11" r="6.5" />
+      <path d="m20 20-4.2-4.2" />
+    </>
+  ),
 }
 
 export function Icon({ name, size = 15, className }: { name: IconName; size?: number; className?: string }) {

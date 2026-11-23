@@ -1,7 +1,7 @@
 import { createClient } from '@supabase/supabase-js'
 import Anthropic from '@anthropic-ai/sdk'
 import type { SupabaseProduct } from '@/lib/sync'
-import { resolveField, applyFeedFilters, type FeedFilter } from '@/lib/feedFilters'
+import { resolveField, applyFeedFilters, explainScope, type FeedFilter } from '@/lib/feedFilters'
 import { applyTransforms, stripHtml, type FindReplacePair } from '@/lib/mappingTransforms'
 import {
   selectBranchValue,
@@ -769,4 +769,71 @@ export async function generatePreview(
   }
 
   return { feedMode, rows, googleFields, totalProducts: filteredProducts.length }
+}
+
+// ── Feed view of specific products ──────────────────────────────────────────
+
+export type FeedViewItem = {
+  // Whether the product makes it into the feed, and why not.
+  inFeed: boolean
+  reason: string | null
+  // Mapped values, product level (first variant), as generatePreview resolves
+  // them in product mode. AI mappings without an accepted title read '__AI__'.
+  fields: Record<string, string>
+}
+
+// The feed's view of a handful of products — the Products page's current page
+// — keyed by shopify_id. Uses the same filters, base URL, mappings and accepted
+// AI titles as generateFeed, without building the whole feed. Read-only.
+export async function feedView(
+  feedId: string,
+  products: SupabaseProduct[]
+): Promise<Map<string, FeedViewItem>> {
+  const db = adminClient()
+  const [{ data: shopSettingsData }, { data: mappingsData }, { data: filtersData }] = await Promise.all([
+    db.from('shop_settings').select('market_url').eq('feed_id', feedId).maybeSingle(),
+    db.from('feed_mappings').select('google_field, mapping_type, config').eq('feed_id', feedId),
+    db.from('feed_filters').select('filter_type, operator, rules').eq('feed_id', feedId),
+  ])
+
+  const marketUrl = await resolveFeedBaseUrl(db, feedId, (shopSettingsData?.market_url as string | null) ?? null)
+  const mappings = ((mappingsData ?? []) as FeedMapping[]).filter(
+    (m) => m.mapping_type && m.mapping_type !== ('' as MappingType)
+  )
+  const filterRows = (filtersData ?? []) as FeedFilter[]
+
+  // Copies: attachOptimizedTitles writes onto the objects it is given.
+  const copies = products.map((p) => ({ ...p }) as SupabaseProduct)
+  await attachOptimizedTitles(db, feedId, copies)
+
+  const out = new Map<string, FeedViewItem>()
+  for (const raw of copies) {
+    const scope = explainScope(raw, filterRows, marketUrl)
+    const product = withFeedItemId(raw, String(raw.shopify_id ?? ''))
+    const fields: Record<string, string> = {}
+    for (const mapping of mappings) {
+      if (mapping.google_field === 'id') {
+        fields['id'] = await resolveItemId(
+          mapping.mapping_type === 'AI' ? undefined : mapping, product, null, marketUrl
+        )
+        continue
+      }
+      const aiTitle = mapping.google_field === 'title' ? aiTitleFor(product) : null
+      if (aiTitle) {
+        fields[mapping.google_field] = aiTitle
+        continue
+      }
+      if (mapping.mapping_type === 'AI') {
+        fields[mapping.google_field] = '__AI__'
+        continue
+      }
+      fields[mapping.google_field] = await resolvedValue(mapping, product, null, marketUrl)
+    }
+    out.set(raw.shopify_id, {
+      inFeed: scope.inFeed,
+      reason: scope.inFeed ? null : scope.reason,
+      fields,
+    })
+  }
+  return out
 }

@@ -37,11 +37,12 @@ export default async function FeedProductsPage({
     })
   }
 
+  const { data: syncRow } = await db.from('feeds').select('last_synced_at').eq('id', feedId).maybeSingle()
+
   return (
     <ProductsClient
       feedId={feedId}
-      feedName={feed.name}
-      userEmail={user.email ?? ''}
+      lastSynced={(syncRow?.last_synced_at as string | null) ?? null}
     />
   )
 }

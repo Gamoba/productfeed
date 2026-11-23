@@ -2,6 +2,7 @@ import { createSupabaseServerClient } from '@/lib/supabase-server'
 import { adminDb, getOwnedFeed } from '@/lib/feeds'
 import { errorResponse } from '@/lib/errors'
 import { toShopifyData, type SupabaseProduct } from '@/lib/sync'
+import { feedView, type FeedViewItem } from '@/lib/feedGenerator'
 
 const ALLOWED_PAGE_SIZES = [20, 25, 50, 100, 200] as const
 const DEFAULT_PAGE_SIZE = 25
@@ -48,6 +49,15 @@ export async function GET(req: Request) {
   // instead. When skipCount is on, the response carries total: null.
   const skipCount = url.searchParams.get('skipCount') === '1'
 
+  // feedView=1 adds, per product, whether it is in the feed (and why not) and
+  // its mapped feed values — what the Products page shows. Off by default:
+  // resolving mappings costs more than reading rows.
+  const withFeedView = url.searchParams.get('feedView') === '1'
+
+  // Sort order. Price/stock live inside the variants JSONB and would sort as
+  // text, so only name and age are offered.
+  const sort = url.searchParams.get('sort') ?? ''
+
   // Discrete filter params used by the field-preview sidebar. Each one is
   // optional; missing or empty params are no-ops. All filters AND together.
   const fVendor = (url.searchParams.get('vendor') ?? '').trim()
@@ -73,8 +83,13 @@ export async function GET(req: Request) {
         skipCount ? undefined : { count: 'exact' }
       )
       .eq('feed_id', feedId)
-      .order('created_at', { ascending: true })
-      .range(from, to)
+
+    if (sort === 'title_asc') query = query.order('title', { ascending: true })
+    else if (sort === 'title_desc') query = query.order('title', { ascending: false })
+    else if (sort === 'newest') query = query.order('created_at', { ascending: false })
+    else query = query.order('created_at', { ascending: true })
+    // id breaks ties so offset pages never repeat or skip rows.
+    query = query.order('id', { ascending: true }).range(from, to)
 
     if (search) {
       const pattern = `*${search}*`
@@ -122,12 +137,17 @@ export async function GET(req: Request) {
     const { data, error, count } = await query
     if (error) throw new Error(error.message)
 
-    const products = toShopifyData((data ?? []) as SupabaseProduct[]).products
+    const rows = (data ?? []) as SupabaseProduct[]
+    const products = toShopifyData(rows).products
+    let feed: Record<string, FeedViewItem> | undefined
+    if (withFeedView) feed = Object.fromEntries(await feedView(feedId, rows))
     const total = skipCount ? null : (count ?? 0)
     const totalPages = total === null ? null : Math.max(1, Math.ceil(total / pageSize))
 
     return Response.json({
       products,
+      // Keyed by source_id (products.shopify_id). Only with feedView=1.
+      ...(feed ? { feed } : {}),
       total,
       page,
       pageSize,
