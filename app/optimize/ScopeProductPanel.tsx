@@ -146,7 +146,7 @@ export function ScopeProductPanel({ feedId, bucketId }: { feedId: string; bucket
           <div className="flex items-center gap-1.5" style={{ fontSize: '11px', color: 'var(--ink-muted)' }}>
             <span
               aria-hidden
-              style={{ display: 'inline-block', width: '12px', height: '12px', border: '2px solid var(--hairline)', borderTopColor: 'var(--accent-purple)', borderRadius: '50%', animation: 'ff-spin 0.6s linear infinite' }}
+              style={{ display: 'inline-block', width: '12px', height: '12px', border: '2px solid var(--hairline)', borderTopColor: 'var(--accent-ink)', borderRadius: '50%', animation: 'ff-spin 0.6s linear infinite' }}
             />{' '}
             Loading…
           </div>

@@ -3,60 +3,60 @@
 import { useState } from 'react'
 import { BucketListPanel } from './BucketListPanel'
 import { SettingsPanel } from './SettingsPanel'
+import { TitleSteps } from './TitleSteps'
 import type { OptimizationSettings } from '@/lib/titleOptimizationService'
 import type { BucketSummary } from '@/lib/optimizationBuckets'
+import './optimize.css'
 
 type Tab = 'buckets' | 'settings'
 
+// Feed › AI Titles, step 1: the buckets (groups of products that share one
+// title style). Opening a bucket continues with Scope, Teach and Run.
 export function OptimizeClient({
   feedId,
-  feedName,
   initialSettings,
   initialBuckets,
 }: {
   feedId: string
-  feedName: string
   initialSettings: OptimizationSettings
   initialBuckets: BucketSummary[]
 }) {
   const [tab, setTab] = useState<Tab>('buckets')
 
-  const tabBtn = (value: Tab, label: string) => {
-    const isActive = tab === value
-    return (
-      <button
-        type="button"
-        onClick={() => setTab(value)}
-        style={{
-          padding: '4px 12px',
-          fontSize: '11px',
-          fontWeight: 500,
-          borderRadius: '5px',
-          background: isActive ? 'var(--color-accent)' : 'transparent',
-          color: isActive ? '#ffffff' : 'var(--color-text-tertiary)',
-        }}
-      >
-        {label}
-      </button>
-    )
-  }
-
   return (
-    <div className="min-h-screen">
-      <header className="ff-topbar">
-        <div className="flex items-center gap-3">
-          <h1 className="ff-topbar-title">{feedName} · AI Titles</h1>
-          <div className="flex gap-1">
-            {tabBtn('buckets', 'Buckets')}
-            {tabBtn('settings', 'Settings')}
-          </div>
+    <div className="ts">
+      <div className="ts-head">
+        <div>
+          <h1>AI Titles</h1>
+          <p className="ts-lede">
+            Del varerne i grupper, lær AI’en stilen for hver gruppe, og godkend titlerne. Du godkender
+            altid, før noget går live.
+          </p>
         </div>
-      </header>
+        <div className="ts-seg" role="tablist" aria-label="Visning">
+          {(
+            [
+              ['buckets', 'Buckets'],
+              ['settings', 'Indstillinger'],
+            ] as const
+          ).map(([v, label]) => (
+            <button key={v} type="button" role="tab" aria-selected={tab === v} onClick={() => setTab(v)}>
+              {label}
+            </button>
+          ))}
+        </div>
+      </div>
 
-      <main className="px-4 py-4 max-w-4xl">
-        {tab === 'buckets' && <BucketListPanel feedId={feedId} initialBuckets={initialBuckets} />}
-        {tab === 'settings' && <SettingsPanel feedId={feedId} initialSettings={initialSettings} />}
-      </main>
+      {tab === 'buckets' ? (
+        <>
+          <TitleSteps current="buckets" feedId={feedId} />
+          <BucketListPanel feedId={feedId} initialBuckets={initialBuckets} />
+        </>
+      ) : (
+        <section className="card">
+          <SettingsPanel feedId={feedId} initialSettings={initialSettings} />
+        </section>
+      )}
     </div>
   )
 }

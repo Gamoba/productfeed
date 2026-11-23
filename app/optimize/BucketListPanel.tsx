@@ -5,7 +5,10 @@ import Link from 'next/link'
 import { useRouter } from 'next/navigation'
 import { createBucket, renameBucket, deleteBucket } from './actions'
 import type { BucketSummary } from '@/lib/optimizationBuckets'
+import { Popover } from '@/app/components/shell/Popover'
+import { formatNumber } from '@/lib/formatDa'
 
+// Step 1: the buckets as cards, plus a card to make a new one.
 export function BucketListPanel({
   feedId,
   initialBuckets,
@@ -16,6 +19,7 @@ export function BucketListPanel({
   const router = useRouter()
   const [list, setList] = useState<BucketSummary[]>(initialBuckets)
   const [name, setName] = useState('')
+  const [adding, setAdding] = useState(false)
   const [editingId, setEditingId] = useState<string | null>(null)
   const [editName, setEditName] = useState('')
   const [error, setError] = useState<string | null>(null)
@@ -25,13 +29,11 @@ export function BucketListPanel({
     setError(null)
     if (!name.trim()) return
     startTransition(async () => {
-      // Method is no longer a user choice — every bucket runs the workshop path
-      // (instructions + curated examples + input fields). 'auto' is the default.
+      // Every bucket runs the workshop path (instructions + examples + input
+      // fields); 'auto' is the default method.
       const r = await createBucket(feedId, name.trim(), 'auto')
       if ('error' in r) setError(r.error)
-      // Go straight into the new bucket's editor (which opens on the Scope step),
-      // so the user defines membership immediately instead of landing on an empty
-      // 0-product row in the list.
+      // Straight into the new bucket's Scope step.
       else router.push(`/feed/${feedId}/optimize/${r.data.id}`)
     })
   }
@@ -54,7 +56,12 @@ export function BucketListPanel({
 
   function handleDelete(id: string, bname: string) {
     setError(null)
-    if (!confirm(`Delete bucket “${bname}”? Its membership is removed, but any titles it already produced stay in the feed.`)) return
+    if (
+      !confirm(
+        `Slet gruppen “${bname}”? Varerne fjernes fra gruppen, men titler den allerede har lavet, bliver i feedet.`
+      )
+    )
+      return
     startTransition(async () => {
       const r = await deleteBucket(feedId, id)
       if (r.error) setError(r.error)
@@ -63,116 +70,144 @@ export function BucketListPanel({
   }
 
   return (
-    <div className="space-y-3">
-      {error && (
-        <div style={{ fontSize: '11px', color: 'var(--color-badge-danger-text)' }}>{error}</div>
-      )}
+    <div className="ts-buckets">
+      {error && <p className="note warn">{error}</p>}
 
-      {/* Create */}
-      <div className="ff-panel">
-        <div
-          className="ff-panel-header"
-          style={{ textTransform: 'none', letterSpacing: 0, fontSize: '12px', padding: '10px 14px' }}
-        >
-          New bucket
-        </div>
-        <div className="p-3.5 flex items-end gap-2 flex-wrap">
-          <div>
-            <label className="ff-label">Name</label>
-            <input
-              type="text"
-              value={name}
-              onChange={(e) => setName(e.target.value)}
-              onKeyDown={(e) => e.key === 'Enter' && handleCreate()}
-              placeholder="e.g. Vintage reds"
-              className="ff-input w-56"
-            />
+      <div className="ts-bgrid">
+        {list.map((b) => {
+          const state =
+            b.memberCount === 0
+              ? { cls: 'st st-off', label: 'Tom' }
+              : b.needsReview > 0
+                ? { cls: 'neg', label: `${formatNumber(b.needsReview)} venter på godkendelse` }
+                : b.aiGenerated + b.humanEdited > 0
+                  ? { cls: 'st', label: 'Optimeret' }
+                  : { cls: 'st st-off', label: 'Kladde' }
+          return (
+            <div key={b.id} className="ts-bcard">
+              {editingId === b.id ? (
+                <div className="ts-rename">
+                  <input
+                    type="text"
+                    value={editName}
+                    onChange={(e) => setEditName(e.target.value)}
+                    onKeyDown={(e) => {
+                      if (e.key === 'Enter') handleRename(b.id)
+                      if (e.key === 'Escape') setEditingId(null)
+                    }}
+                    autoFocus
+                    className="ff-input"
+                    aria-label="Nyt navn"
+                  />
+                  <button onClick={() => handleRename(b.id)} disabled={isPending} className="ff-btn-primary">
+                    Gem
+                  </button>
+                  <button onClick={() => setEditingId(null)} className="ff-btn-ghost">
+                    Annullér
+                  </button>
+                </div>
+              ) : (
+                <>
+                  <div className="ts-bcard-top">
+                    <Link href={`/feed/${feedId}/optimize/${b.id}`} className="ts-bname">
+                      {b.name}
+                    </Link>
+                    <Popover
+                      label={`Flere handlinger for ${b.name}`}
+                      align="right"
+                      triggerClassName="ts-more"
+                      trigger={<span aria-hidden="true">⋯</span>}
+                    >
+                      {(close) => (
+                        <>
+                          <button
+                            type="button"
+                            role="menuitem"
+                            className="shell-menu-item"
+                            onClick={() => {
+                              close()
+                              setEditingId(b.id)
+                              setEditName(b.name)
+                            }}
+                          >
+                            Omdøb
+                          </button>
+                          <button
+                            type="button"
+                            role="menuitem"
+                            className="shell-menu-item neg"
+                            onClick={() => {
+                              close()
+                              handleDelete(b.id, b.name)
+                            }}
+                          >
+                            Slet gruppe
+                          </button>
+                        </>
+                      )}
+                    </Popover>
+                  </div>
+                  <p className="ts-bmeta">
+                    {b.memberCount === 0
+                      ? 'Ingen varer endnu. Vælg dem under Scope.'
+                      : [
+                          `${formatNumber(b.memberCount)} ${b.memberCount === 1 ? 'vare' : 'varer'}`,
+                          b.aiGenerated > 0 ? `${formatNumber(b.aiGenerated)} optimeret` : null,
+                          b.humanEdited > 0 ? `${formatNumber(b.humanEdited)} rettet i hånden` : null,
+                        ]
+                          .filter(Boolean)
+                          .join(' · ')}
+                  </p>
+                  <div className="ts-bfoot">
+                    <span className={state.cls}>{state.label}</span>
+                    <Link href={`/feed/${feedId}/optimize/${b.id}`} className="link">
+                      Åbn
+                    </Link>
+                  </div>
+                </>
+              )}
+            </div>
+          )
+        })}
+
+        {adding ? (
+          <div className="ts-bcard ts-new">
+            <label className="ts-field">
+              <span>Navn på gruppen</span>
+              <input
+                type="text"
+                value={name}
+                onChange={(e) => setName(e.target.value)}
+                onKeyDown={(e) => {
+                  if (e.key === 'Enter') handleCreate()
+                  if (e.key === 'Escape') setAdding(false)
+                }}
+                placeholder="fx Årgangsvine"
+                className="ff-input"
+                autoFocus
+              />
+            </label>
+            <div className="ts-bfoot">
+              <button onClick={() => setAdding(false)} className="ff-btn-ghost">
+                Annullér
+              </button>
+              <button onClick={handleCreate} disabled={isPending || !name.trim()} className="ff-btn-primary">
+                {isPending ? 'Opretter…' : 'Opret og vælg varer'}
+              </button>
+            </div>
           </div>
-          <button onClick={handleCreate} disabled={isPending || !name.trim()} className="ff-btn-primary">
-            Create bucket
+        ) : (
+          <button type="button" className="ts-bcard ts-add" onClick={() => setAdding(true)}>
+            + Ny gruppe
           </button>
-        </div>
+        )}
       </div>
 
-      {/* List */}
-      {list.length === 0 ? (
-        <p className="text-center py-6" style={{ fontSize: '12px', color: 'var(--color-text-tertiary)' }}>
-          No buckets yet. Create one above to group products for optimization.
+      {list.length === 0 && !adding && (
+        <p className="ts-hint">
+          Ingen grupper endnu. En gruppe samler varer, der skal have titler i samme stil, fx årgangsvine eller
+          gaveæsker.
         </p>
-      ) : (
-        <div className="space-y-2">
-          {list.map((b) => (
-            <div key={b.id} className="ff-panel">
-              <div className="p-3.5 flex items-center gap-3">
-                <div className="min-w-0 flex-1">
-                  {editingId === b.id ? (
-                    <div className="flex items-center gap-2">
-                      <input
-                        type="text"
-                        value={editName}
-                        onChange={(e) => setEditName(e.target.value)}
-                        onKeyDown={(e) => {
-                          if (e.key === 'Enter') handleRename(b.id)
-                          if (e.key === 'Escape') setEditingId(null)
-                        }}
-                        autoFocus
-                        className="ff-input w-56"
-                      />
-                      <button onClick={() => handleRename(b.id)} disabled={isPending} className="ff-btn-secondary">Save</button>
-                      <button onClick={() => setEditingId(null)} className="ff-btn-ghost" style={{ fontSize: '11px', padding: '0 8px' }}>Cancel</button>
-                    </div>
-                  ) : (
-                    <div className="flex items-center gap-2">
-                      <Link
-                        href={`/feed/${feedId}/optimize/${b.id}`}
-                        style={{ fontSize: '13px', fontWeight: 600, color: 'var(--color-text-primary)' }}
-                      >
-                        {b.name}
-                      </Link>
-                    </div>
-                  )}
-                  <div className="mt-1" style={{ fontSize: '11px', color: 'var(--color-text-tertiary)' }}>
-                    {b.memberCount === 0 ? (
-                      <span style={{ fontStyle: 'italic', opacity: 0.85 }}>
-                        Empty — add products in Scope
-                      </span>
-                    ) : (
-                      <>
-                        {b.memberCount} {b.memberCount === 1 ? 'product' : 'products'}
-                        {b.aiGenerated > 0 ? ` · ${b.aiGenerated} optimized` : ''}
-                        {b.humanEdited > 0 ? ` · ${b.humanEdited} hand-edited` : ''}
-                        {b.needsReview > 0 ? ` · ${b.needsReview} to review` : ''}
-                      </>
-                    )}
-                  </div>
-                </div>
-                {editingId !== b.id && (
-                  <div className="flex items-center gap-2 shrink-0">
-                    <Link href={`/feed/${feedId}/optimize/${b.id}`} className="ff-btn-secondary">Open</Link>
-                    <button
-                      onClick={() => {
-                        setEditingId(b.id)
-                        setEditName(b.name)
-                      }}
-                      className="ff-btn-ghost"
-                      style={{ fontSize: '11px', padding: '0 8px' }}
-                    >
-                      Rename
-                    </button>
-                    <button
-                      onClick={() => handleDelete(b.id, b.name)}
-                      disabled={isPending}
-                      className="ff-btn-ghost"
-                      style={{ fontSize: '11px', padding: '0 8px', color: 'var(--color-badge-danger-text)' }}
-                    >
-                      Delete
-                    </button>
-                  </div>
-                )}
-              </div>
-            </div>
-          ))}
-        </div>
       )}
     </div>
   )

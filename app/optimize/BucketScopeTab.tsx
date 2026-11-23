@@ -349,7 +349,7 @@ export function BucketScopeTab({
           discreet Saving…/Saved ✓ status sits top-right. */}
       <div className="flex items-start justify-between gap-4">
         <div>
-          <div style={{ fontSize: '11px', fontWeight: 600, textTransform: 'uppercase', letterSpacing: '0.08em', color: 'var(--accent-purple)' }}>
+          <div style={{ fontSize: '11px', fontWeight: 600, textTransform: 'uppercase', letterSpacing: '0.08em', color: 'var(--accent-ink)' }}>
             Scope
           </div>
           <h2 style={{ fontSize: '20px', fontWeight: 500, color: 'var(--ink)', letterSpacing: '-0.01em', lineHeight: 1.2, marginTop: '3px' }}>
@@ -372,7 +372,7 @@ export function BucketScopeTab({
                   width: '13px',
                   height: '13px',
                   border: '2px solid var(--hairline)',
-                  borderTopColor: 'var(--accent-purple)',
+                  borderTopColor: 'var(--accent-ink)',
                   borderRadius: '50%',
                   animation: 'ff-spin 0.6s linear infinite',
                 }}
@@ -436,7 +436,7 @@ export function BucketScopeTab({
           {pendingConflict && (
             <div
               className="space-y-2"
-              style={{ fontSize: '11px', padding: '8px 10px', borderRadius: '6px', background: 'rgba(232, 163, 23, 0.12)', border: '1px solid var(--accent-amber)' }}
+              style={{ fontSize: '11px', padding: '8px 10px', borderRadius: '6px', background: 'var(--warn-bg)', border: '1px solid var(--accent-amber)' }}
             >
               <div style={{ color: 'var(--accent-amber)' }}>
                 “{pendingConflict.title}” already belongs to bucket “{pendingConflict.bucketName}”. Moving it here removes
@@ -550,7 +550,7 @@ export function BucketScopeTab({
                   type="button"
                   onClick={togglePullAll}
                   className="ff-btn-ghost"
-                  style={{ fontSize: '10px', fontWeight: 500, color: 'var(--accent-purple)', padding: '2px 6px', alignSelf: 'flex-start' }}
+                  style={{ fontSize: '10px', fontWeight: 500, color: 'var(--accent-ink)', padding: '2px 6px', alignSelf: 'flex-start' }}
                 >
                   {allPulledIn ? 'Deselect all' : 'Select all'}
                 </button>

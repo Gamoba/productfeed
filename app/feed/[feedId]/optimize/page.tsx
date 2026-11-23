@@ -29,7 +29,6 @@ export default async function FeedOptimizePage({
   return (
     <OptimizeClient
       feedId={feedId}
-      feedName={feed.name}
       initialSettings={settings}
       initialBuckets={bucketList}
     />

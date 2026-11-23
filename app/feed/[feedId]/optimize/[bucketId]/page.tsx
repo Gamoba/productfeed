@@ -28,7 +28,6 @@ export default async function BucketEditorPage({
   return (
     <BucketEditorClient
       feedId={feedId}
-      feedName={feed.name}
       bucketId={bucket.id}
       bucketName={bucket.name}
       initialInclude={filters.include}

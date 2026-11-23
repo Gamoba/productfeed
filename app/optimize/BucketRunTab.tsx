@@ -134,7 +134,7 @@ export function BucketRunTab({
       {/* Hero — the heading; the run button itself now lives in the editor's frozen
           bottom bar (this step's final action). */}
       <div className="space-y-1.5">
-        <div className="wl-eyebrow" style={{ color: 'var(--accent-purple)' }}>Run</div>
+        <div className="wl-eyebrow" style={{ color: 'var(--accent-ink)' }}>Run</div>
         <h2 style={{ fontSize: '26px', fontWeight: 500, letterSpacing: '-0.02em', lineHeight: 1.1, color: 'var(--ink)' }}>
           Run optimization
         </h2>
@@ -172,7 +172,7 @@ export function BucketRunTab({
             {progress.done} of {progress.total} optimized…
           </div>
           <div style={{ height: '6px', background: 'var(--bg-surface)', border: '1px solid var(--hairline)', borderRadius: '999px', overflow: 'hidden' }}>
-            <div style={{ height: '100%', width: progress.total ? `${(progress.done / progress.total) * 100}%` : '0%', background: 'var(--accent-purple)', transition: 'width 0.2s' }} />
+            <div style={{ height: '100%', width: progress.total ? `${(progress.done / progress.total) * 100}%` : '0%', background: 'var(--accent-ink)', transition: 'width 0.2s' }} />
           </div>
         </div>
       )}

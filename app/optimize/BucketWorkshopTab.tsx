@@ -69,7 +69,7 @@ function StepNumber({ n }: { n: number }) {
   return (
     <span
       className="flex items-center justify-center shrink-0"
-      style={{ width: '18px', height: '18px', borderRadius: '50%', background: 'var(--accent-purple)', color: '#ffffff', fontSize: '10px', fontWeight: 500 }}
+      style={{ width: '18px', height: '18px', borderRadius: '50%', background: 'var(--accent-ink)', color: '#ffffff', fontSize: '10px', fontWeight: 500 }}
     >
       {n}
     </span>
@@ -289,7 +289,7 @@ export function BucketWorkshopTab({ feedId, bucketId }: { feedId: string; bucket
 
       {/* Step heading — names the task and lays out the three-step flow below. */}
       <div>
-        <div style={{ fontSize: '11px', fontWeight: 600, textTransform: 'uppercase', letterSpacing: '0.08em', color: 'var(--accent-purple)' }}>
+        <div style={{ fontSize: '11px', fontWeight: 600, textTransform: 'uppercase', letterSpacing: '0.08em', color: 'var(--accent-ink)' }}>
           Examples
         </div>
         <h2 style={{ fontSize: '20px', fontWeight: 500, color: 'var(--color-text-primary)', letterSpacing: '-0.01em', lineHeight: 1.2, marginTop: '3px' }}>

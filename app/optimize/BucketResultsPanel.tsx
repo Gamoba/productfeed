@@ -227,7 +227,7 @@ export function BucketResultsPanel({
                   fontSize: '11px',
                   borderRadius: '5px',
                   border: '1px solid var(--hairline)',
-                  background: active ? 'var(--accent-purple)' : 'transparent',
+                  background: active ? 'var(--accent-ink)' : 'transparent',
                   color: active ? '#ffffff' : 'var(--ink-secondary)',
                 }}
               >
@@ -281,7 +281,7 @@ export function BucketResultsPanel({
                               onClick={() => saveTitle(it.product_ref, draft)}
                               disabled={rowBusy || !draft.trim()}
                               className="ff-btn-ghost shrink-0 w-6 h-6 flex items-center justify-center"
-                              style={{ color: 'var(--accent-green, var(--accent-purple))' }}
+                              style={{ color: 'var(--good)' }}
                               aria-label="Save title"
                               title="Save"
                             >
