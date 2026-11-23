@@ -4,6 +4,7 @@ export type IconName =
   | 'bolt' | 'overview' | 'box' | 'setup' | 'mapping' | 'filter' | 'titles' | 'tag'
   | 'eye' | 'chart' | 'megaphone' | 'drop' | 'settings' | 'feeds' | 'shops'
   | 'chevron' | 'chevron-down' | 'back' | 'logout' | 'check' | 'menu' | 'search'
+  | 'hash' | 'link' | 'image' | 'price' | 'truck' | 'text'
 
 const PATHS: Record<IconName, React.ReactNode> = {
   bolt: <path d="M13 2 4 14h7l-1 8 9-12h-7l1-8z" />,
@@ -78,6 +79,24 @@ const PATHS: Record<IconName, React.ReactNode> = {
   logout: <path d="M9 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h4M16 17l5-5-5-5M21 12H9" />,
   check: <path d="m5 12 5 5L20 7" />,
   menu: <path d="M4 7h16M4 12h16M4 17h16" />,
+  hash: <path d="M5 9h14M5 15h14M10 4 8 20M16 4l-2 16" />,
+  link: <path d="M10 14a4 4 0 0 0 5.7 0l3-3a4 4 0 0 0-5.7-5.7l-1 1M14 10a4 4 0 0 0-5.7 0l-3 3a4 4 0 0 0 5.7 5.7l1-1" />,
+  image: (
+    <>
+      <rect x="3" y="4" width="18" height="16" rx="2" />
+      <circle cx="9" cy="10" r="1.5" />
+      <path d="m21 16-5-5-8 9" />
+    </>
+  ),
+  price: <path d="M12 3v18M16.5 7.5C16 6 14.3 5 12 5c-2.8 0-4.5 1.4-4.5 3.3 0 4.4 9 2.4 9 7 0 2-1.9 3.7-4.5 3.7-2.4 0-4.2-1.1-4.7-2.8" />,
+  truck: (
+    <>
+      <path d="M3 6h11v10H3zM14 9h4l3 3v4h-7" />
+      <circle cx="7" cy="17.5" r="1.8" />
+      <circle cx="17" cy="17.5" r="1.8" />
+    </>
+  ),
+  text: <path d="M5 6V4h14v2M12 4v16M9 20h6" />,
   search: (
     <>
       <circle cx="11" cy="11" r="6.5" />

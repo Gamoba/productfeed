@@ -46,7 +46,6 @@ export default async function FeedMappingPage({
   return (
     <MappingClient
       feedId={feedId}
-      feedName={feed.name}
       feedMode={feedMode}
       initialMappings={mappingsRes.data ?? []}
     />

@@ -19,6 +19,9 @@ import {
   type Rule,
   type ValueSpec,
 } from '@/lib/mappingRules'
+import { applyLookup, parseLookupPaste, type LookupConfig, type LookupRow } from '@/lib/mappingLookup'
+import './mapping.css'
+import { Icon, type IconName } from '../components/shell/icons'
 
 // Lets all FieldSelect / ShopifyFieldsModal usages pick up the active feed
 // mode without prop-drilling through 8+ render sites.
@@ -48,6 +51,7 @@ type MappingType =
   | 'FIND_REPLACE'
   | 'TRUNCATE'
   | 'STRIP_HTML'
+  | 'LOOKUP'
   | 'AI'
 
 type Config = Record<string, unknown>
@@ -68,6 +72,30 @@ type AISuggestion = {
 const REQUIRED_FIELDS = [
   'id', 'title', 'description', 'link', 'image_link', 'availability', 'price', 'brand',
 ] as const
+const REQUIRED_SET = new Set<string>(REQUIRED_FIELDS)
+
+// Filter chips above the field list.
+type FieldChip = 'all' | 'unmapped' | 'rules' | 'lookup' | 'ai'
+const FIELD_CHIPS: { id: FieldChip; label: string }[] = [
+  { id: 'all', label: 'Alle' },
+  { id: 'unmapped', label: 'Ikke mappet' },
+  { id: 'rules', label: 'Med regler' },
+  { id: 'lookup', label: 'Opslag' },
+  { id: 'ai', label: 'AI' },
+]
+
+// The icon in front of a field name says what kind of field it is.
+function fieldIcon(field: string): IconName {
+  if (/image|media/.test(field)) return 'image'
+  if (/link|url/.test(field)) return 'link'
+  if (/price|cost/.test(field)) return 'price'
+  if (/shipping|handling/.test(field)) return 'truck'
+  if (/^(id|gtin|mpn|item_group_id|identifier_exists|promotion_id)$/.test(field)) return 'hash'
+  if (/custom_label/.test(field)) return 'tag'
+  if (/category|product_type/.test(field)) return 'feeds'
+  if (/availability|condition|stock/.test(field)) return 'box'
+  return 'text'
+}
 
 // Collapsible sections — collapsed by default, auto-opened when at least one
 // field inside has a saved mapping.
@@ -204,6 +232,7 @@ const MAPPING_TYPES: { value: MappingType; label: string }[] = [
   { value: 'FIND_REPLACE', label: 'Find & Replace' },
   { value: 'TRUNCATE', label: 'Truncate' },
   { value: 'STRIP_HTML', label: 'Strip HTML' },
+  { value: 'LOOKUP', label: 'Lookup table' },
   { value: 'AI', label: 'AI' },
 ]
 
@@ -257,7 +286,7 @@ const btnSm =
 const miniSel = 'ff-select shrink-0'
 // Left-hand keyword column of a rule row (ONLY IF / ELSE IF / THEN / ELSE).
 // Fixed width so every keyword lines up down the panel.
-const condLbl = 'text-xs text-gray-400 font-mono w-16 shrink-0 pt-2'
+const condLbl = 'text-xs text-[var(--muted)] opacity-70 font-mono w-16 shrink-0 pt-2'
 
 // Drops one key from a mapping config. Used when a whole layer (the rule stack,
 // the filter layer) is removed — the key must disappear rather than be left as
@@ -402,6 +431,11 @@ function applyClientMapping(
     }
     case 'STRIP_HTML':
       return stripHtml(resolveClientField(String(config.field ?? ''), product, marketUrl, feedMode))
+    case 'LOOKUP':
+      return applyLookup(
+        resolveClientField(String(config.field ?? ''), product, marketUrl, feedMode),
+        config as LookupConfig
+      )
     case 'AI':
       return AI_PLACEHOLDER
     default:
@@ -606,7 +640,7 @@ function CombineChipsEditor({
         <button
           type="button"
           onClick={() => setPicker(picker === 'field' ? 'none' : 'field')}
-          className={`${btnSm} bg-[rgba(124,92,252,0.08)] text-[var(--accent-purple)] hover:bg-[rgba(124,92,252,0.14)]`}
+          className={`${btnSm} bg-[var(--tint)] text-[var(--accent-ink)] hover:bg-[var(--tint)]`}
           aria-expanded={picker === 'field'}
         >
           + Field
@@ -614,7 +648,7 @@ function CombineChipsEditor({
         <button
           type="button"
           onClick={() => setPicker(picker === 'text' ? 'none' : 'text')}
-          className={`${btnSm} bg-gray-100 text-gray-600 hover:bg-gray-200`}
+          className={`${btnSm} bg-[var(--card-2)] text-[var(--muted)] hover:bg-[var(--canvas-2)]`}
           aria-expanded={picker === 'text'}
         >
           + Text
@@ -672,10 +706,10 @@ function CombineChip({
         padding: '4px 4px 4px 8px',
         fontSize: '11px',
         background: isField
-          ? 'rgba(124, 92, 252, 0.13)'
+          ? 'var(--tint)'
           : 'var(--bg-surface)',
         color: isField
-          ? '#5b3fd6'
+          ? 'var(--tint-fg)'
           : 'var(--ink-secondary)',
         borderRadius: '4px',
         opacity: isDragging ? 0.4 : 1,
@@ -727,7 +761,7 @@ function DropIndicator({ side }: { side: 'left' | 'right' }) {
         bottom: 0,
         [side]: '-5px',
         width: '2px',
-        background: 'var(--accent-purple)',
+        background: 'var(--accent-ink)',
         borderRadius: '1px',
         pointerEvents: 'none',
       }}
@@ -877,7 +911,7 @@ function PickerOption({
         background: 'transparent',
         border: 'none',
         cursor: 'pointer',
-        color: mono ? 'var(--accent-purple)' : 'var(--ink)',
+        color: mono ? 'var(--accent-ink)' : 'var(--ink)',
       }}
       className={mono ? 'ff-mono' : undefined}
       onMouseEnter={(e) => {
@@ -1043,7 +1077,7 @@ function ConfigEditor({
                 placeholder="Find..."
                 className={inpSm}
               />
-              <span className="text-gray-400 text-sm shrink-0">→</span>
+              <span className="text-[var(--muted)] opacity-70 text-sm shrink-0">→</span>
               <input
                 type="text"
                 value={pair.replace}
@@ -1059,7 +1093,7 @@ function ConfigEditor({
                 <button
                   type="button"
                   onClick={() => set('pairs', pairs.filter((_, j) => j !== i))}
-                  className={`${btnSm} bg-gray-100 text-gray-500 hover:bg-gray-200 shrink-0`}
+                  className={`${btnSm} bg-[var(--card-2)] text-[var(--muted)] hover:bg-[var(--canvas-2)] shrink-0`}
                 >
                   ×
                 </button>
@@ -1069,7 +1103,7 @@ function ConfigEditor({
           <button
             type="button"
             onClick={() => set('pairs', [...pairs, { find: '', replace: '' }])}
-            className={`${btnSm} bg-[rgba(124,92,252,0.08)] text-[var(--accent-purple)] hover:bg-[rgba(124,92,252,0.14)]`}
+            className={`${btnSm} bg-[var(--tint)] text-[var(--accent-ink)] hover:bg-[var(--tint)]`}
           >
             + Add pair
           </button>
@@ -1090,9 +1124,9 @@ function ConfigEditor({
             value={Number(config.maxChars ?? 500)}
             onChange={(e) => set('maxChars', Number(e.target.value))}
             min={1}
-            className="w-24 px-3 py-2 rounded-lg border border-gray-200 text-sm text-center focus:outline-none focus:ring-2 focus:ring-[rgba(124,92,252,0.2)] shrink-0"
+            className="w-24 px-3 py-2 rounded-lg border border-[var(--line)] text-sm text-center focus:outline-none focus:ring-2 focus:ring-[rgba(39,67,214,0.15)] shrink-0"
           />
-          <span className="text-sm text-gray-500 shrink-0">chars</span>
+          <span className="text-sm text-[var(--muted)] shrink-0">chars</span>
         </div>
       )
 
@@ -1105,6 +1139,9 @@ function ConfigEditor({
         />
       )
 
+    case 'LOOKUP':
+      return <LookupEditor config={config as LookupConfig} onChange={(c) => onChange({ ...config, ...c })} allFields={allFields} />
+
     case 'AI':
       return (
         <textarea
@@ -1112,13 +1149,157 @@ function ConfigEditor({
           onChange={(e) => onChange({ ...config, prompt: e.target.value })}
           rows={2}
           placeholder="Describe what Claude should generate based on the product data..."
-          className="w-full px-3 py-2 rounded-lg border border-gray-200 text-sm focus:outline-none focus:ring-2 focus:ring-[rgba(124,92,252,0.2)] focus:border-[var(--accent-purple)] resize-none"
+          className="w-full px-3 py-2 rounded-lg border border-[var(--line)] text-sm focus:outline-none focus:ring-2 focus:ring-[rgba(39,67,214,0.15)] focus:border-[var(--accent-ink)] resize-none"
         />
       )
 
     default:
       return null
   }
+}
+
+// ── LookupEditor ───────────────────────────────────────────────────────────
+
+// Lookup table: source field + "value → feed value" rows + what to do when
+// nothing matches. Rows can be pasted from a spreadsheet (two columns). The
+// logic lives in lib/mappingLookup so the preview and the generated feed agree.
+function LookupEditor({
+  config,
+  onChange,
+  allFields,
+}: {
+  config: LookupConfig
+  onChange: (c: LookupConfig) => void
+  allFields: string[]
+}) {
+  const rows: LookupRow[] = config.rows?.length ? config.rows : [{ from: '', to: '' }]
+  const [paste, setPaste] = useState<string | null>(null)
+  const setRows = (next: LookupRow[]) => onChange({ ...config, rows: next })
+  const pasted = paste ? parseLookupPaste(paste) : []
+
+  return (
+    <div className="lk">
+      <div className="lk-line">
+        <span className="lk-kw">SLÅ OP</span>
+        <FieldSelect value={String(config.field ?? '')} onChange={(v) => onChange({ ...config, field: v })} allFields={allFields} />
+      </div>
+
+      <div className="lk-table" role="table" aria-label="Opslagstabel">
+        <div className="lk-head" role="row">
+          <span role="columnheader">Hvis værdien {config.match === 'contains' ? 'indeholder' : 'er'}</span>
+          <span role="columnheader">så skriv</span>
+          <span />
+        </div>
+        {rows.map((row, i) => (
+          <div className="lk-row" role="row" key={i}>
+            <input
+              className="ff-input"
+              value={row.from}
+              placeholder="fx rot"
+              aria-label={`Række ${i + 1}: værdi i shoppen`}
+              onChange={(e) => setRows(rows.map((r, j) => (j === i ? { ...r, from: e.target.value } : r)))}
+            />
+            <input
+              className="ff-input"
+              value={row.to}
+              placeholder="fx Rot"
+              aria-label={`Række ${i + 1}: værdi i feedet`}
+              onChange={(e) => setRows(rows.map((r, j) => (j === i ? { ...r, to: e.target.value } : r)))}
+            />
+            <button
+              type="button"
+              className="lk-x"
+              aria-label={`Fjern række ${i + 1}`}
+              onClick={() => setRows(rows.length > 1 ? rows.filter((_, j) => j !== i) : [{ from: '', to: '' }])}
+            >
+              ×
+            </button>
+          </div>
+        ))}
+      </div>
+
+      <div className="lk-tools">
+        <button type="button" className="ff-btn-ghost" onClick={() => setRows([...rows, { from: '', to: '' }])}>
+          + Række
+        </button>
+        <button type="button" className="ff-btn-ghost" onClick={() => setPaste(paste === null ? '' : null)}>
+          {paste === null ? 'Indsæt fra regneark' : 'Luk indsæt'}
+        </button>
+        <span className="lk-count">
+          {rows.filter((r) => r.from.trim()).length} rækker · første match vinder
+        </span>
+      </div>
+
+      {paste !== null && (
+        <div className="lk-paste">
+          <textarea
+            className="ff-input"
+            rows={4}
+            value={paste}
+            placeholder="Kopiér to kolonner fra Excel eller Google Sheets, og indsæt dem her."
+            onChange={(e) => setPaste(e.target.value)}
+          />
+          <div className="lk-tools">
+            <button
+              type="button"
+              className="ff-btn-secondary"
+              disabled={pasted.length === 0}
+              onClick={() => {
+                const kept = rows.filter((r) => r.from.trim() || r.to.trim())
+                setRows([...kept, ...pasted])
+                setPaste(null)
+              }}
+            >
+              Tilføj {pasted.length} {pasted.length === 1 ? 'række' : 'rækker'}
+            </button>
+          </div>
+        </div>
+      )}
+
+      <div className="lk-opts">
+        <label>
+          Match
+          <select
+            className="ff-select"
+            value={config.match ?? 'exact'}
+            onChange={(e) => onChange({ ...config, match: e.target.value as LookupConfig['match'] })}
+          >
+            <option value="exact">Hele værdien er lig</option>
+            <option value="contains">Værdien indeholder</option>
+          </select>
+        </label>
+        <label className="lk-check">
+          <input
+            type="checkbox"
+            checked={config.caseSensitive ?? false}
+            onChange={(e) => onChange({ ...config, caseSensitive: e.target.checked })}
+          />
+          Skeln mellem store og små bogstaver
+        </label>
+        <label>
+          Ingen match
+          <select
+            className="ff-select"
+            value={config.fallback ?? 'source'}
+            onChange={(e) => onChange({ ...config, fallback: e.target.value as LookupConfig['fallback'] })}
+          >
+            <option value="source">Behold værdien fra shoppen</option>
+            <option value="empty">Lad feltet være tomt</option>
+            <option value="static">Skriv en fast værdi</option>
+          </select>
+        </label>
+        {config.fallback === 'static' && (
+          <input
+            className="ff-input lk-fallback"
+            value={config.fallbackValue ?? ''}
+            placeholder="Fast værdi"
+            aria-label="Fast værdi når intet matcher"
+            onChange={(e) => onChange({ ...config, fallbackValue: e.target.value })}
+          />
+        )}
+      </div>
+    </div>
+  )
 }
 
 // ── ConditionModeToggle ────────────────────────────────────────────────────
@@ -1155,7 +1336,7 @@ function ConditionModeToggle({
               fontSize: '11px',
               fontWeight: 500,
               borderLeft: idx > 0 ? '1px solid var(--hairline)' : 'none',
-              background: active ? 'var(--accent-purple)' : '#ffffff',
+              background: active ? 'var(--accent-ink)' : '#ffffff',
               color: active ? '#ffffff' : 'var(--ink-secondary)',
               cursor: active ? 'default' : 'pointer',
               transition: 'background 0.12s ease, color 0.12s ease',
@@ -1264,7 +1445,7 @@ function ConditionRows({
               <button
                 type="button"
                 onClick={() => onChange(conditions.filter((_, j) => j !== i))}
-                className={`${btnSm} bg-gray-100 text-gray-500 hover:bg-gray-200 mt-0.5`}
+                className={`${btnSm} bg-[var(--card-2)] text-[var(--muted)] hover:bg-[var(--canvas-2)] mt-0.5`}
                 style={{ flex: 'none' }}
               >
                 ×
@@ -1278,14 +1459,14 @@ function ConditionRows({
         <button
           type="button"
           onClick={() => onChange([...conditions, { field: '', operator: 'equals', value: '', logic: 'AND' }])}
-          className={`${btnSm} bg-gray-100 text-gray-600 hover:bg-gray-200`}
+          className={`${btnSm} bg-[var(--card-2)] text-[var(--muted)] hover:bg-[var(--canvas-2)]`}
         >
           + AND
         </button>
         <button
           type="button"
           onClick={() => onChange([...conditions, { field: '', operator: 'equals', value: '', logic: 'OR' }])}
-          className={`${btnSm} bg-gray-100 text-gray-600 hover:bg-gray-200`}
+          className={`${btnSm} bg-[var(--card-2)] text-[var(--muted)] hover:bg-[var(--canvas-2)]`}
         >
           + OR
         </button>
@@ -1344,7 +1525,7 @@ function ValueSpecEditor({
           />
         )}
         {value.type === 'empty' && (
-          <span className="text-sm text-gray-400 italic pt-1.5">The field is left empty</span>
+          <span className="text-sm text-[var(--muted)] opacity-70 italic pt-1.5">The field is left empty</span>
         )}
         {value.type === 'combine' && (
           <CombineChipsEditor
@@ -1449,7 +1630,7 @@ function OnlyIfEditor({
                 onClick={() => setRules(rules.filter((_, j) => j !== i))}
                 title="Remove rule"
                 aria-label="Remove rule"
-                className={`${btnSm} hover:bg-red-50 hover:text-red-600`}
+                className={`${btnSm} hover:bg-[var(--bad-bg)] hover:text-[var(--bad)]`}
               >
                 ×
               </button>
@@ -1476,13 +1657,13 @@ function OnlyIfEditor({
               },
             ])
           }
-          className={`${btnSm} bg-[rgba(124,92,252,0.08)] text-[var(--accent-purple)] hover:bg-[rgba(124,92,252,0.14)]`}
+          className={`${btnSm} bg-[var(--tint)] text-[var(--accent-ink)] hover:bg-[var(--tint)]`}
         >
           + Else if
         </button>
       </div>
 
-      <div className="border-t border-[rgba(124,92,252,0.18)] pt-2">
+      <div className="border-t border-[var(--tint)] pt-2">
         <ValueSpecEditor
           label="ELSE"
           value={elseBranch}
@@ -1501,7 +1682,7 @@ function OnlyIfEditor({
         <button
           type="button"
           onClick={onRemove}
-          className="text-xs text-gray-400 hover:text-red-500 transition-colors"
+          className="text-xs text-[var(--muted)] opacity-70 hover:text-[var(--bad)] transition-colors"
         >
           Remove condition
         </button>
@@ -1616,7 +1797,7 @@ function PreviewValueText({
             marginTop: '2px',
             fontSize: '10px',
             fontWeight: 500,
-            color: 'var(--accent-purple)',
+            color: 'var(--accent-ink)',
             background: 'transparent',
             border: 'none',
             padding: 0,
@@ -1666,7 +1847,7 @@ function TransformBody({
   switch (transform.type) {
     case 'STRIP_HTML':
       return (
-        <span className="text-sm text-gray-400 italic pt-1.5">
+        <span className="text-sm text-[var(--muted)] opacity-70 italic pt-1.5">
           Removes HTML tags, keeps paragraph breaks
         </span>
       )
@@ -1690,7 +1871,7 @@ function TransformBody({
                 placeholder="Find..."
                 className={inpSm}
               />
-              <span className="text-gray-400 text-sm shrink-0">→</span>
+              <span className="text-[var(--muted)] opacity-70 text-sm shrink-0">→</span>
               <input
                 type="text"
                 value={pair.replace}
@@ -1706,7 +1887,7 @@ function TransformBody({
                 <button
                   type="button"
                   onClick={() => setPairs(pairs.filter((_, j) => j !== i))}
-                  className={`${btnSm} bg-gray-100 text-gray-500 hover:bg-gray-200 shrink-0`}
+                  className={`${btnSm} bg-[var(--card-2)] text-[var(--muted)] hover:bg-[var(--canvas-2)] shrink-0`}
                 >
                   ×
                 </button>
@@ -1716,7 +1897,7 @@ function TransformBody({
           <button
             type="button"
             onClick={() => setPairs([...pairs, { find: '', replace: '' }])}
-            className={`${btnSm} bg-[rgba(124,92,252,0.08)] text-[var(--accent-purple)] hover:bg-[rgba(124,92,252,0.14)]`}
+            className={`${btnSm} bg-[var(--tint)] text-[var(--accent-ink)] hover:bg-[var(--tint)]`}
           >
             + Add pair
           </button>
@@ -1732,9 +1913,9 @@ function TransformBody({
             value={Number(transform.maxChars ?? 500)}
             onChange={(e) => onChange({ ...transform, maxChars: Number(e.target.value) })}
             min={1}
-            className="w-24 px-3 py-2 rounded-lg border border-gray-200 text-sm text-center focus:outline-none focus:ring-2 focus:ring-[rgba(124,92,252,0.2)] shrink-0"
+            className="w-24 px-3 py-2 rounded-lg border border-[var(--line)] text-sm text-center focus:outline-none focus:ring-2 focus:ring-[rgba(39,67,214,0.15)] shrink-0"
           />
-          <span className="text-sm text-gray-500 shrink-0">chars</span>
+          <span className="text-sm text-[var(--muted)] shrink-0">chars</span>
         </div>
       )
 
@@ -1834,7 +2015,7 @@ function TransformsEditor({
               onClick={() => onChange(transforms.filter((_, j) => j !== i))}
               title="Remove filter"
               aria-label="Remove filter"
-              className={`${btnSm} hover:bg-red-50 hover:text-red-600`}
+              className={`${btnSm} hover:bg-[var(--bad-bg)] hover:text-[var(--bad)]`}
             >
               ×
             </button>
@@ -1861,7 +2042,7 @@ function TransformsEditor({
             <button
               type="button"
               onClick={() => setAdding(false)}
-              className="text-xs text-gray-400 hover:text-gray-600 transition-colors"
+              className="text-xs text-[var(--muted)] opacity-70 hover:text-[var(--muted)] transition-colors"
             >
               Cancel
             </button>
@@ -1870,7 +2051,7 @@ function TransformsEditor({
           <button
             type="button"
             onClick={() => setAdding(true)}
-            className={`${btnSm} bg-[rgba(124,92,252,0.08)] text-[var(--accent-purple)] hover:bg-[rgba(124,92,252,0.14)]`}
+            className={`${btnSm} bg-[var(--tint)] text-[var(--accent-ink)] hover:bg-[var(--tint)]`}
           >
             + Add filter
           </button>
@@ -1887,7 +2068,7 @@ function TransformsEditor({
         <button
           type="button"
           onClick={onRemove}
-          className="text-xs text-gray-400 hover:text-red-500 transition-colors"
+          className="text-xs text-[var(--muted)] opacity-70 hover:text-[var(--bad)] transition-colors"
         >
           Remove filters
         </button>
@@ -1955,44 +2136,27 @@ function FieldRow({
   }
 
   return (
-    <div className="px-4 py-3.5 group">
+    <div className="mp-row group">
       <div className="flex items-start gap-3">
-        <div className="w-52 pt-1.5 shrink-0">
+        <div className="w-52 pt-1 shrink-0">
           <div className="flex items-center justify-between gap-1.5">
-            <code
-              className="ff-mono truncate"
-              style={{
-                fontSize: '11px',
-                color: '#5b3fd6',
-                background: 'rgba(124, 92, 252, 0.1)',
-                border: '1px solid rgba(124, 92, 252, 0.2)',
-                borderRadius: '6px',
-                padding: '2px 8px',
-                display: 'inline-block',
-                maxWidth: '100%',
-              }}
-            >
-              {displayField}
-            </code>
+            <span className={`mp-name${state.type ? '' : ' off'}`}>
+              <span className="mp-ic">
+                <Icon name={fieldIcon(displayField)} size={14} />
+              </span>
+              <span className="mp-n" title={displayField}>
+                {displayField}
+              </span>
+              {!state.type && REQUIRED_SET.has(field) && <span className="pill bad">Mangler</span>}
+              {state.type === 'AI' && <span className="mp-ai">AI</span>}
+            </span>
             <div className="flex items-center gap-1 shrink-0">
               {onPreview && (
                 <button
                   type="button"
                   onClick={onPreview}
-                  title="Preview the field across all products"
-                  className="opacity-0 group-hover:opacity-100 focus:opacity-100"
-                  style={{
-                    padding: '2px 6px',
-                    fontSize: '10px',
-                    fontWeight: 500,
-                    border: '1px solid var(--hairline)',
-                    borderRadius: '4px',
-                    background: '#ffffff',
-                    color: 'var(--accent-purple)',
-                    cursor: 'pointer',
-                    transition: 'opacity 0.12s ease',
-                    lineHeight: 1.2,
-                  }}
+                  title="Se feltet på tværs af varerne"
+                  className="mp-mini"
                 >
                   Preview
                 </button>
@@ -2056,33 +2220,26 @@ function FieldRow({
               // mis-click on the thing that reports them would be a trap.
               // Deleting is the explicit "Remove filters" link inside the panel.
               onClick={() => setShowTransforms((v) => !v)}
-              title="Stack extra operations on top of this mapping"
-              className={`px-2.5 py-2 rounded-lg text-xs font-medium transition-colors ${
-                transforms.length > 0
-                  ? 'bg-[rgba(124,92,252,0.14)] text-[#5b3fd6] hover:bg-[rgba(124,92,252,0.2)]'
-                  : 'bg-gray-100 text-gray-500 hover:bg-gray-200'
-              }`}
+              title="Formatér værdien yderligere: fjern HTML, find og erstat, forkort, tilføj før/efter"
+              className={`mp-chip${transforms.length > 0 ? ' on' : ''}`}
             >
-              {transforms.length > 0 ? `Filters · ${transforms.length}` : '+ Filter'}
+              {transforms.length > 0 ? `Formatering · ${transforms.length}` : '+ Formatering'}
             </button>
             <button
               type="button"
               onClick={showOnlyIf ? removeOnlyIf : openOnlyIf}
-              className={`px-2.5 py-2 rounded-lg text-xs font-medium transition-colors ${
-                hasConditions
-                  ? 'bg-[rgba(124,92,252,0.14)] text-[#5b3fd6] hover:bg-[rgba(124,92,252,0.2)]'
-                  : 'bg-gray-100 text-gray-500 hover:bg-gray-200'
-              }`}
+              title="Brug en anden værdi, når en betingelse er opfyldt"
+              className={`mp-chip${hasConditions ? ' on' : ''}`}
             >
-              {hasConditions ? 'Only if ✓' : '+ Only if'}
+              {hasConditions ? 'Regler ✓' : '+ Regel'}
             </button>
             {showOnlyIf && (
               <button
                 type="button"
                 onClick={removeOnlyIf}
-                title="Remove all conditions"
-                aria-label="Remove all conditions"
-                className="px-2 py-2 rounded-lg text-xs font-medium bg-gray-100 text-gray-500 hover:bg-red-100 hover:text-red-600 transition-colors"
+                title="Fjern alle regler"
+                aria-label="Fjern alle regler"
+                className="mp-chip mp-chip-x"
               >
                 ×
               </button>
@@ -2098,15 +2255,13 @@ function FieldRow({
           <div className="w-40 shrink-0" />
           <div className="flex-1 min-w-0 flex items-start gap-1.5">
             {previewValue === AI_PLACEHOLDER ? (
-              <span className="inline-flex items-center px-1.5 py-0.5 rounded text-xs bg-[rgba(124,92,252,0.14)] text-[#5b3fd6] font-medium">
-                AI – cannot be previewed
-              </span>
+              <span className="pill ai">Skrives af AI, kan ikke vises her</span>
             ) : previewValue === '' ? (
-              <span className="text-xs text-red-500 font-medium">Missing</span>
+              <span className="neg mp-prev">Tom</span>
             ) : (
               <>
-                <span className="text-xs text-gray-300 shrink-0 pt-px">→</span>
-                <div className="flex-1 min-w-0 text-xs text-[var(--accent-purple)]">
+                <span className="mp-prev-arrow shrink-0">→</span>
+                <div className="flex-1 min-w-0 mp-prev">
                   <PreviewValueText value={previewValue} />
                 </div>
               </>
@@ -2117,14 +2272,7 @@ function FieldRow({
 
       {showTransforms && state.type !== '' && (
         <div
-          className="mt-2.5 ml-52"
-          style={{
-            background: 'var(--bg-surface)',
-            border: '1px solid var(--hairline)',
-            borderLeft: '2px solid var(--accent-purple)',
-            borderRadius: '8px',
-            padding: '2px 14px 8px',
-          }}
+          className="mp-sub"
         >
           <TransformsEditor
             transforms={transforms}
@@ -2136,14 +2284,7 @@ function FieldRow({
 
       {showOnlyIf && state.type !== '' && onlyIf && (
         <div
-          className="mt-2.5 ml-52"
-          style={{
-            background: 'var(--bg-surface)',
-            border: '1px solid var(--hairline)',
-            borderLeft: '2px solid var(--accent-purple)',
-            borderRadius: '8px',
-            padding: '2px 14px 8px',
-          }}
+          className="mp-sub"
         >
           <OnlyIfEditor
             value={onlyIf}
@@ -2172,7 +2313,8 @@ function collectUsedFields(state: FieldState): string[] {
     case 'PREFIX_SUFFIX':
     case 'FIND_REPLACE':
     case 'TRUNCATE':
-    case 'STRIP_HTML': {
+    case 'STRIP_HTML':
+    case 'LOOKUP': {
       const f = String(cfg.field ?? '')
       if (f) used.push(f)
       break
@@ -2198,7 +2340,7 @@ function MappedBadge({ mapped }: { mapped: boolean }) {
   return (
     <span
       className={`shrink-0 text-xs px-2 py-0.5 rounded font-medium ${
-        mapped ? 'bg-green-100 text-green-700' : 'bg-gray-100 text-gray-500'
+        mapped ? 'bg-[var(--good-bg)] text-[var(--good)]' : 'bg-[var(--card-2)] text-[var(--muted)]'
       }`}
     >
       {mapped ? 'Mapped' : 'Not mapped'}
@@ -2208,7 +2350,7 @@ function MappedBadge({ mapped }: { mapped: boolean }) {
 
 function FieldExample({ value }: { value: string }) {
   if (!value) {
-    return <span className="text-gray-300 italic">empty</span>
+    return <span className="text-[var(--muted)] opacity-70 italic">empty</span>
   }
   const trimmed = value.length > 120 ? value.slice(0, 120) + '…' : value
   return <span>{trimmed}</span>
@@ -2259,12 +2401,12 @@ function ShopifyFieldsModal({
     <div className="fixed inset-0 z-50 flex items-start justify-center pt-12 px-4" onClick={onClose}>
       <div className="absolute inset-0 bg-black/30" />
       <div
-        className="relative bg-white rounded-xl shadow-xl border border-gray-200 w-full max-w-3xl flex flex-col max-h-[85vh] overflow-hidden"
+        className="relative bg-white rounded-xl shadow-xl border border-[var(--line)] w-full max-w-3xl flex flex-col max-h-[85vh] overflow-hidden"
         onClick={(e) => e.stopPropagation()}
       >
-        <div className="px-6 py-4 border-b border-gray-100 shrink-0">
-          <h2 className="text-base font-semibold text-gray-900">Source fields</h2>
-          <p className="text-sm text-gray-500 mt-0.5">
+        <div className="px-6 py-4 border-b border-[var(--line)] shrink-0">
+          <h2 className="text-base font-semibold text-[var(--ink)]">Source fields</h2>
+          <p className="text-sm text-[var(--muted)] mt-0.5">
             {totalMapped} of {totalFields} fields are used in a mapping
             {product ? ` — example values from "${product.title}"` : ''}
           </p>
@@ -2273,31 +2415,31 @@ function ShopifyFieldsModal({
             value={search}
             onChange={(e) => setSearch(e.target.value)}
             placeholder="Search field…"
-            className="mt-3 w-full px-3 py-2 rounded-lg border border-gray-200 text-sm focus:outline-none focus:ring-2 focus:ring-[rgba(124,92,252,0.2)] focus:border-[var(--accent-purple)]"
+            className="mt-3 w-full px-3 py-2 rounded-lg border border-[var(--line)] text-sm focus:outline-none focus:ring-2 focus:ring-[rgba(39,67,214,0.15)] focus:border-[var(--accent-ink)]"
           />
         </div>
 
         <div className="overflow-y-auto flex-1">
           {/* Standard fields */}
-          <div className="px-6 py-2 bg-gray-50 border-b border-gray-100 sticky top-0 z-10">
-            <h3 className="text-xs font-semibold text-gray-500 uppercase tracking-wider">
+          <div className="px-6 py-2 bg-[var(--card-2)] border-b border-[var(--line)] sticky top-0 z-10">
+            <h3 className="text-xs font-semibold text-[var(--muted)] uppercase tracking-wider">
               Standard fields
             </h3>
           </div>
           {loading && !product ? (
-            <div className="p-6 text-center text-sm text-gray-400">Loading example values…</div>
+            <div className="p-6 text-center text-sm text-[var(--muted)] opacity-70">Loading example values…</div>
           ) : filteredStandard.length === 0 ? (
-            <div className="p-6 text-center text-sm text-gray-400">No fields match the search</div>
+            <div className="p-6 text-center text-sm text-[var(--muted)] opacity-70">No fields match the search</div>
           ) : (
             filteredStandard.map((f) => (
               <div
                 key={f}
-                className="flex items-start gap-3 px-6 py-2.5 border-b border-gray-50 last:border-b-0"
+                className="flex items-start gap-3 px-6 py-2.5 border-b border-[var(--line)] last:border-b-0"
               >
                 <div className="w-52 shrink-0 pt-0.5">
-                  <code className="text-xs font-mono text-gray-700">{labels[f] ?? f}</code>
+                  <code className="text-xs font-mono text-[var(--ink)]">{labels[f] ?? f}</code>
                 </div>
-                <div className="flex-1 min-w-0 text-xs text-gray-500 break-all pt-0.5">
+                <div className="flex-1 min-w-0 text-xs text-[var(--muted)] break-all pt-0.5">
                   <FieldExample value={exampleFor(f)} />
                 </div>
                 <MappedBadge mapped={usedFields.has(f)} />
@@ -2308,13 +2450,13 @@ function ShopifyFieldsModal({
           {/* Metafields */}
           {metafields.length > 0 && (
             <>
-              <div className="px-6 py-2 bg-gray-50 border-b border-gray-100 sticky top-0 z-10">
-                <h3 className="text-xs font-semibold text-gray-500 uppercase tracking-wider">
+              <div className="px-6 py-2 bg-[var(--card-2)] border-b border-[var(--line)] sticky top-0 z-10">
+                <h3 className="text-xs font-semibold text-[var(--muted)] uppercase tracking-wider">
                   Metafields ({metafields.length})
                 </h3>
               </div>
               {filteredMeta.length === 0 ? (
-                <div className="p-6 text-center text-sm text-gray-400">No metafields match the search</div>
+                <div className="p-6 text-center text-sm text-[var(--muted)] opacity-70">No metafields match the search</div>
               ) : (
                 filteredMeta.map((m) => {
                   const fullKey = `metafield:${m.namespace}.${m.key}`
@@ -2322,19 +2464,19 @@ function ShopifyFieldsModal({
                   return (
                     <div
                       key={fullKey}
-                      className="flex items-start gap-3 px-6 py-2.5 border-b border-gray-50 last:border-b-0"
+                      className="flex items-start gap-3 px-6 py-2.5 border-b border-[var(--line)] last:border-b-0"
                     >
                       <div className="w-52 shrink-0 pt-0.5">
                         {m.name ? (
                           <>
-                            <span className="text-xs font-medium text-gray-700">{m.name}</span>
-                            <code className="block text-[10px] font-mono text-gray-400">{rawKey}</code>
+                            <span className="text-xs font-medium text-[var(--ink)]">{m.name}</span>
+                            <code className="block text-[10px] font-mono text-[var(--muted)] opacity-70">{rawKey}</code>
                           </>
                         ) : (
-                          <code className="text-xs font-mono text-gray-700">{rawKey}</code>
+                          <code className="text-xs font-mono text-[var(--ink)]">{rawKey}</code>
                         )}
                       </div>
-                      <div className="flex-1 min-w-0 text-xs text-gray-500 break-all pt-0.5">
+                      <div className="flex-1 min-w-0 text-xs text-[var(--muted)] break-all pt-0.5">
                         <FieldExample value={exampleFor(fullKey)} />
                       </div>
                       <MappedBadge mapped={usedFields.has(fullKey)} />
@@ -2346,10 +2488,10 @@ function ShopifyFieldsModal({
           )}
         </div>
 
-        <div className="px-6 py-3 border-t border-gray-100 flex justify-end shrink-0">
+        <div className="px-6 py-3 border-t border-[var(--line)] flex justify-end shrink-0">
           <button
             onClick={onClose}
-            className="px-4 py-2 rounded-lg border border-gray-200 text-sm text-gray-600 hover:bg-gray-50 transition-colors"
+            className="px-4 py-2 rounded-lg border border-[var(--line)] text-sm text-[var(--muted)] hover:bg-[var(--canvas-2)] transition-colors"
           >
             Luk
           </button>
@@ -2443,12 +2585,12 @@ function ProductPickerModal({
     >
       <div className="absolute inset-0 bg-black/20" />
       <div
-        className="relative bg-white rounded-xl shadow-xl border border-gray-200 w-full max-w-md overflow-hidden flex flex-col"
+        className="relative bg-white rounded-xl shadow-xl border border-[var(--line)] w-full max-w-md overflow-hidden flex flex-col"
         style={{ maxHeight: 'calc(100vh - 120px)' }}
         onClick={(e) => e.stopPropagation()}
       >
-        <div className="p-4 border-b border-gray-100 shrink-0">
-          <p className="text-xs font-medium text-gray-500 mb-2">Choose preview product</p>
+        <div className="p-4 border-b border-[var(--line)] shrink-0">
+          <p className="text-xs font-medium text-[var(--muted)] mb-2">Choose preview product</p>
           <input
             type="search"
             placeholder="Search title, vendor, handle, tags…"
@@ -2456,7 +2598,7 @@ function ProductPickerModal({
             onChange={(e) => setSearch(e.target.value)}
             // eslint-disable-next-line jsx-a11y/no-autofocus
             autoFocus
-            className="w-full px-3 py-2 rounded-lg border border-gray-300 text-sm focus:border-[var(--accent-purple)] focus:outline-none focus:ring-2 focus:ring-[rgba(124,92,252,0.2)]"
+            className="w-full px-3 py-2 rounded-lg border border-[var(--line)] text-sm focus:border-[var(--accent-ink)] focus:outline-none focus:ring-2 focus:ring-[rgba(39,67,214,0.15)]"
           />
         </div>
         <div
@@ -2464,9 +2606,9 @@ function ProductPickerModal({
           style={{ flex: 1, opacity: loading && products.length > 0 ? 0.6 : 1 }}
         >
           {loading && products.length === 0 ? (
-            <div className="p-8 text-center text-sm text-gray-400">Loading products…</div>
+            <div className="p-8 text-center text-sm text-[var(--muted)] opacity-70">Loading products…</div>
           ) : products.length === 0 ? (
-            <div className="p-8 text-center text-sm text-gray-400">
+            <div className="p-8 text-center text-sm text-[var(--muted)] opacity-70">
               {debouncedSearch ? 'No products match the search' : 'No products found'}
             </div>
           ) : (
@@ -2474,21 +2616,21 @@ function ProductPickerModal({
               <button
                 key={p.id}
                 onClick={() => onSelect(p)}
-                className="w-full text-left px-4 py-3 hover:bg-[rgba(124,92,252,0.08)] border-b border-gray-50 transition-colors flex items-center gap-3"
+                className="w-full text-left px-4 py-3 hover:bg-[var(--tint)] border-b border-[var(--line)] transition-colors flex items-center gap-3"
               >
                 {(p.images[0]?.src as string | undefined) ? (
                   // eslint-disable-next-line @next/next/no-img-element
                   <img
                     src={p.images[0].src as string}
                     alt=""
-                    className="w-8 h-8 rounded object-cover shrink-0 border border-gray-100"
+                    className="w-8 h-8 rounded object-cover shrink-0 border border-[var(--line)]"
                   />
                 ) : (
-                  <div className="w-8 h-8 rounded bg-gray-100 shrink-0" />
+                  <div className="w-8 h-8 rounded bg-[var(--card-2)] shrink-0" />
                 )}
                 <div className="min-w-0">
-                  <div className="text-sm font-medium text-gray-800 truncate">{p.title}</div>
-                  <div className="text-xs text-gray-400 font-mono truncate mt-0.5">{p.handle}</div>
+                  <div className="text-sm font-medium text-[var(--ink)] truncate">{p.title}</div>
+                  <div className="text-xs text-[var(--muted)] opacity-70 font-mono truncate mt-0.5">{p.handle}</div>
                 </div>
               </button>
             ))
@@ -2529,9 +2671,9 @@ function ProductPickerModal({
 
 function ConfidenceBadge({ confidence }: { confidence: AISuggestion['confidence'] }) {
   const styles = {
-    high:   'bg-green-100 text-green-700',
-    medium: 'bg-amber-100 text-amber-700',
-    low:    'bg-gray-100 text-gray-500',
+    high:   'bg-[var(--good-bg)] text-[var(--good)]',
+    medium: 'bg-[var(--warn-bg)] text-[var(--warn)]',
+    low:    'bg-[var(--card-2)] text-[var(--muted)]',
   }
   const labels = { high: 'High', medium: 'Medium', low: 'Low' }
   return (
@@ -2591,13 +2733,13 @@ function AISuggestionsModal({
     >
       <div className="absolute inset-0 bg-black/30" />
       <div
-        className="relative bg-white rounded-xl shadow-xl border border-gray-200 w-full max-w-2xl flex flex-col max-h-[85vh] overflow-hidden"
+        className="relative bg-white rounded-xl shadow-xl border border-[var(--line)] w-full max-w-2xl flex flex-col max-h-[85vh] overflow-hidden"
         onClick={(e) => e.stopPropagation()}
       >
         {/* Header */}
-        <div className="px-6 py-4 border-b border-gray-100 shrink-0">
-          <h2 className="text-base font-semibold text-gray-900">AI mapping suggestions</h2>
-          <p className="text-sm text-gray-500 mt-0.5">
+        <div className="px-6 py-4 border-b border-[var(--line)] shrink-0">
+          <h2 className="text-base font-semibold text-[var(--ink)]">AI mapping suggestions</h2>
+          <p className="text-sm text-[var(--muted)] mt-0.5">
             {validSuggestions.length} suggestions · {selectableCount} can be applied
           </p>
         </div>
@@ -2605,7 +2747,7 @@ function AISuggestionsModal({
         {/* List */}
         <div className="overflow-y-auto flex-1">
           {validSuggestions.length === 0 ? (
-            <p className="p-8 text-center text-sm text-gray-400">
+            <p className="p-8 text-center text-sm text-[var(--muted)] opacity-70">
               AI found no confident mapping suggestions for your store.
             </p>
           ) : (
@@ -2617,8 +2759,8 @@ function AISuggestionsModal({
               return (
                 <label
                   key={s.google_field}
-                  className={`flex items-start gap-3 px-6 py-3.5 border-b border-gray-50 transition-colors ${
-                    same ? 'cursor-not-allowed opacity-60' : 'cursor-pointer hover:bg-gray-50'
+                  className={`flex items-start gap-3 px-6 py-3.5 border-b border-[var(--line)] transition-colors ${
+                    same ? 'cursor-not-allowed opacity-60' : 'cursor-pointer hover:bg-[var(--canvas-2)]'
                   }`}
                 >
                   <input
@@ -2626,36 +2768,36 @@ function AISuggestionsModal({
                     checked={!same && selected.has(s.google_field)}
                     disabled={same}
                     onChange={() => { if (!same) toggle(s.google_field) }}
-                    className="mt-0.5 rounded border-gray-300 text-[var(--accent-purple)] focus:ring-indigo-500 shrink-0"
+                    className="mt-0.5 rounded border-[var(--line)] text-[var(--accent-ink)] focus:ring-[var(--accent-ink)] shrink-0"
                   />
                   <div className="flex-1 min-w-0">
                     <div className="flex items-center gap-2 flex-wrap">
-                      <code className="text-xs font-mono text-gray-700 bg-gray-100 px-1.5 py-0.5 rounded">
+                      <code className="text-xs font-mono text-[var(--ink)] bg-[var(--card-2)] px-1.5 py-0.5 rounded">
                         {s.google_field}
                       </code>
-                      <span className="text-gray-300 text-sm">→</span>
+                      <span className="text-[var(--muted)] opacity-70 text-sm">→</span>
                       {s.mapping_type === 'static' ? (
                         <code className="text-xs font-mono text-emerald-700 bg-emerald-50 px-1.5 py-0.5 rounded">
                           Static: &quot;{s.static_value ?? ''}&quot;
                         </code>
                       ) : (
-                        <code className="text-xs font-mono text-[#5b3fd6] bg-[rgba(124,92,252,0.08)] px-1.5 py-0.5 rounded">
+                        <code className="text-xs font-mono text-[var(--tint-fg)] bg-[var(--tint)] px-1.5 py-0.5 rounded">
                           {s.shopify_field ?? '—'}
                         </code>
                       )}
                       <ConfidenceBadge confidence={s.confidence} />
                       {same && (
-                        <span className="text-xs bg-gray-100 text-gray-500 px-1.5 py-0.5 rounded">
+                        <span className="text-xs bg-[var(--card-2)] text-[var(--muted)] px-1.5 py-0.5 rounded">
                           Same as current
                         </span>
                       )}
                       {willOverwrite && (
-                        <span className="text-xs bg-amber-50 text-amber-700 border border-amber-200 px-1.5 py-0.5 rounded">
+                        <span className="text-xs bg-[var(--warn-bg)] text-[var(--warn)] border border-[var(--warn-bg)] px-1.5 py-0.5 rounded">
                           Overwrites existing mapping
                         </span>
                       )}
                     </div>
-                    <p className="text-xs text-gray-500 mt-1">{s.reason}</p>
+                    <p className="text-xs text-[var(--muted)] mt-1">{s.reason}</p>
                   </div>
                 </label>
               )
@@ -2664,21 +2806,21 @@ function AISuggestionsModal({
         </div>
 
         {/* Footer */}
-        <div className="px-6 py-4 border-t border-gray-100 flex items-center justify-between shrink-0">
-          <span className="text-sm text-gray-500">
+        <div className="px-6 py-4 border-t border-[var(--line)] flex items-center justify-between shrink-0">
+          <span className="text-sm text-[var(--muted)]">
             {selected.size} selected
           </span>
           <div className="flex gap-2">
             <button
               onClick={onClose}
-              className="px-4 py-2 rounded-lg border border-gray-200 text-sm text-gray-600 hover:bg-gray-50 transition-colors"
+              className="px-4 py-2 rounded-lg border border-[var(--line)] text-sm text-[var(--muted)] hover:bg-[var(--canvas-2)] transition-colors"
             >
               Cancel
             </button>
             <button
               onClick={() => onApply([...selected])}
               disabled={selected.size === 0}
-              className="px-4 py-2 rounded-lg bg-indigo-600 text-white text-sm font-medium hover:bg-indigo-700 disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
+              className="px-4 py-2 rounded-lg bg-[var(--accent-ink)] text-white text-sm font-medium hover:bg-[var(--accent-ink)] disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
             >
               Apply {selected.size > 0 ? `${selected.size} ` : ''}selected
             </button>
@@ -2698,6 +2840,7 @@ function AISuggestionsModal({
 function SectionPanel({
   title,
   fields,
+  totalFields,
   mappings,
   allFields,
   onTypeChange,
@@ -2708,9 +2851,13 @@ function SectionPanel({
   collapsible = false,
   open = true,
   onToggle,
+  required = false,
 }: {
   title: string
+  // The fields to show (after search/filter).
   fields: string[]
+  // Every field in the group, for the "X/Y mappet" count and the closed summary.
+  totalFields: string[]
   mappings: Record<string, FieldState>
   allFields: string[]
   onTypeChange: (field: string, type: MappingType) => void
@@ -2721,67 +2868,37 @@ function SectionPanel({
   collapsible?: boolean
   open?: boolean
   onToggle?: () => void
+  required?: boolean
 }) {
-  const sectionMapped = fields.filter((f) => mappings[f]?.type !== '' && mappings[f]?.type).length
+  const isMapped = (f: string) => !!mappings[f]?.type
+  const mapped = totalFields.filter(isMapped).length
+  const missing = required ? totalFields.filter((f) => !isMapped(f)).length : 0
 
-  const counter = (
-    <span
-      className="ff-mono"
-      style={{
-        fontSize: '10px',
-        color: 'var(--ink-muted)',
-        textTransform: 'none',
-        letterSpacing: 0,
-      }}
-    >
-      {sectionMapped}/{fields.length} mapped
-    </span>
-  )
-
-  const headerContent = (
+  const head = (
     <>
-      <div className="flex items-center gap-2 flex-1 min-w-0">
-        {collapsible && (
-          <svg
-            width="10"
-            height="10"
-            viewBox="0 0 12 12"
-            fill="none"
-            style={{
-              transform: open ? 'rotate(90deg)' : 'rotate(0deg)',
-              transition: 'transform 0.12s ease',
-              color: 'var(--ink-muted)',
-              flexShrink: 0,
-            }}
-          >
-            <path d="M4 2l4 4-4 4" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round" />
-          </svg>
-        )}
-        <span>{title}</span>
-      </div>
-      {counter}
+      {collapsible && <Icon name="chevron" size={13} className="mp-chev" />}
+      <span className="mp-group-t">
+        <b>{title}</b>
+        {!open && <small>{totalFields.join(' · ')}</small>}
+      </span>
+      {missing > 0 && <span className="pill bad">{missing} mangler</span>}
+      <span className="mp-count">
+        {mapped}/{totalFields.length} mappet
+      </span>
     </>
   )
 
   return (
-    <div className="ff-panel">
+    <div className="mp-group" data-open={open}>
       {collapsible ? (
-        <button
-          type="button"
-          onClick={onToggle}
-          className="ff-panel-header"
-          style={{ width: '100%', cursor: 'pointer', textAlign: 'left' }}
-        >
-          {headerContent}
+        <button type="button" onClick={onToggle} className="mp-group-h" aria-expanded={open}>
+          {head}
         </button>
       ) : (
-        <div className="ff-panel-header">{headerContent}</div>
+        <div className="mp-group-h mp-static">{head}</div>
       )}
       {open && (
-        <div
-          style={{ borderColor: 'var(--hairline)' }}
-          className="divide-y divide-[color:rgba(26,26,24,0.13)]"
-        >
+        <div className="mp-rows">
           {fields.map((field) => (
             <FieldRow
               key={field}
@@ -2852,20 +2969,13 @@ function CustomFieldsSection({
   }
 
   return (
-    <div className="ff-panel">
-      <div className="ff-panel-header">
-        <span>Custom fields</span>
-        <span
-          className="ff-mono"
-          style={{
-            fontSize: '10px',
-            color: 'var(--ink-muted)',
-            textTransform: 'none',
-            letterSpacing: 0,
-          }}
-        >
-          {mappedCount}/{customFields.length} mapped
+    <div className="card flush mp-card">
+      <div className="mp-group-h mp-static">
+        <span className="mp-group-t">
+          <b>Custom fields</b>
+          <small>Felter uden for Google-standarden. De skrives i feedet uden g:-præfiks.</small>
         </span>
+        <span className="mp-count">{mappedCount}/{customFields.length} mappet</span>
       </div>
       <div
         style={{ borderColor: 'var(--hairline)' }}
@@ -3574,7 +3684,7 @@ function FieldPreviewSidebar({
                     ) : value === AI_PLACEHOLDER ? (
                       <span className="ff-badge ff-badge-accent">AI</span>
                     ) : (
-                      <div style={{ color: 'var(--accent-purple)' }}>
+                      <div style={{ color: 'var(--accent-ink)' }}>
                         <PreviewValueText value={value} align="right" />
                       </div>
                     )}
@@ -3717,12 +3827,10 @@ type InitialMapping = {
 
 export default function MappingClient({
   feedId,
-  feedName,
   feedMode,
   initialMappings,
 }: {
   feedId: string
-  feedName: string
   feedMode: 'product' | 'variant'
   initialMappings: InitialMapping[]
 }) {
@@ -4040,6 +4148,46 @@ export default function MappingClient({
     setMappings((prev) => ({ ...prev, [field]: { ...prev[field], config } }))
   }
 
+  // ── Search + filter chips ────────────────────────────────────────────────
+  const [query, setQuery] = useState('')
+  const [chip, setChip] = useState<FieldChip>('all')
+  const q = query.trim().toLowerCase()
+  const filtering = q !== '' || chip !== 'all'
+
+  function matchesChip(f: string, c: FieldChip): boolean {
+    const st = mappings[f]
+    switch (c) {
+      case 'unmapped':
+        return !st?.type
+      case 'rules':
+        return (
+          !!st?.type &&
+          (((st.config.onlyIf as OnlyIf | undefined)?.conditions?.some((x) => x.field) ?? false) ||
+            configTransforms(st.config).length > 0)
+        )
+      case 'lookup':
+        return st?.type === 'LOOKUP'
+      case 'ai':
+        return st?.type === 'AI'
+      default:
+        return true
+    }
+  }
+  function fieldMatches(f: string): boolean {
+    if (q && !f.replace(/^custom:/, '').toLowerCase().includes(q)) return false
+    return matchesChip(f, chip)
+  }
+  const chipCount = (c: FieldChip) => visibleFields.filter((f) => matchesChip(f, c)).length
+
+  const groups: { title: string; fields: string[]; required?: boolean; collapsible: boolean }[] = [
+    { title: 'Required', fields: [...REQUIRED_FIELDS], required: true, collapsible: false },
+    ...COLLAPSIBLE_SECTIONS.map((g) => ({ title: g.title, fields: g.fields, collapsible: true })),
+    ...(addedFields.length > 0 ? [{ title: 'Added fields', fields: addedFields, collapsible: false }] : []),
+  ]
+  const shownGroups = groups
+    .map((g) => ({ ...g, shown: g.fields.filter(fieldMatches) }))
+    .filter((g) => !filtering || g.shown.length > 0)
+
   function handleSave() {
     startTransition(async () => {
       const entries: MappingEntry[] = [
@@ -4076,160 +4224,106 @@ export default function MappingClient({
   return (
     <FeedModeContext.Provider value={feedMode}>
     <MetafieldLabelsContext.Provider value={metafieldLabels}>
-    <div className="min-h-screen" style={{ background: 'var(--bg-base)' }}>
-      <main className="max-w-6xl mx-auto px-6 py-9 space-y-5">
-      <header className="flex items-start justify-between gap-4 flex-wrap">
-        <div className="space-y-1.5 min-w-0">
-          <div className="wl-eyebrow truncate">{feedName}</div>
-          <h1 style={{ fontSize: '30px', fontWeight: 500, letterSpacing: '-0.02em', lineHeight: 1.1, color: 'var(--ink)' }}>
-            Mapping
-          </h1>
-          <p style={{ fontSize: '13px', color: 'var(--ink-muted)' }}>
-            {mappedCount} of {totalVisibleFields} fields mapped
+    <div className="mp">
+      <div className="mp-head">
+        <div>
+          <h1>Mapping</h1>
+          <p className="mp-lede">
+            Påkrævede felter står åbne. Resten er klappet sammen i grupper. Ikonet viser, hvilken slags
+            felt det er. {mappedCount} af {totalVisibleFields} felter er mappet.
           </p>
         </div>
-        <div className="flex items-center gap-2 flex-wrap justify-end">
-          <button onClick={openFieldsModal} className="ff-btn-secondary">
-            <svg className="w-3.5 h-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={1.5}>
-              <path strokeLinecap="round" strokeLinejoin="round" d="M3.75 6.75h16.5M3.75 12h16.5M3.75 17.25h16.5" />
-            </svg>
-            Shopify fields
+        <div className="mp-actions">
+          <button onClick={openFieldsModal} className="wl-btn-secondary">
+            Shopify-felter
           </button>
-
-          {aiError && (
-            <span className="max-w-40 truncate" style={{ fontSize: '11px', color: 'var(--accent-red)' }}>{aiError}</span>
-          )}
-          <button onClick={fetchAISuggestions} disabled={isFetchingAI} className="ff-btn-secondary">
-            {isFetchingAI ? (
-              <>
-                <svg className="w-3.5 h-3.5 animate-spin" fill="none" viewBox="0 0 24 24">
-                  <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4" />
-                  <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8v8H4z" />
-                </svg>
-                AI analyzing…
-              </>
-            ) : (
-              <>
-                <svg className="w-3.5 h-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={1.5}>
-                  <path strokeLinecap="round" strokeLinejoin="round" d="M9.813 15.904L9 18.75l-.813-2.846a4.5 4.5 0 00-3.09-3.09L2.25 12l2.846-.813a4.5 4.5 0 003.09-3.09L9 5.25l.813 2.846a4.5 4.5 0 003.09 3.09L15.75 12l-2.846.813a4.5 4.5 0 00-3.09 3.09z" />
-                </svg>
-                Auto-map with AI
-              </>
-            )}
+          <button onClick={fetchAISuggestions} disabled={isFetchingAI} className="wl-btn-secondary">
+            <Icon name="bolt" size={14} />
+            {isFetchingAI ? 'AI analyserer…' : 'Auto-map med AI'}
           </button>
-
           {previewProduct ? (
-            <div
-              className="flex items-center gap-2 px-2 py-1"
-              style={{
-                background: 'rgba(124, 92, 252, 0.13)',
-                borderRadius: '3px',
-              }}
-            >
+            <span className="mp-prodchip">
               {(previewProduct.images[0]?.src as string | undefined) && (
                 // eslint-disable-next-line @next/next/no-img-element
-                <img
-                  src={previewProduct.images[0].src as string}
-                  alt=""
-                  className="w-4 h-4 object-cover shrink-0"
-                  style={{ borderRadius: '2px' }}
-                />
+                <img src={previewProduct.images[0].src as string} alt="" />
               )}
-              <span
-                className="max-w-40 truncate"
-                style={{ fontSize: '11px', fontWeight: 500, color: '#5b3fd6' }}
-              >
-                {previewProduct.title}
-              </span>
-              <button
-                onClick={() => setPreviewProduct(null)}
-                style={{ color: '#5b3fd6', fontSize: '14px', lineHeight: 1 }}
-                aria-label="Remove preview product"
-              >
+              <span className="mp-prodchip-t">{previewProduct.title}</span>
+              <button onClick={() => setPreviewProduct(null)} aria-label="Fjern eksempelvaren">
                 ×
               </button>
-            </div>
+            </span>
           ) : (
-            <button onClick={openPicker} className="ff-btn-secondary">
-              <svg className="w-3.5 h-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
-                <path strokeLinecap="round" strokeLinejoin="round" d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z" />
-                <circle cx="12" cy="12" r="3" />
-              </svg>
-              Preview product
+            <button onClick={openPicker} className="wl-btn-secondary">
+              <Icon name="eye" size={14} />
+              Vis på en vare
             </button>
           )}
-
-          {status === 'saved' && (
-            <span style={{ fontSize: '11px', fontWeight: 500, color: 'var(--accent-green)' }}>
-              Saved
-            </span>
-          )}
-          {status === 'error' && (
-            <span style={{ fontSize: '11px', color: 'var(--accent-red)' }}>{errorMsg}</span>
-          )}
-          <button onClick={handleSave} disabled={isPending} className="ff-btn-primary">
-            {isPending ? 'Saving…' : 'Save'}
+          <button onClick={handleSave} disabled={isPending} className="wl-btn-primary">
+            {isPending ? 'Gemmer…' : status === 'saved' ? '✓ Gemt' : 'Gem'}
           </button>
         </div>
-      </header>
+      </div>
 
-        {/* Required — always visible, never collapsed */}
-        <SectionPanel
-          title="Required"
-          fields={[...REQUIRED_FIELDS]}
-          mappings={mappings}
-          allFields={allFields}
-          onTypeChange={updateType}
-          onConfigChange={updateConfig}
-          previewProduct={previewProduct}
-          previewValues={previewValues}
-          onPreview={setPreviewSidebarField}
-        />
+      {aiError && <p className="note warn">AI-forslagene kunne ikke hentes: {aiError}</p>}
+      {status === 'error' && <p className="note warn">Mappingen kunne ikke gemmes: {errorMsg}</p>}
 
-        {/* Collapsible sections */}
-        {COLLAPSIBLE_SECTIONS.map((section) => (
-          <SectionPanel
-            key={section.title}
-            title={section.title}
-            fields={section.fields}
-            mappings={mappings}
-            allFields={allFields}
-            onTypeChange={updateType}
-            onConfigChange={updateConfig}
-            previewProduct={previewProduct}
-            previewValues={previewValues}
-            onPreview={setPreviewSidebarField}
-            collapsible
-            open={openSections.has(section.title)}
-            onToggle={() => toggleSection(section.title)}
-          />
-        ))}
+      <section className="card flush mp-card">
+        <div className="mp-tools">
+          <label className="mp-search">
+            <Icon name="search" size={14} />
+            <input
+              type="search"
+              value={query}
+              onChange={(e) => setQuery(e.target.value)}
+              placeholder="Find et felt, fx price eller custom_label"
+              aria-label="Find et felt"
+            />
+          </label>
+          <div className="mp-chips" role="group" aria-label="Filtrér felter">
+            {FIELD_CHIPS.map((c) => (
+              <button
+                key={c.id}
+                type="button"
+                className="mp-filter"
+                aria-pressed={chip === c.id}
+                onClick={() => setChip(c.id)}
+              >
+                {c.label} <b>{chipCount(c.id)}</b>
+              </button>
+            ))}
+          </div>
+        </div>
 
-        {/* User-added advanced fields */}
-        {addedFields.length > 0 && (
-          <SectionPanel
-            title="Added fields"
-            fields={addedFields}
-            mappings={mappings}
-            allFields={allFields}
-            onTypeChange={updateType}
-            onConfigChange={updateConfig}
-            previewProduct={previewProduct}
-            previewValues={previewValues}
-            onPreview={setPreviewSidebarField}
-          />
+        {shownGroups.length === 0 ? (
+          <p className="mp-none">Ingen felter matcher. Prøv et andet filter.</p>
+        ) : (
+          shownGroups.map((g) => (
+            <SectionPanel
+              key={g.title}
+              title={g.title}
+              fields={g.shown}
+              totalFields={g.fields}
+              mappings={mappings}
+              allFields={allFields}
+              onTypeChange={updateType}
+              onConfigChange={updateConfig}
+              previewProduct={previewProduct}
+              previewValues={previewValues}
+              onPreview={setPreviewSidebarField}
+              required={g.required}
+              collapsible={g.collapsible && !filtering}
+              open={filtering || !g.collapsible || openSections.has(g.title)}
+              onToggle={() => toggleSection(g.title)}
+            />
+          ))
         )}
 
-        {/* + Tilføj felt */}
-        <div className="flex justify-center pt-2">
-          <button
-            type="button"
-            onClick={() => setShowAddFieldModal(true)}
-            className="ff-btn-secondary"
-          >
-            ＋ Add field
+        <div className="mp-addrow">
+          <button type="button" onClick={() => setShowAddFieldModal(true)} className="ff-btn-ghost">
+            + Tilføj felt
           </button>
         </div>
+      </section>
 
         {/* Custom (non-Google) fields — always rendered, sits at the bottom */}
         <CustomFieldsSection
@@ -4244,7 +4338,6 @@ export default function MappingClient({
           onRemove={removeCustomField}
           onPreview={setPreviewSidebarField}
         />
-      </main>
 
       {showPicker && (
         <ProductPickerModal

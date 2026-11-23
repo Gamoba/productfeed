@@ -1,6 +1,7 @@
 import { createClient } from '@supabase/supabase-js'
 import Anthropic from '@anthropic-ai/sdk'
 import type { SupabaseProduct } from '@/lib/sync'
+import { applyLookup, type LookupConfig } from '@/lib/mappingLookup'
 import { resolveField, applyFeedFilters, explainScope, type FeedFilter } from '@/lib/feedFilters'
 import { applyTransforms, stripHtml, type FindReplacePair } from '@/lib/mappingTransforms'
 import {
@@ -19,6 +20,7 @@ type MappingType =
   | 'FIND_REPLACE'
   | 'TRUNCATE'
   | 'STRIP_HTML'
+  | 'LOOKUP'
   | 'AI'
 
 type Config = Record<string, unknown>
@@ -145,6 +147,9 @@ async function applyMapping(
 
     case 'STRIP_HTML':
       return stripHtml(resolveField(String(config.field ?? ''), product, marketUrl))
+
+    case 'LOOKUP':
+      return applyLookup(resolveField(String(config.field ?? ''), product, marketUrl), config as LookupConfig)
 
     case 'AI': {
       if (!anthropic) return ''
