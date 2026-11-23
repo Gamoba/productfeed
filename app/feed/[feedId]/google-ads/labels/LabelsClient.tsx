@@ -13,6 +13,16 @@ import {
   type BucketRule,
   type CustomLabel,
 } from '@/lib/googleAdsBuckets'
+import { formatNumber } from '@/lib/formatDa'
+import './labels.css'
+
+// Feed › Labels (reference: references/feed_labels.jpg). Pick a custom label
+// slot at the top; its buckets are listed on the left in the order they are
+// checked (first match wins), and the selected bucket is edited on the right
+// with the products it holds underneath.
+//
+// Level (per product / per variant) is not chosen here: it follows the feed's
+// own structure from Settings (GUIDELINES §4). Nothing here writes to Shopify.
 
 export type LabelView = {
   label: CustomLabel
@@ -38,8 +48,9 @@ export type PreviewTable = {
 
 type Props = {
   feedId: string
-  feedName: string
   connected: boolean
+  // The feed's structure (feed_settings.feed_mode). Labels measure at this level.
+  feedMode: BucketLevel
   currency: string | null
   roasActions: string[]
   poasActions: string[]
@@ -50,18 +61,18 @@ type Props = {
 const METRIC_LABEL: Record<BucketMetric, string> = {
   roas: 'ROAS',
   poas: 'POAS',
-  conversions: 'Conversions (account default)',
-  roas_conversions: 'Conversions (revenue)',
-  poas_conversions: 'Conversions (gross profit)',
-  conversions_value: 'Revenue',
-  cost: 'Cost',
-  clicks: 'Clicks',
-  impressions: 'Impressions',
-  profit_after_ad_spend: 'Profit − cost',
-  cogs_margin: 'Margin (COGS)',
-  inventory_quantity: 'Stock (units)',
-  stock_coverage: 'Stock coverage',
-  days_of_stock: 'Days of stock',
+  conversions: 'Konverteringer (kontoens standard)',
+  roas_conversions: 'Konverteringer (omsætning)',
+  poas_conversions: 'Konverteringer (bruttoprofit)',
+  conversions_value: 'Omsætning',
+  cost: 'Forbrug',
+  clicks: 'Klik',
+  impressions: 'Visninger',
+  profit_after_ad_spend: 'Profit minus forbrug',
+  cogs_margin: 'Margin (kostpris)',
+  inventory_quantity: 'Lager (stk.)',
+  stock_coverage: 'Lagerdækning',
+  days_of_stock: 'Dages lager',
 }
 
 const OPERATORS: { value: BucketOperator; label: string; needsValue: boolean }[] = [
@@ -71,12 +82,14 @@ const OPERATORS: { value: BucketOperator; label: string; needsValue: boolean }[]
   { value: 'lte', label: '≤', needsValue: true },
   { value: 'eq', label: '=', needsValue: true },
   { value: 'neq', label: '≠', needsValue: true },
-  { value: 'is_empty', label: 'has no value', needsValue: false },
-  { value: 'is_not_empty', label: 'has a value', needsValue: false },
+  { value: 'is_empty', label: 'har ingen værdi', needsValue: false },
+  { value: 'is_not_empty', label: 'har en værdi', needsValue: false },
 ]
 
 const WINDOWS = [7, 14, 30, 90, 180, 365]
 const SLOTS = [0, 1, 2, 3, 4]
+const DOT = ['var(--hi)', '#101312', 'var(--series-2)', 'var(--bad)', 'var(--series-3)', 'var(--series-4)']
+const LEVEL_LABEL: Record<BucketLevel, string> = { product: 'Pr. vare (varianter samlet)', variant: 'Pr. variant' }
 
 function slugify(s: string): string {
   return s
@@ -89,10 +102,18 @@ function slugify(s: string): string {
     .slice(0, 40)
 }
 
-export function LabelsClient(props: Props) {
-  const { feedId, feedName, connected, roasActions, poasActions, labels, tables } = props
+const rulesKey = (rules: BucketRule[] = []) =>
+  rules.map((r) => `${r.metric}|${r.operator}|${r.value ?? ''}|${r.windowDays ?? ''}`).join(';')
 
+const GHOST_PREFIX = 'ghost:'
+const isGhost = (id: string) => id.startsWith(GHOST_PREFIX)
+
+type Compose = { labelId: string; name: string; value: string; touched: boolean; fallback: boolean } | null
+
+export function LabelsClient(props: Props) {
+  const { feedId, connected, feedMode, roasActions, poasActions, labels, tables } = props
   const router = useRouter()
+
   const [busy, setBusy] = useState<string | null>(null)
   const [error, setError] = useState<string | null>(null)
   const [note, setNote] = useState<string | null>(null)
@@ -100,34 +121,22 @@ export function LabelsClient(props: Props) {
 
   const [labelDraft, setLabelDraft] = useState<Record<string, CustomLabel>>({})
   const [bucketDraft, setBucketDraft] = useState<Record<string, Bucket>>({})
-
   const [pendingDelete, setPendingDelete] = useState<Set<string>>(new Set())
   const [ghosts, setGhosts] = useState<Bucket[]>([])
+
+  const [selLabelId, setSelLabelId] = useState<string | null>(null)
+  const [selBucketId, setSelBucketId] = useState<string | null>(null)
+  // A new label being named, for a given slot (null = no slot).
+  const [newLabel, setNewLabel] = useState<{ slot: number | null; name: string } | null>(null)
+  const [compose, setCompose] = useState<Compose>(null)
 
   const liveIds = new Set(labels.flatMap((v) => v.buckets.map((b) => b.id)))
   const arrived = new Set(labels.flatMap((v) => v.buckets.map((b) => `${b.label_id}:${b.name}`)))
   const hiding = new Set([...pendingDelete].filter((id) => liveIds.has(id)))
   const pendingNew = ghosts.filter((g) => !arrived.has(`${g.label_id}:${g.name}`))
 
-  const [noticesOpen, setNoticesOpen] = useState(false)
-
-  const [newLabel, setNewLabel] = useState<string | null>(null)
-  const [newBucket, setNewBucket] = useState<{
-    labelId: string
-    name: string
-    value: string
-    touched: boolean
-    fallback: boolean
-  } | null>(null)
-
   const editedLabel = (l: CustomLabel) => labelDraft[l.id] ?? l
   const editedBucket = (b: Bucket) => bucketDraft[b.id] ?? b
-  const labelDirty = (l: CustomLabel) => !!labelDraft[l.id]
-  const bucketDirty = (b: Bucket) => !!bucketDraft[b.id]
-
-  const takenSlots = new Set(
-    labels.map((v) => editedLabel(v.label).slot).filter((s): s is number => s !== null)
-  )
 
   function patchLabel(l: CustomLabel, change: Partial<CustomLabel>) {
     setLabelDraft((d) => ({ ...d, [l.id]: { ...editedLabel(l), ...change } }))
@@ -140,18 +149,13 @@ export function LabelsClient(props: Props) {
     const res = await fetch(url, init)
     const json = await res.json().catch(() => ({}))
     if (!res.ok) {
-      setError((json as { error?: string }).error ?? 'Something went wrong')
+      setError((json as { error?: string }).error ?? 'Noget gik galt')
       return null
     }
     return json as Record<string, unknown>
   }
-
   const post = (url: string, body: unknown) =>
-    call(url, {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify(body),
-    })
+    call(url, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(body) })
 
   // ── Recompute ──────────────────────────────────────────────────────────────
 
@@ -160,24 +164,18 @@ export function LabelsClient(props: Props) {
     setError(null)
     const json = await post(`/api/google-ads/${feedId}/labels/recompute`, labelId ? { labelId } : {})
     setBusy(null)
-
     if (json) {
       const r = json.result as {
-        labels: { name: string; assigned: number; entities: number; moved: number; unlabelled: number; warnings: string[] }[]
+        labels: { name: string; assigned: number; entities: number; moved: number; warnings: string[] }[]
         warnings: string[]
       }
       const per = r.labels ?? []
       setNote(
         per.length === 1
-          ? `${per[0].name}: ${per[0].assigned} of ${per[0].entities} labelled · ${per[0].moved} changed value`
-          : `${per.length} labels recomputed · ${per.reduce((n, l) => n + l.moved, 0)} values changed`
+          ? `${per[0].name}: ${formatNumber(per[0].assigned)} af ${formatNumber(per[0].entities)} har fået et label · ${formatNumber(per[0].moved)} skiftede værdi.`
+          : `${per.length} labels genberegnet · ${formatNumber(per.reduce((n, l) => n + l.moved, 0))} skiftede værdi.`
       )
-      const next = [
-        ...(r.warnings ?? []),
-        ...per.flatMap((l) => l.warnings.map((w) => `${l.name}: ${w}`)),
-      ]
-      setWarnings(next)
-      if (next.length) setNoticesOpen(true)
+      setWarnings([...(r.warnings ?? []), ...per.flatMap((l) => l.warnings.map((w) => `${l.name}: ${w}`))])
     }
     router.refresh()
   }
@@ -186,13 +184,13 @@ export function LabelsClient(props: Props) {
 
   async function saveLabel(view: LabelView) {
     const before = view.label
-    const after = editedLabel(before)
+    // The level always follows the feed's structure.
+    const after = { ...editedLabel(before), level: feedMode }
     setBusy(before.id)
     setError(null)
     const ok = await post(`/api/google-ads/${feedId}/labels`, { action: 'save', label: after })
     setBusy(null)
     if (!ok) return
-
     setLabelDraft((d) => {
       const next = { ...d }
       delete next[before.id]
@@ -201,19 +199,20 @@ export function LabelsClient(props: Props) {
     if (before.level !== after.level || before.window_days !== after.window_days) {
       await recompute(before.id)
     } else {
-      setNote('Saved. Nothing about what is measured changed, so nothing was recomputed.')
+      setNote('Gemt. Intet ved det, der måles, er ændret, så der er ikke genberegnet.')
       router.refresh()
     }
   }
 
-  async function addLabel(name: string) {
-    const trimmed = name.trim()
-    if (!trimmed) return
+  async function addLabel() {
+    if (!newLabel) return
+    const name = newLabel.name.trim()
+    if (!name) return
     setBusy('add-label')
     setError(null)
     const ok = await post(`/api/google-ads/${feedId}/labels`, {
       action: 'save',
-      label: { name: trimmed, slot: null, level: 'product', window_days: 30 },
+      label: { name, slot: newLabel.slot, level: feedMode, window_days: 30 },
     })
     setBusy(null)
     if (ok) {
@@ -223,11 +222,15 @@ export function LabelsClient(props: Props) {
   }
 
   async function removeLabel(view: LabelView) {
+    if (!confirm(`Slet labelet “${view.label.name}” og dets buckets? Varerne mister værdien for dette label.`)) return
     setBusy(view.label.id)
     setError(null)
     const ok = await call(`/api/google-ads/${feedId}/labels?id=${view.label.id}`, { method: 'DELETE' })
     setBusy(null)
-    if (ok) router.refresh()
+    if (ok) {
+      setSelLabelId(null)
+      router.refresh()
+    }
   }
 
   // ── Buckets ────────────────────────────────────────────────────────────────
@@ -239,7 +242,6 @@ export function LabelsClient(props: Props) {
     const ok = await post(`/api/google-ads/${feedId}/buckets`, { bucket: after })
     setBusy(null)
     if (!ok) return
-
     setBucketDraft((d) => {
       const next = { ...d }
       delete next[b.id]
@@ -250,24 +252,20 @@ export function LabelsClient(props: Props) {
       b.match_type !== after.match_type ||
       b.is_fallback !== after.is_fallback ||
       rulesKey(b.rules) !== rulesKey(after.rules)
-
-    if (moves) {
-      await recompute(b.label_id)
-    } else {
-      setNote('Saved. No condition changed, so nothing was recomputed.')
+    if (moves) await recompute(b.label_id)
+    else {
+      setNote('Gemt. Ingen betingelse er ændret, så der er ikke genberegnet.')
       router.refresh()
     }
   }
 
   async function addBucket() {
-    if (!newBucket) return
-    const { labelId, name, value, fallback } = newBucket
+    if (!compose) return
+    const { labelId, name, value, fallback } = compose
     if (!name.trim() || !value.trim()) return
-
     setError(null)
     const siblings = labels.find((v) => v.label.id === labelId)?.buckets ?? []
     const nextPriority = Math.max(0, ...siblings.filter((b) => !b.is_fallback).map((b) => b.priority)) + 10
-
     const bucket = {
       label_id: labelId,
       name: name.trim(),
@@ -277,27 +275,23 @@ export function LabelsClient(props: Props) {
       is_fallback: fallback,
       rules: [] as BucketRule[],
     }
-
     const ghostId = `${GHOST_PREFIX}${labelId}:${bucket.name}`
     setGhosts((g) => [...g, { ...bucket, id: ghostId, feed_id: '', description: null }])
-    setNewBucket(null)
-
+    setCompose(null)
     const ok = await post(`/api/google-ads/${feedId}/buckets`, { bucket })
-
     if (!ok) {
       setGhosts((g) => g.filter((x) => x.id !== ghostId))
-      setNewBucket({ labelId, name, value, touched: true, fallback })
+      setCompose({ labelId, name, value, touched: true, fallback })
       return
     }
-
     if (fallback) await recompute(labelId)
     else router.refresh()
   }
 
   async function removeBucket(b: Bucket) {
+    if (!confirm(`Slet bucketen “${b.name}”? Varerne i den går videre til de næste buckets.`)) return
     setError(null)
     setPendingDelete((s) => new Set(s).add(b.id))
-
     const ok = await call(`/api/google-ads/${feedId}/buckets?id=${b.id}`, { method: 'DELETE' })
     if (!ok) {
       setPendingDelete((s) => {
@@ -307,6 +301,7 @@ export function LabelsClient(props: Props) {
       })
       return
     }
+    setSelBucketId(null)
     await recompute(b.label_id)
   }
 
@@ -314,390 +309,211 @@ export function LabelsClient(props: Props) {
 
   if (!connected) {
     return (
-      <Shell feedName={feedName}>
-        <div className="wl-card" style={{ padding: '40px' }}>
-          <div className="max-w-xl space-y-3">
-            <h2 style={{ fontSize: '20px', fontWeight: 500, color: 'var(--ink)' }}>
-              Not connected to Google Ads
-            </h2>
-            <p style={{ fontSize: '15px', lineHeight: 1.6, color: 'var(--ink-secondary)' }}>
-              Custom labels segment products by how they perform, so this feed needs a Google Ads
-              connection and at least one sync first.
-            </p>
-            <Link href={`/feed/${feedId}/google-ads`} className="wl-btn-primary inline-block">
-              Go to Performance →
-            </Link>
-          </div>
-        </div>
-      </Shell>
+      <div className="lb">
+        <Head />
+        <section className="card lb-empty">
+          <h3>Feedet er ikke koblet til Google Ads</h3>
+          <p>Labels deler varerne efter, hvordan de klarer sig, så feedet skal have en Google Ads-konto og mindst én synkronisering først.</p>
+          <Link href={`/feed/${feedId}/google-ads`} className="wl-btn-primary">
+            Gå til Performance
+          </Link>
+        </section>
+      </div>
     )
   }
 
-  const overlay = (v: LabelView): LabelView => {
+  const views = labels.map((v): LabelView => {
     const kept = v.buckets.filter((b) => !hiding.has(b.id))
     const mine = pendingNew.filter((g) => g.label_id === v.label.id)
     if (kept.length === v.buckets.length && !mine.length) return v
     return { ...v, buckets: orderBuckets([...kept, ...mine]) }
-  }
+  })
+  const bySlot = new Map(views.filter((v) => v.label.slot !== null).map((v) => [v.label.slot as number, v]))
+  const unslotted = views.filter((v) => v.label.slot === null)
+  const current =
+    views.find((v) => v.label.id === selLabelId) ??
+    SLOTS.map((s) => bySlot.get(s)).find(Boolean) ??
+    unslotted[0] ??
+    null
+  const takenSlots = new Set(views.map((v) => editedLabel(v.label).slot).filter((s): s is number => s !== null))
 
   const shared = roasActions.filter((a) => poasActions.includes(a))
-  const sameAction =
-    shared.length > 0 && shared.length === roasActions.length && shared.length === poasActions.length
-
-  const slotted = labels.filter((v) => v.label.slot !== null).length
-
-  const notices: Notice[] = [
-    ...warnings.map((w, i) => ({ id: `w${i}`, tone: 'amber' as const, body: w })),
-    ...(sameAction
-      ? [
-          {
-            id: 'same-action',
-            tone: 'amber' as const,
-            body: (
-              <>
-                Revenue and gross profit use the same conversion action
-                {roasActions.length > 1 ? 's' : ''} ({roasActions.join(', ')}), so POAS equals ROAS
-                and any POAS rule is really a ROAS rule. Fix it on the Performance page.
-              </>
-            ),
-          },
-        ]
-      : []),
-    {
-      id: 'not-published',
-      tone: 'green' as const,
-      body: 'Labels are computed and shown here only. Nothing is written to the product feed and nothing is sent to Merchant Center.',
-    },
-  ]
+  const sameAction = shared.length > 0 && shared.length === roasActions.length && shared.length === poasActions.length
 
   return (
-    <Shell feedName={feedName}>
-      <header className="flex items-end justify-between gap-4 flex-wrap">
-        <div className="space-y-1.5">
-          <div className="wl-eyebrow truncate">{feedName}</div>
-          <h1
-            style={{
-              fontSize: '34px',
-              fontWeight: 500,
-              lineHeight: 1.1,
-              letterSpacing: '-0.02em',
-              color: 'var(--ink)',
-            }}
-          >
-            Custom labels
-          </h1>
-          <p style={{ fontSize: '13px', color: 'var(--ink-muted)' }}>
-            {labels.length} {labels.length === 1 ? 'label' : 'labels'} · {slotted} of 5 slots in use
-          </p>
-        </div>
-        <div className="flex items-center gap-2">
-          <Link href={`/feed/${feedId}/google-ads`} className="wl-btn-secondary">
-            Performance
-          </Link>
-          {labels.length > 0 && (
+    <div className="lb">
+      <Head
+        actions={
+          labels.length > 0 && (
             <button onClick={() => recompute()} disabled={busy === 'recompute'} className="wl-btn-primary">
-              {busy === 'recompute' ? 'Computing…' : 'Recompute all'}
+              {busy === 'recompute' ? 'Genberegner…' : 'Genberegn alle'}
             </button>
-          )}
-        </div>
-      </header>
+          )
+        }
+      />
 
-      {error && <Banner tone="red">{error}</Banner>}
-      {note && !error && <Banner tone="green">{note}</Banner>}
-
-      <Notices open={noticesOpen} onToggle={() => setNoticesOpen((v) => !v)} items={notices} />
-
-      {labels.length === 0 ? (
-        <div className="wl-card py-16 flex flex-col items-center gap-3">
-          <p style={{ fontSize: '15px', color: 'var(--ink-secondary)' }}>No custom labels yet.</p>
-          {newLabel !== null ? (
-            <div className="mt-1 w-full max-w-md space-y-2.5 px-6">
-              <NameField
-                value={newLabel}
-                placeholder="e.g. Performance"
-                onChange={setNewLabel}
-                onCreate={() => addLabel(newLabel)}
-                onCancel={() => setNewLabel(null)}
-                busy={busy === 'add-label'}
-                centred
-              />
-            </div>
-          ) : (
-            <div className="flex flex-col items-center gap-2 mt-1">
-              <div className="flex gap-2">
-                <button onClick={() => setNewLabel('')} className="wl-btn-primary">
-                  Start empty
-                </button>
-                <button
-                  disabled
-                  className="wl-btn-secondary"
-                  title="Templates are being written"
-                >
-                  Use suggested set
-                </button>
-              </div>
-              <p style={{ fontSize: '12px', color: 'var(--ink-muted)' }}>
-                Suggested sets arrive once the templates are written.
-              </p>
-            </div>
-          )}
-        </div>
-      ) : (
-        <section className="space-y-6">
-          {labels.map((view) => (
-            <LabelCard
-              key={view.label.id}
-              view={overlay(view)}
-              edited={editedLabel(view.label)}
-              dirty={labelDirty(view.label)}
-              busy={busy}
-              takenSlots={takenSlots}
-              bucketDraft={bucketDraft}
-              newBucket={newBucket}
-              onPatch={(change) => patchLabel(view.label, change)}
-              onSave={() => saveLabel(view)}
-              onDelete={() => removeLabel(view)}
-              onRecompute={() => recompute(view.label.id)}
-              onPatchBucket={patchBucket}
-              onSaveBucket={saveBucket}
-              onDeleteBucket={removeBucket}
-              bucketIsDirty={bucketDirty}
-              onCompose={(fallback) =>
-                setNewBucket({
-                  labelId: view.label.id,
-                  name: fallback ? 'Everything else' : '',
-                  value: fallback ? 'other' : '',
-                  touched: fallback,
-                  fallback,
-                })
-              }
-              onComposeChange={setNewBucket}
-              onComposeCancel={() => setNewBucket(null)}
-              onComposeCreate={addBucket}
-            />
+      {/* Slot selector */}
+      <div className="lb-top">
+        <span className="lb-top-l">Custom label</span>
+        <div className="lb-seg" role="tablist" aria-label="Custom label">
+          {SLOTS.map((s) => {
+            const v = bySlot.get(s)
+            const on = !!v && current?.label.id === v.label.id
+            return (
+              <button
+                key={s}
+                type="button"
+                role="tab"
+                aria-selected={on || (newLabel?.slot === s && !v)}
+                className={v ? undefined : 'lb-free'}
+                onClick={() => {
+                  setNewLabel(null)
+                  if (v) {
+                    setSelLabelId(v.label.id)
+                    setSelBucketId(null)
+                  } else setNewLabel({ slot: s, name: '' })
+                }}
+                title={v ? `custom_label_${s}` : `custom_label_${s} er ledig. Klik for at lave et label her.`}
+              >
+                {s}
+                {v ? ` · ${v.label.name}` : ''}
+              </button>
+            )
+          })}
+          {unslotted.map((v) => (
+            <button
+              key={v.label.id}
+              type="button"
+              role="tab"
+              aria-selected={current?.label.id === v.label.id}
+              onClick={() => {
+                setNewLabel(null)
+                setSelLabelId(v.label.id)
+                setSelBucketId(null)
+              }}
+              title="Uden slot: beregnes, men har ingen plads i feedet"
+            >
+              – · {v.label.name}
+            </button>
           ))}
+        </div>
+      </div>
 
-          {newLabel !== null ? (
-            <div className="wl-card" style={{ padding: '16px 18px' }}>
-              <div className="wl-eyebrow">New custom label</div>
-              <div style={{ marginTop: '10px' }}>
-                <NameField
-                  value={newLabel}
-                  placeholder="e.g. Margin band"
-                  onChange={setNewLabel}
-                  onCreate={() => addLabel(newLabel)}
-                  onCancel={() => setNewLabel(null)}
-                  busy={busy === 'add-label'}
-                />
-              </div>
-            </div>
-          ) : (
-            <button onClick={() => setNewLabel('')} className="wl-btn-secondary">
-              + Add custom label
-            </button>
-          )}
-        </section>
+      {error && <p className="note warn">{error}</p>}
+      {note && !error && <p className="note lb-ok">{note}</p>}
+      {warnings.map((w, i) => (
+        <p key={i} className="note warn">
+          {w}
+        </p>
+      ))}
+      {sameAction && (
+        <p className="note warn">
+          Omsætning og bruttoprofit bruger samme konverteringshandling ({roasActions.join(', ')}), så POAS er lig ROAS.
+          Ret det på Performance-siden.
+        </p>
       )}
 
-      {/* ── Verification tables ───────────────────────────────────── */}
-      {tables.map((t) => (
-        <PreviewSection key={t.level} table={t} labels={labels} />
-      ))}
-    </Shell>
-  )
-}
-
-const rulesKey = (rules: BucketRule[] = []) =>
-  rules.map((r) => `${r.metric}|${r.operator}|${r.value ?? ''}|${r.windowDays ?? ''}`).join(';')
-
-const GHOST_PREFIX = 'ghost:'
-const isGhost = (id: string) => id.startsWith(GHOST_PREFIX)
-
-function GhostBlock({ bucket }: { bucket: Bucket }) {
-  return (
-    <div
-      style={{
-        border: '1px dashed var(--hairline)',
-        borderRadius: '10px',
-        padding: '12px 14px',
-        background: 'var(--bg-base)',
-        opacity: 0.6,
-      }}
-    >
-      <div className="flex items-center gap-2 flex-wrap">
-        <span className="wl-pill" style={{ background: 'var(--bg-surface)', color: 'var(--ink-muted)' }}>
-          {bucket.is_fallback ? 'last' : bucket.priority}
-        </span>
-        <span style={{ fontSize: '14px', fontWeight: 500, color: 'var(--ink)' }}>{bucket.name}</span>
-        <span style={{ fontSize: '12px', color: 'var(--ink-muted)' }}>emits</span>
-        <span style={{ fontSize: '13px', fontFamily: 'var(--font-mono)', color: 'var(--ink)' }}>
-          {bucket.value}
-        </span>
-        <span style={{ fontSize: '12px', color: 'var(--ink-muted)', marginLeft: 'auto' }}>Creating…</span>
-      </div>
-    </div>
-  )
-}
-
-const miniInput: React.CSSProperties = {
-  padding: '5px 8px',
-  borderRadius: '8px',
-  border: '1px solid var(--hairline)',
-  background: 'var(--bg-base)',
-  color: 'var(--ink)',
-  fontSize: '12px',
-}
-
-function Shell({ feedName, children }: { feedName: string; children: React.ReactNode }) {
-  return (
-    <div className="min-h-screen" style={{ background: 'var(--bg-base)' }}>
-      <main className="max-w-6xl mx-auto px-6 py-9 space-y-6">
-        <span className="sr-only">{feedName}</span>
-        {children}
-      </main>
-    </div>
-  )
-}
-
-type Notice = { id: string; tone: 'amber' | 'green'; body: React.ReactNode }
-
-function Notices({
-  items,
-  open,
-  onToggle,
-}: {
-  items: Notice[]
-  open: boolean
-  onToggle: () => void
-}) {
-  if (!items.length) return null
-
-  const warnings = items.filter((i) => i.tone === 'amber').length
-  const summary = warnings
-    ? `${warnings} warning${warnings === 1 ? '' : 's'}${items.length > warnings ? ` · ${items.length - warnings} note${items.length - warnings === 1 ? '' : 's'}` : ''}`
-    : `${items.length} note${items.length === 1 ? '' : 's'}`
-
-  return (
-    <div className="wl-card" style={{ padding: 0, overflow: 'hidden' }}>
-      <button
-        onClick={onToggle}
-        aria-expanded={open}
-        style={{
-          width: '100%',
-          display: 'flex',
-          alignItems: 'center',
-          justifyContent: 'space-between',
-          gap: '12px',
-          padding: '12px 18px',
-          background: 'none',
-          border: 'none',
-          cursor: 'pointer',
-          textAlign: 'left',
-        }}
-      >
-        <span className="flex items-center gap-2.5">
-          <span
-            className="wl-dot"
-            style={{ background: warnings ? 'var(--accent-amber)' : 'var(--accent-green)' }}
-          />
-          <span style={{ fontSize: '13px', color: 'var(--ink-secondary)' }}>{summary}</span>
-        </span>
-        <span style={{ fontSize: '12px', color: 'var(--ink-muted)' }}>{open ? 'Hide' : 'Show'}</span>
-      </button>
-
-      {open &&
-        items.map((i) => (
-          <div
-            key={i.id}
-            className="flex items-start gap-2.5"
-            style={{ padding: '12px 18px', borderTop: '1px solid var(--hairline)' }}
-          >
-            <span
-              className="wl-dot shrink-0"
-              style={{
-                background: i.tone === 'amber' ? 'var(--accent-amber)' : 'var(--accent-green)',
-                marginTop: '5px',
+      {newLabel ? (
+        <section className="card lb-new">
+          <h3>Nyt label{newLabel.slot !== null ? ` i custom_label_${newLabel.slot}` : ''}</h3>
+          <div className="lb-row">
+            <input
+              autoFocus
+              className="ff-input"
+              value={newLabel.name}
+              placeholder="fx Performance"
+              onChange={(e) => setNewLabel({ ...newLabel, name: e.target.value })}
+              onKeyDown={(e) => {
+                if (e.key === 'Enter') void addLabel()
+                if (e.key === 'Escape') setNewLabel(null)
               }}
             />
-            <p style={{ fontSize: '13px', color: 'var(--ink-secondary)', lineHeight: 1.5 }}>
-              {i.body}
-            </p>
+            <button className="wl-btn-primary" onClick={() => void addLabel()} disabled={busy === 'add-label' || !newLabel.name.trim()}>
+              {busy === 'add-label' ? 'Opretter…' : 'Opret label'}
+            </button>
+            <button className="wl-btn-secondary" onClick={() => setNewLabel(null)}>
+              Annullér
+            </button>
           </div>
-        ))}
+          <p className="lb-muted">Navnet er til denne side. Værdierne, Google får, sætter du på hver bucket.</p>
+        </section>
+      ) : !current ? (
+        <section className="card lb-empty">
+          <h3>Ingen labels endnu</h3>
+          <p>Vælg en ledig plads ovenfor (0 til 4) for at lave dit første label, fx Performance.</p>
+        </section>
+      ) : (
+        <LabelEditor
+          key={current.label.id}
+          feedId={feedId}
+          view={current}
+          edited={editedLabel(current.label)}
+          dirty={!!labelDraft[current.label.id]}
+          feedMode={feedMode}
+          busy={busy}
+          takenSlots={takenSlots}
+          selBucketId={selBucketId}
+          onSelectBucket={setSelBucketId}
+          bucketDraft={bucketDraft}
+          compose={compose?.labelId === current.label.id ? compose : null}
+          table={tables.find((t) => t.labelIds.includes(current.label.id)) ?? null}
+          onPatch={(c) => patchLabel(current.label, c)}
+          onSave={() => void saveLabel(current)}
+          onDelete={() => void removeLabel(current)}
+          onRecompute={() => void recompute(current.label.id)}
+          onPatchBucket={patchBucket}
+          onSaveBucket={(b) => void saveBucket(b)}
+          onDeleteBucket={(b) => void removeBucket(b)}
+          onCompose={(fallback) =>
+            setCompose({
+              labelId: current.label.id,
+              name: fallback ? 'Alt andet' : '',
+              value: fallback ? 'other' : '',
+              touched: fallback,
+              fallback,
+            })
+          }
+          onComposeChange={setCompose}
+          onComposeCreate={() => void addBucket()}
+        />
+      )}
+
+      <p className="lb-muted lb-foot">
+        Labels beregnes og vises her. Intet skrives til feedet eller sendes til Merchant Center endnu.
+      </p>
     </div>
   )
 }
 
-function Banner({ tone, children }: { tone: 'red' | 'green' | 'amber'; children: React.ReactNode }) {
-  const colour =
-    tone === 'red' ? 'var(--accent-red)' : tone === 'amber' ? 'var(--accent-amber)' : 'var(--accent-green)'
+function Head({ actions }: { actions?: React.ReactNode }) {
   return (
-    <div className="wl-card" style={{ padding: '14px 18px' }}>
-      <div className="flex items-start gap-2.5">
-        <span className="wl-dot shrink-0" style={{ background: colour, marginTop: '5px' }} />
-        <p style={{ fontSize: '13px', color: 'var(--ink-secondary)', lineHeight: 1.5 }}>{children}</p>
+    <div className="lb-head">
+      <div>
+        <h1>Labels</h1>
+        <p className="lb-lede">
+          Giv varerne et label ud fra, hvordan de klarer sig. Brug det til at dele kampagner og budget i Google Ads.
+        </p>
       </div>
+      {actions && <div className="lb-actions">{actions}</div>}
     </div>
   )
 }
 
-/** Name something new: type, Enter to create, Escape to back out. */
-function NameField({
-  value,
-  placeholder,
-  onChange,
-  onCreate,
-  onCancel,
-  busy,
-  centred,
-}: {
-  value: string
-  placeholder: string
-  onChange: (v: string) => void
-  onCreate: () => void
-  onCancel: () => void
-  busy: boolean
-  centred?: boolean
-}) {
-  return (
-    <div className={`flex items-center gap-2 flex-wrap${centred ? ' justify-center' : ''}`}>
-      <input
-        autoFocus
-        value={value}
-        placeholder={placeholder}
-        onChange={(ev) => onChange(ev.target.value)}
-        onKeyDown={(ev) => {
-          if (ev.key === 'Enter' && value.trim() && !busy) onCreate()
-          if (ev.key === 'Escape') onCancel()
-        }}
-        style={{ ...miniInput, fontSize: '14px', padding: '8px 11px', flex: '0 1 300px', minWidth: '190px' }}
-      />
-      <button onClick={onCreate} disabled={busy || !value.trim()} className="wl-btn-primary">
-        {busy ? 'Creating…' : 'Create'}
-      </button>
-      <button onClick={onCancel} disabled={busy} className="wl-btn-secondary">
-        Cancel
-      </button>
-    </div>
-  )
-}
+// ── One label: buckets on the left, the selected bucket on the right ────────
 
-type ComposeState = {
-  labelId: string
-  name: string
-  value: string
-  touched: boolean
-  fallback: boolean
-} | null
-
-function LabelCard({
+function LabelEditor({
+  feedId,
   view,
   edited,
   dirty,
+  feedMode,
   busy,
   takenSlots,
+  selBucketId,
+  onSelectBucket,
   bucketDraft,
-  newBucket,
+  compose,
+  table,
   onPatch,
   onSave,
   onDelete,
@@ -705,255 +521,243 @@ function LabelCard({
   onPatchBucket,
   onSaveBucket,
   onDeleteBucket,
-  bucketIsDirty,
   onCompose,
   onComposeChange,
-  onComposeCancel,
   onComposeCreate,
 }: {
+  feedId: string
   view: LabelView
   edited: CustomLabel
   dirty: boolean
+  feedMode: BucketLevel
   busy: string | null
   takenSlots: Set<number>
+  selBucketId: string | null
+  onSelectBucket: (id: string | null) => void
   bucketDraft: Record<string, Bucket>
-  newBucket: ComposeState
-  onPatch: (change: Partial<CustomLabel>) => void
+  compose: Compose
+  table: PreviewTable | null
+  onPatch: (c: Partial<CustomLabel>) => void
   onSave: () => void
   onDelete: () => void
   onRecompute: () => void
-  onPatchBucket: (b: Bucket, change: Partial<Bucket>) => void
+  onPatchBucket: (b: Bucket, c: Partial<Bucket>) => void
   onSaveBucket: (b: Bucket) => void
   onDeleteBucket: (b: Bucket) => void
-  bucketIsDirty: (b: Bucket) => boolean
   onCompose: (fallback: boolean) => void
-  onComposeChange: (s: ComposeState) => void
-  onComposeCancel: () => void
+  onComposeChange: (c: Compose) => void
   onComposeCreate: () => void
 }) {
   const { label, buckets, counts, assigned, stale } = view
-  const composing = newBucket?.labelId === label.id ? newBucket : null
+  const real = buckets.filter((b) => !isGhost(b.id))
+  const selected = real.find((b) => b.id === selBucketId) ?? real[0] ?? null
   const hasFallback = buckets.some((b) => b.is_fallback)
+  const levelDiffers = label.level !== feedMode
+  const recomputing = busy === `recompute:${label.id}`
 
   return (
-    <div className="wl-card" style={{ padding: '18px 20px' }}>
-      {/* ── Identity ── */}
-      <div className="flex items-start justify-between gap-4 flex-wrap">
-        <div className="flex items-center gap-3 min-w-0">
+    <>
+      <section className="card lb-settings">
+        <div className="lb-row lb-wrap">
+          <input
+            value={edited.name}
+            onChange={(e) => onPatch({ name: e.target.value })}
+            onKeyDown={(e) => e.key === 'Enter' && dirty && edited.name.trim() && onSave()}
+            aria-label="Labelets navn"
+            className="wl-inline-edit lb-name"
+          />
           <select
+            className="ff-select lb-slot"
             value={edited.slot ?? ''}
-            onChange={(ev) => onPatch({ slot: ev.target.value === '' ? null : Number(ev.target.value) })}
-            style={{ ...miniInput, fontVariantNumeric: 'tabular-nums' }}
-            title="Which of Google's five slots this dimension occupies"
+            onChange={(e) => onPatch({ slot: e.target.value === '' ? null : Number(e.target.value) })}
+            aria-label="Plads i feedet"
           >
-            <option value="">no slot</option>
+            <option value="">Uden slot</option>
             {SLOTS.map((n) => (
               <option key={n} value={n} disabled={takenSlots.has(n) && edited.slot !== n}>
                 custom_label_{n}
               </option>
             ))}
           </select>
-          <input
-            value={edited.name}
-            onChange={(ev) => onPatch({ name: ev.target.value })}
-            placeholder="Name this label"
-            aria-label="Custom label name"
-            title="Rename — Enter to save"
-            className="wl-inline-edit"
-            onKeyDown={(ev) => {
-              if (ev.key === 'Enter' && dirty && edited.name.trim()) onSave()
-            }}
-            style={{ fontSize: '17px', fontWeight: 500, minWidth: '14ch' }}
-          />
-        </div>
-
-        <div className="flex items-center gap-2">
-          <span style={{ fontSize: '13px', color: 'var(--ink-muted)' }}>
-            {assigned.toLocaleString('da-DK')} labelled
-          </span>
+          <span className="lb-spacer" />
+          <span className="lb-muted">{formatNumber(assigned)} varer har et label</span>
           {dirty && (
             <button onClick={onSave} disabled={busy === label.id} className="wl-btn-primary">
-              {busy === label.id ? 'Saving…' : 'Save'}
+              {busy === label.id ? 'Gemmer…' : 'Gem'}
             </button>
           )}
-          <button
-            onClick={onRecompute}
-            disabled={busy === `recompute:${label.id}`}
-            className="wl-btn-secondary"
-          >
-            {busy === `recompute:${label.id}` ? 'Computing…' : 'Recompute'}
+          <button onClick={onRecompute} disabled={recomputing} className="wl-btn-secondary">
+            {recomputing ? 'Genberegner…' : 'Genberegn'}
           </button>
-          <button
-            onClick={onDelete}
-            disabled={busy === label.id}
-            className="wl-btn-secondary"
-            style={{ color: 'var(--accent-red)' }}
-          >
-            Delete
+          <button onClick={onDelete} disabled={busy === label.id} className="wl-btn-secondary lb-danger">
+            Slet label
           </button>
         </div>
-      </div>
 
-      {/* ── What it measures ── */}
-      <div className="flex flex-wrap items-end gap-6" style={{ marginTop: '16px' }}>
-        <div className="space-y-1.5">
-          <div className="wl-eyebrow">Level</div>
-          <div className="flex gap-1">
-            {(['product', 'variant'] as BucketLevel[]).map((l) => (
-              <button
-                key={l}
-                onClick={() => l !== edited.level && onPatch({ level: l })}
-                className="wl-pill"
-                style={pillStyle(l === edited.level)}
-              >
-                {l === 'product' ? 'Per product' : 'Per variant'}
-              </button>
-            ))}
+        <div className="lb-row lb-wrap lb-measure">
+          <div>
+            <span className="lb-k">Lookback-vindue</span>
+            <div className="lb-pills" role="group" aria-label="Lookback-vindue">
+              {WINDOWS.map((w) => (
+                <button
+                  key={w}
+                  type="button"
+                  aria-pressed={w === edited.window_days}
+                  onClick={() => w !== edited.window_days && onPatch({ window_days: w })}
+                >
+                  {w}d
+                </button>
+              ))}
+            </div>
+          </div>
+          <div>
+            <span className="lb-k">Niveau</span>
+            <p className="lb-level">
+              {LEVEL_LABEL[feedMode]} ·{' '}
+              <Link href={`/feed/${feedId}/settings`} className="link">
+                følger feedets opbygning
+              </Link>
+            </p>
           </div>
         </div>
-
-        <div className="space-y-1.5">
-          <div className="wl-eyebrow">Window</div>
-          <div className="flex gap-1">
-            {WINDOWS.map((w) => (
-              <button
-                key={w}
-                onClick={() => w !== edited.window_days && onPatch({ window_days: w })}
-                className="wl-pill"
-                style={pillStyle(w === edited.window_days)}
-              >
-                {w}d
-              </button>
-            ))}
-          </div>
-        </div>
-      </div>
-
-      {(stale.never || stale.dataNewer || stale.settingsNewer) && (
-        <p
-          style={{
-            fontSize: '12px',
-            color: 'var(--accent-amber)',
-            marginTop: '12px',
-            lineHeight: 1.5,
-            maxWidth: '68ch',
-          }}
-        >
-          {stale.never
-            ? 'Never computed — no product carries a value for this label yet.'
-            : stale.settingsNewer
-              ? 'The Google Ads settings changed after this was computed. If the revenue or gross profit actions were among them, these values describe the old definition.'
-              : 'Google Ads data has been synced since this was computed, so these values describe an older window.'}
+        <p className="lb-muted lb-small">
+          Et kort vindue reagerer hurtigt i en sæson. Et langt vindue giver flere varer nok klik til at blive dømt.
         </p>
-      )}
-
-      {/* ── Values ── */}
-      <div className="space-y-2" style={{ marginTop: '18px' }}>
-        {buckets.map((b) =>
-          isGhost(b.id) ? (
-            <GhostBlock key={b.id} bucket={b} />
-          ) : (
-            <BucketBlock
-              key={b.id}
-              bucket={bucketDraft[b.id] ?? b}
-              dirty={bucketIsDirty(b)}
-              busy={busy === b.id}
-              count={counts[b.id] ?? 0}
-              share={assigned ? Math.round(((counts[b.id] ?? 0) / assigned) * 100) : 0}
-              onPatch={(change) => onPatchBucket(b, change)}
-              onSave={() => onSaveBucket(b)}
-              onDelete={() => onDeleteBucket(b)}
-            />
-          )
-        )}
-      </div>
-
-      {composing ? (
-        <div
-          className="space-y-2"
-          style={{ marginTop: '12px', paddingTop: '12px', borderTop: '1px solid var(--hairline)' }}
-        >
-          <div className="wl-eyebrow">{composing.fallback ? 'New catch-all' : 'New value'}</div>
-          <div className="flex items-center gap-2 flex-wrap">
-            <input
-              autoFocus
-              value={composing.name}
-              placeholder="Name, e.g. High performers"
-              onChange={(ev) =>
-                onComposeChange({
-                  ...composing,
-                  name: ev.target.value,
-                  value: composing.touched ? composing.value : slugify(ev.target.value),
-                })
-              }
-              onKeyDown={(ev) => {
-                if (ev.key === 'Escape') onComposeCancel()
-              }}
-              style={{ ...miniInput, fontSize: '14px', padding: '8px 11px', flex: '0 1 240px' }}
-            />
-            <span style={{ fontSize: '12px', color: 'var(--ink-muted)' }}>emits</span>
-            <input
-              value={composing.value}
-              placeholder="high"
-              onChange={(ev) => onComposeChange({ ...composing, value: ev.target.value, touched: true })}
-              onKeyDown={(ev) => {
-                if (ev.key === 'Enter' && composing.name.trim() && composing.value.trim()) onComposeCreate()
-                if (ev.key === 'Escape') onComposeCancel()
-              }}
-              style={{ ...miniInput, fontSize: '14px', padding: '8px 11px', flex: '0 1 160px', fontFamily: 'var(--font-mono)' }}
-            />
-            <button
-              onClick={onComposeCreate}
-              disabled={busy === 'add-bucket' || !composing.name.trim() || !composing.value.trim()}
-              className="wl-btn-primary"
-            >
-              {busy === 'add-bucket' ? 'Creating…' : 'Create'}
-            </button>
-            <button onClick={onComposeCancel} className="wl-btn-secondary">
-              Cancel
-            </button>
-          </div>
-          <p style={{ fontSize: '12px', color: 'var(--ink-muted)', lineHeight: 1.5, maxWidth: '64ch' }}>
-            The name is for this screen; the value is the text Google would receive — keep it
-            short and stable, it ends up as a column heading in Merchant Center reports.
-            {composing.fallback
-              ? ' A catch-all takes everything no earlier value matched, so it applies as soon as it exists.'
-              : ' You add the conditions next; nothing is labelled until you save them.'}
+        {levelDiffers && (
+          <p className="note warn">
+            Labelet er beregnet {LEVEL_LABEL[label.level].toLowerCase()}, men feedet er {LEVEL_LABEL[feedMode].toLowerCase()}. Gem
+            labelet for at følge feedet.
           </p>
-        </div>
-      ) : (
-        <div className="flex gap-2" style={{ marginTop: '14px' }}>
-          <button onClick={() => onCompose(false)} className="wl-btn-secondary">
-            + Add value
-          </button>
-          {!hasFallback && (
-            <button
-              onClick={() => onCompose(true)}
-              className="wl-btn-secondary"
-              title="Matches everything no earlier value did"
-            >
-              + Add catch-all
-            </button>
+        )}
+        {(stale.never || stale.dataNewer || stale.settingsNewer) && (
+          <p className="note warn">
+            {stale.never
+              ? 'Aldrig beregnet. Ingen varer har en værdi for dette label endnu.'
+              : stale.settingsNewer
+                ? 'Google Ads-indstillingerne er ændret siden beregningen. Genberegn, hvis omsætning eller bruttoprofit var blandt ændringerne.'
+                : 'Der er hentet nye Google Ads-tal siden beregningen. Genberegn for at bruge dem.'}
+          </p>
+        )}
+      </section>
+
+      <div className="lb-split">
+        <section className="card lb-buckets">
+          <div className="lb-card-h">
+            <h3>Buckets</h3>
+            <small>Tjekkes oppefra. Første match vinder.</small>
+          </div>
+          <ul>
+            {buckets.map((b, i) => {
+              const e = bucketDraft[b.id] ?? b
+              const ghost = isGhost(b.id)
+              const on = !ghost && selected?.id === b.id
+              return (
+                <li key={b.id}>
+                  <button
+                    type="button"
+                    className={`lb-bucket${on ? ' on' : ''}${ghost ? ' ghost' : ''}`}
+                    aria-pressed={on}
+                    disabled={ghost}
+                    onClick={() => onSelectBucket(b.id)}
+                  >
+                    <span className="lb-prio">{b.is_fallback ? '·' : i + 1}</span>
+                    <span className="lb-bt">
+                      <b>{e.name}</b>
+                      <small>{ghost ? 'Opretter…' : e.value}</small>
+                    </span>
+                    <span className="lb-bc num">
+                      <b>{formatNumber(counts[b.id] ?? 0)}</b>
+                      <small>varer</small>
+                    </span>
+                    <span className="lb-dot" style={{ background: DOT[i % DOT.length] }} />
+                  </button>
+                </li>
+              )
+            })}
+          </ul>
+
+          {compose ? (
+            <div className="lb-compose">
+              <input
+                autoFocus
+                className="ff-input"
+                value={compose.name}
+                placeholder={compose.fallback ? 'Navn' : 'Navn, fx Highly profitable'}
+                onChange={(e) =>
+                  onComposeChange({ ...compose, name: e.target.value, value: compose.touched ? compose.value : slugify(e.target.value) })
+                }
+                onKeyDown={(e) => e.key === 'Escape' && onComposeChange(null)}
+              />
+              <input
+                className="ff-input"
+                value={compose.value}
+                placeholder="Værdi i feedet, fx highly_profitable"
+                onChange={(e) => onComposeChange({ ...compose, value: e.target.value, touched: true })}
+                onKeyDown={(e) => {
+                  if (e.key === 'Enter' && compose.name.trim() && compose.value.trim()) onComposeCreate()
+                  if (e.key === 'Escape') onComposeChange(null)
+                }}
+              />
+              <div className="lb-row">
+                <button className="wl-btn-primary" onClick={onComposeCreate} disabled={!compose.name.trim() || !compose.value.trim()}>
+                  Opret
+                </button>
+                <button className="wl-btn-secondary" onClick={() => onComposeChange(null)}>
+                  Annullér
+                </button>
+              </div>
+              <p className="lb-muted lb-small">
+                {compose.fallback
+                  ? 'Fallback tager alt, ingen tidligere bucket matchede, og gælder, så snart den findes.'
+                  : 'Værdien er teksten, Google får. Hold den kort og stabil. Betingelserne sætter du bagefter.'}
+              </p>
+            </div>
+          ) : (
+            <div className="lb-addrow">
+              <button type="button" className="lb-add" onClick={() => onCompose(false)}>
+                + Ny bucket
+              </button>
+              {!hasFallback && (
+                <button type="button" className="lb-add" onClick={() => onCompose(true)} title="Tager alt, ingen tidligere bucket matchede">
+                  + Fallback
+                </button>
+              )}
+            </div>
           )}
+        </section>
+
+        <div className="lb-right">
+          {selected ? (
+            <BucketEditor
+              bucket={bucketDraft[selected.id] ?? selected}
+              dirty={!!bucketDraft[selected.id]}
+              busy={busy === selected.id}
+              count={counts[selected.id] ?? 0}
+              share={assigned ? Math.round(((counts[selected.id] ?? 0) / assigned) * 100) : 0}
+              windowDays={edited.window_days}
+              onPatch={(c) => onPatchBucket(selected, c)}
+              onSave={() => onSaveBucket(selected)}
+              onDelete={() => onDeleteBucket(selected)}
+            />
+          ) : (
+            <section className="card lb-empty">
+              <p>Labelet har ingen buckets endnu. Lav den første til venstre.</p>
+            </section>
+          )}
+          {selected && table && <MembersCard table={table} labelId={label.id} bucket={selected} />}
         </div>
-      )}
-    </div>
+      </div>
+    </>
   )
 }
 
-const pillStyle = (active: boolean): React.CSSProperties => ({
-  cursor: 'pointer',
-  background: active ? 'var(--accent-purple)' : 'transparent',
-  color: active ? '#fff' : 'var(--ink-muted)',
-  border: active ? 'none' : '1px solid var(--hairline)',
-})
-
-function BucketBlock({
+function BucketEditor({
   bucket,
   dirty,
   busy,
   count,
   share,
+  windowDays,
   onPatch,
   onSave,
   onDelete,
@@ -963,321 +767,181 @@ function BucketBlock({
   busy: boolean
   count: number
   share: number
-  onPatch: (change: Partial<Bucket>) => void
+  windowDays: number
+  onPatch: (c: Partial<Bucket>) => void
   onSave: () => void
   onDelete: () => void
 }) {
+  const rules = bucket.rules ?? []
   return (
-    <div
-      style={{
-        border: '1px solid var(--hairline)',
-        borderRadius: '10px',
-        padding: '12px 14px',
-        background: 'var(--bg-base)',
-      }}
-    >
-      <div className="flex items-start justify-between gap-3 flex-wrap">
-        <div className="flex items-center gap-2 min-w-0">
-          {bucket.is_fallback ? (
-            <span className="wl-pill" style={{ background: 'var(--bg-surface)', color: 'var(--ink-muted)' }}>
-              last
-            </span>
-          ) : (
-            <input
-              type="number"
-              value={bucket.priority}
-              onChange={(ev) => onPatch({ priority: Number(ev.target.value) })}
-              title="Evaluation order — lower runs first, first match wins"
-              aria-label="Priority"
-              style={{ ...miniInput, width: '58px', textAlign: 'center', fontVariantNumeric: 'tabular-nums' }}
-            />
-          )}
+    <section className="card">
+      <div className="lb-row lb-wrap">
+        <div className="lb-card-h lb-grow">
           <input
             value={bucket.name}
-            onChange={(ev) => onPatch({ name: ev.target.value })}
-            onKeyDown={(ev) => {
-              if (ev.key === 'Enter' && dirty && bucket.name.trim()) onSave()
-            }}
-            placeholder="Name this value"
-            aria-label="Bucket name"
-            title="Rename — Enter to save"
-            className="wl-inline-edit"
-            style={{ fontSize: '14px', fontWeight: 500, minWidth: '12ch' }}
+            onChange={(e) => onPatch({ name: e.target.value })}
+            onKeyDown={(e) => e.key === 'Enter' && dirty && bucket.name.trim() && onSave()}
+            aria-label="Bucketens navn"
+            className="wl-inline-edit lb-bname"
           />
-          <span style={{ fontSize: '12px', color: 'var(--ink-muted)' }}>emits</span>
-          <input
-            value={bucket.value}
-            onChange={(ev) => onPatch({ value: ev.target.value })}
-            onKeyDown={(ev) => {
-              if (ev.key === 'Enter' && dirty && bucket.value.trim()) onSave()
-            }}
-            aria-label="Emitted value"
-            title="What Google would receive"
-            className="wl-inline-edit"
-            style={{ fontSize: '13px', minWidth: '8ch', fontFamily: 'var(--font-mono)' }}
-          />
+          <small>
+            {bucket.is_fallback ? 'Fallback: alt, ingen tidligere bucket matchede.' : 'Varer der matcher alle linjer, får værdien.'}
+          </small>
         </div>
+        <label className="lb-field">
+          <span>Værdi i feedet</span>
+          <input className="ff-input" value={bucket.value} onChange={(e) => onPatch({ value: e.target.value })} />
+        </label>
+        {!bucket.is_fallback && (
+          <label className="lb-field lb-prio-f">
+            <span>Rækkefølge</span>
+            <input
+              type="number"
+              className="ff-input"
+              value={bucket.priority}
+              onChange={(e) => onPatch({ priority: Number(e.target.value) })}
+              title="Lavere tjekkes først"
+            />
+          </label>
+        )}
+      </div>
 
-        <div className="flex items-center gap-3">
-          <span style={{ fontSize: '13px', color: 'var(--ink)' }}>
-            {count} <span style={{ color: 'var(--ink-muted)' }}>({share}%)</span>
-          </span>
-          <div
-            style={{
-              width: '80px',
-              height: '6px',
-              borderRadius: '3px',
-              background: 'var(--bg-surface)',
-              overflow: 'hidden',
-            }}
-          >
-            <div style={{ width: `${share}%`, height: '100%', background: 'var(--accent-purple)' }} />
+      {!bucket.is_fallback && (
+        <div className="lb-rules">
+          {rules.length === 0 && <p className="lb-muted lb-small">Ingen betingelser endnu. Intet får dette label, før du tilføjer en og gemmer.</p>}
+          {rules.map((rule, i) => {
+            const op = OPERATORS.find((o) => o.value === rule.operator)
+            return (
+              <div className="lb-rule" key={i}>
+                {i === 0 ? (
+                  <span className="lb-kw">HVIS</span>
+                ) : (
+                  <select
+                    className="ff-select lb-join"
+                    value={bucket.match_type}
+                    onChange={(e) => onPatch({ match_type: e.target.value as 'ALL' | 'ANY' })}
+                    title="Gælder alle betingelser i bucketen"
+                  >
+                    <option value="ALL">OG</option>
+                    <option value="ANY">ELLER</option>
+                  </select>
+                )}
+                <select
+                  className="ff-select"
+                  value={rule.metric}
+                  onChange={(e) => onPatch({ rules: rules.map((r, j) => (j === i ? { ...r, metric: e.target.value as BucketMetric } : r)) })}
+                >
+                  {BUCKET_METRICS.map((m) => (
+                    <option key={m} value={m}>
+                      {METRIC_LABEL[m]}
+                    </option>
+                  ))}
+                </select>
+                <select
+                  className="ff-select lb-op"
+                  value={rule.operator}
+                  onChange={(e) => onPatch({ rules: rules.map((r, j) => (j === i ? { ...r, operator: e.target.value as BucketOperator } : r)) })}
+                >
+                  {OPERATORS.map((o) => (
+                    <option key={o.value} value={o.value}>
+                      {o.label}
+                    </option>
+                  ))}
+                </select>
+                {op?.needsValue ? (
+                  <input
+                    type="number"
+                    step="any"
+                    className="ff-input lb-val"
+                    value={rule.value ?? ''}
+                    onChange={(e) =>
+                      onPatch({
+                        rules: rules.map((r, j) => (j === i ? { ...r, value: e.target.value === '' ? undefined : Number(e.target.value) } : r)),
+                      })
+                    }
+                  />
+                ) : (
+                  <span />
+                )}
+                <button
+                  type="button"
+                  className="lb-x"
+                  aria-label="Fjern betingelse"
+                  onClick={() => onPatch({ rules: rules.filter((_, j) => j !== i) })}
+                >
+                  ×
+                </button>
+              </div>
+            )
+          })}
+          <div className="lb-row lb-wrap">
+            <button
+              type="button"
+              className="lb-add-inline"
+              onClick={() => onPatch({ rules: [...rules, { metric: 'clicks', operator: 'gte', value: 25 }] })}
+            >
+              + Betingelse
+            </button>
+            <span className="lb-spacer" />
+            <span className="lb-muted lb-small">Regnes på de sidste {windowDays} dage</span>
           </div>
         </div>
-      </div>
-
-      {bucket.is_fallback ? (
-        <p style={{ fontSize: '12px', color: 'var(--ink-muted)', marginTop: '10px' }}>
-          Catch-all — everything no earlier value matched.
-        </p>
-      ) : (
-        <div className="space-y-2" style={{ marginTop: '10px' }}>
-          {/* An empty bucket shows 0 products, which without this reads as a
-              result rather than as "not asked yet". */}
-          {(bucket.rules ?? []).length === 0 && (
-            <p style={{ fontSize: '12px', color: 'var(--ink-muted)' }}>
-              No conditions yet - nothing is labelled until you add one and save.
-            </p>
-          )}
-          {(bucket.rules ?? []).map((rule, i) => (
-            <RuleRow
-              key={i}
-              rule={rule}
-              matchType={bucket.match_type}
-              showJoin={i > 0}
-              onJoinChange={(m) => onPatch({ match_type: m })}
-              onChange={(next) => onPatch({ rules: bucket.rules.map((r, j) => (j === i ? next : r)) })}
-              onRemove={() => onPatch({ rules: bucket.rules.filter((_, j) => j !== i) })}
-            />
-          ))}
-          <button
-            onClick={() =>
-              onPatch({ rules: [...(bucket.rules ?? []), { metric: 'clicks', operator: 'gte', value: 25 }] })
-            }
-            style={{
-              fontSize: '12px',
-              color: 'var(--accent-purple)',
-              background: 'none',
-              border: 'none',
-              cursor: 'pointer',
-              padding: 0,
-            }}
-          >
-            + Add condition
-          </button>
-        </div>
       )}
 
-      <div className="flex items-center gap-2 justify-end" style={{ marginTop: '10px' }}>
+      <div className="lb-row lb-wrap lb-bfoot">
+        <span className="num lb-share">
+          <b>{formatNumber(count)}</b> varer · {share} %
+        </span>
+        <span className="lb-bar" aria-hidden="true">
+          <i style={{ width: `${share}%` }} />
+        </span>
+        <span className="lb-spacer" />
+        <button onClick={onDelete} disabled={busy} className="wl-btn-secondary lb-danger">
+          Slet bucket
+        </button>
         {dirty && (
           <button onClick={onSave} disabled={busy} className="wl-btn-primary">
-            {busy ? 'Saving…' : 'Save'}
+            {busy ? 'Gemmer…' : 'Gem bucket'}
           </button>
         )}
-        <button
-          onClick={onDelete}
-          disabled={busy}
-          className="wl-btn-secondary"
-          style={{ color: 'var(--accent-red)' }}
-        >
-          Delete
-        </button>
       </div>
-    </div>
-  )
-}
-
-function RuleRow({
-  rule,
-  matchType,
-  showJoin,
-  onJoinChange,
-  onChange,
-  onRemove,
-}: {
-  rule: BucketRule
-  matchType: 'ALL' | 'ANY'
-  showJoin: boolean
-  onJoinChange: (m: 'ALL' | 'ANY') => void
-  onChange: (r: BucketRule) => void
-  onRemove: () => void
-}) {
-  const op = OPERATORS.find((o) => o.value === rule.operator)
-  return (
-    <div className="flex items-center gap-2 flex-wrap">
-      <div style={{ width: '72px', flexShrink: 0 }}>
-        {showJoin ? (
-          <select
-            value={matchType}
-            onChange={(e) => onJoinChange(e.target.value as 'ALL' | 'ANY')}
-            title="Applies to every condition in this bucket"
-            style={{ ...miniInput, width: '100%' }}
-          >
-            <option value="ALL">and</option>
-            <option value="ANY">or</option>
-          </select>
-        ) : (
-          <span
-            style={{
-              fontSize: '13px',
-              color: 'var(--ink-secondary)',
-              paddingLeft: '9px',
-              display: 'inline-block',
-            }}
-          >
-            if
-          </span>
-        )}
-      </div>
-
-      <select
-        value={rule.metric}
-        onChange={(e) => onChange({ ...rule, metric: e.target.value as BucketMetric })}
-        style={{ ...miniInput, minWidth: '130px' }}
-      >
-        {BUCKET_METRICS.map((m) => (
-          <option key={m} value={m}>
-            {METRIC_LABEL[m]}
-          </option>
-        ))}
-      </select>
-
-      <select
-        value={rule.operator}
-        onChange={(e) => onChange({ ...rule, operator: e.target.value as BucketOperator })}
-        style={{ ...miniInput, minWidth: '110px' }}
-      >
-        {OPERATORS.map((o) => (
-          <option key={o.value} value={o.value}>
-            {o.label}
-          </option>
-        ))}
-      </select>
-
-      {op?.needsValue && (
-        <input
-          type="number"
-          step="any"
-          value={rule.value ?? ''}
-          onChange={(e) =>
-            onChange({ ...rule, value: e.target.value === '' ? undefined : Number(e.target.value) })
-          }
-          style={{ ...miniInput, width: '90px' }}
-        />
-      )}
-
-      <button
-        onClick={onRemove}
-        title="Remove condition"
-        style={{
-          background: 'none',
-          border: 'none',
-          color: 'var(--ink-muted)',
-          cursor: 'pointer',
-          fontSize: '14px',
-          lineHeight: 1,
-        }}
-      >
-        ×
-      </button>
-    </div>
-  )
-}
-
-function PreviewSection({ table, labels }: { table: PreviewTable; labels: LabelView[] }) {
-  const columns = table.labelIds
-    .map((id) => labels.find((v) => v.label.id === id))
-    .filter((v): v is LabelView => !!v)
-
-  return (
-    <section className="wl-card" style={{ padding: 0, overflow: 'hidden' }}>
-      <div style={{ padding: '14px 18px', borderBottom: '1px solid var(--hairline)' }}>
-        <span className="wl-eyebrow">
-          {table.level === 'product' ? 'Per product' : 'Per variant'} · what each one carries
-        </span>
-      </div>
-      <div style={{ overflowX: 'auto', maxHeight: '520px', overflowY: 'auto' }}>
-        <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: '12px' }}>
-          <thead>
-            <tr style={{ borderBottom: '1px solid var(--hairline)' }}>
-              <Th first>{table.level === 'product' ? 'Product ID' : 'Item ID'}</Th>
-              <Th>Title</Th>
-              {columns.map((c) => (
-                <Th key={c.label.id}>
-                  {c.label.slot !== null ? `custom_label_${c.label.slot}` : c.label.name}
-                </Th>
-              ))}
-            </tr>
-          </thead>
-          <tbody>
-            {table.rows.map((r) => (
-              <tr key={r.ref} style={{ borderBottom: '0.5px solid var(--hairline)' }}>
-                <td
-                  style={{
-                    padding: '8px 12px 8px 18px',
-                    fontVariantNumeric: 'tabular-nums',
-                    color: 'var(--ink-secondary)',
-                    whiteSpace: 'nowrap',
-                  }}
-                >
-                  {r.ref}
-                </td>
-                <td style={{ padding: '8px 12px', color: 'var(--ink)', maxWidth: '280px' }}>
-                  <span className="truncate block">{r.title ?? '—'}</span>
-                </td>
-                {columns.map((c) => {
-                  const cell = r.cells[c.label.id]
-                  return (
-                    <td key={c.label.id} style={{ padding: '8px 12px', whiteSpace: 'nowrap' }}>
-                      {cell ? (
-                        <span className="wl-pill" style={{ background: 'var(--bg-surface)', color: 'var(--ink)' }}>
-                          {cell.value}
-                        </span>
-                      ) : (
-                        <span style={{ color: 'var(--ink-muted)' }}>—</span>
-                      )}
-                    </td>
-                  )
-                })}
-              </tr>
-            ))}
-          </tbody>
-        </table>
-      </div>
-      {table.total > table.rows.length && (
-        <p style={{ fontSize: '11px', color: 'var(--ink-muted)', padding: '10px 18px' }}>
-          Showing {table.rows.length} of {table.total}.
-        </p>
-      )}
     </section>
   )
 }
 
-function Th({ children, first }: { children: React.ReactNode; first?: boolean }) {
+function MembersCard({ table, labelId, bucket }: { table: PreviewTable; labelId: string; bucket: Bucket }) {
+  const rows = table.rows.filter((r) => r.cells[labelId]?.name === bucket.name)
   return (
-    <th
-      style={{
-        padding: first ? '10px 12px 10px 18px' : '10px 12px',
-        textAlign: 'left',
-        fontSize: '11px',
-        fontWeight: 500,
-        textTransform: 'uppercase',
-        letterSpacing: '0.08em',
-        color: 'var(--ink-muted)',
-        whiteSpace: 'nowrap',
-      }}
-    >
-      {children}
-    </th>
+    <section className="card flush">
+      <div className="lb-card-h lb-pad">
+        <h3>Varer i {bucket.name}</h3>
+        <small>Alle får værdien {bucket.value}, som den var ved sidste beregning.</small>
+      </div>
+      {rows.length === 0 ? (
+        <p className="lb-muted lb-small lb-pad">Ingen varer i denne bucket ved sidste beregning.</p>
+      ) : (
+        <div className="lb-tablewrap">
+          <table className="lb-table">
+            <thead>
+              <tr>
+                <th>{table.level === 'product' ? 'Vare-id' : 'Item-id'}</th>
+                <th>Titel</th>
+              </tr>
+            </thead>
+            <tbody>
+              {rows.map((r) => (
+                <tr key={r.ref}>
+                  <td className="num lb-muted">{r.ref}</td>
+                  <td>{r.title ?? '—'}</td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        </div>
+      )}
+      {table.total > table.rows.length && (
+        <p className="lb-muted lb-small lb-pad">Ud af de første {formatNumber(table.rows.length)} af {formatNumber(table.total)} varer med labels.</p>
+      )}
+    </section>
   )
 }

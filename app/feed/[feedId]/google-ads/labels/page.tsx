@@ -24,14 +24,19 @@ export default async function LabelsPage({ params }: { params: Promise<{ feedId:
   if (!feed) notFound()
 
   const db = adminDb()
-  const settings = await getFeedSettings(db, feedId)
+  const [settings, { data: feedSettingsRow }] = await Promise.all([
+    getFeedSettings(db, feedId),
+    db.from('feed_settings').select('feed_mode').eq('feed_id', feedId).maybeSingle(),
+  ])
+  // Labels measure at the feed's own level (Settings › opbygning).
+  const feedMode: BucketLevel = feedSettingsRow?.feed_mode === 'variant' ? 'variant' : 'product'
 
   if (!settings?.customer_id) {
     return (
       <LabelsClient
         feedId={feedId}
-        feedName={feed.name}
         connected={false}
+        feedMode={feedMode}
         currency={null}
         roasActions={[]}
         poasActions={[]}
@@ -148,8 +153,8 @@ export default async function LabelsPage({ params }: { params: Promise<{ feedId:
   return (
     <LabelsClient
       feedId={feedId}
-      feedName={feed.name}
       connected
+      feedMode={feedMode}
       currency={settings.currency_code}
       roasActions={settings.roas_conversion_actions ?? []}
       poasActions={settings.poas_conversion_actions ?? []}
