@@ -2,6 +2,7 @@ import { NextResponse } from 'next/server'
 import { createSupabaseServerClient } from '@/lib/supabase-server'
 import { adminDb, type ProjectRow } from '@/lib/feeds'
 import { errorResponse } from '@/lib/errors'
+import { getAccessibleAccountIds, resolveAccountForNewProject } from '@/lib/accounts'
 
 function hostOf(url: string | null): string | null {
   if (!url) return null
@@ -12,7 +13,7 @@ function hostOf(url: string | null): string | null {
   }
 }
 
-// GET — list the user's projects with feed counts + connection status.
+// GET — list the projects in the user's accounts with feed counts + connection status.
 // Never returns the encrypted token columns.
 export async function GET() {
   const supabase = await createSupabaseServerClient()
@@ -23,10 +24,19 @@ export async function GET() {
 
   const db = adminDb()
 
+  // Every project in every account the user is a member of.
+  let accountIds: string[]
+  try {
+    accountIds = await getAccessibleAccountIds(db, user.id)
+  } catch (err) {
+    return errorResponse(err, 'GET /api/projects accounts')
+  }
+  if (accountIds.length === 0) return NextResponse.json({ projects: [] })
+
   const { data: projects, error } = await db
     .from('projects')
-    .select('id, name, description, shop_url, source_type, feed_url, primary_domain, connection_status, last_verified_at, created_at, updated_at')
-    .eq('user_id', user.id)
+    .select('id, account_id, name, description, shop_url, source_type, feed_url, primary_domain, connection_status, last_verified_at, created_at, updated_at')
+    .in('account_id', accountIds)
     .order('created_at', { ascending: true })
 
   if (error) return errorResponse(error, 'GET /api/projects')
@@ -62,6 +72,7 @@ export async function GET() {
 
   const enriched = (projects ?? []).map((p) => ({
     id: p.id,
+    accountId: p.account_id,
     name: p.name,
     description: p.description,
     // The list shows one "where products come from" label: the Shopify admin
@@ -88,19 +99,34 @@ export async function POST(req: Request) {
   } = await supabase.auth.getUser()
   if (!user) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
 
-  const body = (await req.json().catch(() => ({}))) as { name?: string; description?: string }
+  const body = (await req.json().catch(() => ({}))) as {
+    name?: string
+    description?: string
+    // Optional: which of the user's accounts the project goes into. Defaults
+    // to the user's oldest membership (see resolveAccountForNewProject).
+    account_id?: string
+  }
   const name = (body.name ?? '').trim()
   if (!name) return NextResponse.json({ error: 'Name is required' }, { status: 400 })
 
   const db = adminDb()
+  let accountId: string | null
+  try {
+    accountId = await resolveAccountForNewProject(db, user, body.account_id ?? null)
+  } catch (err) {
+    return errorResponse(err, 'POST /api/projects account')
+  }
+  if (!accountId) return NextResponse.json({ error: 'Account not found' }, { status: 404 })
+
   const { data, error } = await db
     .from('projects')
     .insert({
       user_id: user.id,
+      account_id: accountId,
       name,
       description: body.description?.trim() || null,
     })
-    .select('id, name, description, shop_url, connection_status, last_verified_at, created_at, updated_at')
+    .select('id, account_id, name, description, shop_url, connection_status, last_verified_at, created_at, updated_at')
     .single<ProjectRow>()
 
   if (error) return errorResponse(error, 'POST /api/projects')

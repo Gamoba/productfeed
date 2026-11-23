@@ -51,7 +51,6 @@ export async function saveAutoSyncSchedule(
     .from('feeds')
     .update({ auto_sync_frequency: frequency, auto_sync_time: time })
     .eq('id', feedId)
-    .eq('user_id', user.id)
 
   if (error) return { error: clientMessage(error, 'saveAutoSyncSchedule') }
   return {}

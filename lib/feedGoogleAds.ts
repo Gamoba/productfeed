@@ -10,7 +10,10 @@ export type GoogleAdsConnectionStatus = 'unverified' | 'connected' | 'error'
 
 export type GoogleAdsConnection = {
   id: string
-  user_id: string
+  // The account the grant is shared with (migration 052). user_id is just who
+  // authorised it.
+  account_id: string
+  user_id: string | null
   account_label: string | null
   login_customer_id: string | null
   status: GoogleAdsConnectionStatus
@@ -21,7 +24,7 @@ export type GoogleAdsConnection = {
 }
 
 const CONNECTION_PUBLIC_COLUMNS =
-  'id, user_id, account_label, login_customer_id, status, last_verified_at, last_error, created_at, updated_at'
+  'id, account_id, user_id, account_label, login_customer_id, status, last_verified_at, last_error, created_at, updated_at'
 
 export type GoogleAdsFeedSettings = {
   id: string
@@ -82,14 +85,15 @@ const SETTINGS_COLUMNS =
 
 // ── Connections ──────────────────────────────────────────────────────────────
 
+// The account's newest Google Ads grant. Shared by every member of the account.
 export async function getConnection(
   db: SupabaseClient,
-  userId: string
+  accountId: string
 ): Promise<GoogleAdsConnection | null> {
   const { data, error } = await db
     .from('google_ads_connections')
     .select(CONNECTION_PUBLIC_COLUMNS)
-    .eq('user_id', userId)
+    .eq('account_id', accountId)
     .order('created_at', { ascending: false })
     .limit(1)
     .maybeSingle()
@@ -100,14 +104,16 @@ export async function getConnection(
 
 export async function saveConnection(
   db: SupabaseClient,
-  userId: string,
+  accountId: string,
+  userId: string | null,
   params: { refreshToken: string; loginCustomerId?: string | null; accountLabel?: string | null }
 ): Promise<GoogleAdsConnection> {
   const enc = encryptToken(params.refreshToken)
   const now = new Date().toISOString()
-  const existing = await getConnection(db, userId)
+  const existing = await getConnection(db, accountId)
 
   const row = {
+    account_id: accountId,
     user_id: userId,
     account_label: params.accountLabel ?? null,
     // A reconnect (OAuth callback) passes no manager — it is unknown until an

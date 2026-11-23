@@ -1,4 +1,5 @@
 import { createClient, type SupabaseClient } from '@supabase/supabase-js'
+import { getAccountRole } from '@/lib/accounts'
 
 export function adminDb(): SupabaseClient {
   return createClient(
@@ -9,7 +10,8 @@ export function adminDb(): SupabaseClient {
 
 export type FeedRow = {
   id: string
-  user_id: string
+  // Who created the feed. Not an access check any more — see getOwnedFeed.
+  user_id: string | null
   name: string
   description: string | null
   project_id: string | null
@@ -25,7 +27,9 @@ export type ProjectConnectionStatus = 'unverified' | 'connected' | 'error'
 // only in lib/projectShopify.getProjectCredentials at call time.
 export type ProjectRow = {
   id: string
-  user_id: string
+  // Who created the project. Access goes through account_id (migration 052).
+  user_id: string | null
+  account_id: string
   name: string
   description: string | null
   shop_url: string | null
@@ -41,43 +45,40 @@ export type ProjectRow = {
 export type ProjectSourceType = 'shopify' | 'feed_url'
 
 const PROJECT_PUBLIC_COLUMNS =
-  'id, user_id, name, description, shop_url, source_type, feed_url, connection_status, last_verified_at, created_at, updated_at'
+  'id, user_id, account_id, name, description, shop_url, source_type, feed_url, connection_status, last_verified_at, created_at, updated_at'
 
-// Returns the feed if owned by userId, otherwise null. Use this at every API
-// route / server action entry that takes a feedId from the client.
+// A feed the user may work on, with the account it belongs to.
+export type OwnedFeed = FeedRow & { account_id: string }
+
+// Returns the feed if the user is a member of the account that owns the feed's
+// project, otherwise null. Use this at every API route / server action entry
+// that takes a feedId from the client.
 //
-// Defense-in-depth: a feed's project must also be owned by the same user.
-// feeds.project_id is NOT NULL, so the guard below normally always runs; the
-// null-check is kept purely defensively.
+// ("Owned" is kept in the name for continuity: since migration 052 a feed is
+// owned by an account, and the user reaches it through membership.)
 export async function getOwnedFeed(
   userId: string,
   feedId: string
-): Promise<FeedRow | null> {
+): Promise<OwnedFeed | null> {
   const db = adminDb()
-  const { data } = await db
-    .from('feeds')
-    .select('*')
-    .eq('id', feedId)
-    .eq('user_id', userId)
-    .maybeSingle()
+  const { data } = await db.from('feeds').select('*').eq('id', feedId).maybeSingle()
   const feed = (data as FeedRow | null) ?? null
-  if (!feed) return null
+  // feeds.project_id is NOT NULL; a feed without one has no owner to check.
+  if (!feed?.project_id) return null
 
-  if (feed.project_id) {
-    const { data: project } = await db
-      .from('projects')
-      .select('id')
-      .eq('id', feed.project_id)
-      .eq('user_id', userId)
-      .maybeSingle()
-    if (!project) return null
-  }
+  const { data: project } = await db
+    .from('projects')
+    .select('account_id')
+    .eq('id', feed.project_id)
+    .maybeSingle<{ account_id: string }>()
+  if (!project) return null
 
-  return feed
+  if (!(await getAccountRole(db, userId, project.account_id))) return null
+  return { ...feed, account_id: project.account_id }
 }
 
-// Returns the project if owned by userId, otherwise null. Mirrors getOwnedFeed.
-// Never selects the encrypted token columns.
+// Returns the project if the user is a member of its account, otherwise null.
+// Mirrors getOwnedFeed. Never selects the encrypted token columns.
 export async function getOwnedProject(
   userId: string,
   projectId: string
@@ -87,9 +88,11 @@ export async function getOwnedProject(
     .from('projects')
     .select(PROJECT_PUBLIC_COLUMNS)
     .eq('id', projectId)
-    .eq('user_id', userId)
     .maybeSingle()
-  return (data as ProjectRow | null) ?? null
+  const project = (data as ProjectRow | null) ?? null
+  if (!project) return null
+  if (!(await getAccountRole(db, userId, project.account_id))) return null
+  return project
 }
 
 // Picks the user's first (oldest) feed. Used for backwards-compat at

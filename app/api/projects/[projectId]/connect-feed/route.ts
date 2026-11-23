@@ -65,7 +65,6 @@ export async function POST(
         .from('projects')
         .select('source_type, feed_url, feed_auth_ciphertext, feed_auth_iv, feed_auth_tag')
         .eq('id', projectId)
-        .eq('user_id', user.id)
         .maybeSingle<{ source_type: string | null; feed_url: string | null } & FeedAuthColumns>()
       const stored = current?.source_type === 'feed_url' ? decryptFeedAuth(current) : null
       if (stored && current?.feed_url && sameOrigin(current.feed_url, feedUrl)) {
@@ -109,7 +108,6 @@ export async function POST(
         updated_at: now,
       })
       .eq('id', projectId)
-      .eq('user_id', user.id)
     if (updateErr) return errorResponse(updateErr, 'POST /api/projects/[projectId]/connect-feed update')
 
     return NextResponse.json({

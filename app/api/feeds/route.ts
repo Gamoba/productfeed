@@ -1,6 +1,7 @@
 import { NextResponse } from 'next/server'
 import { createSupabaseServerClient } from '@/lib/supabase-server'
 import { adminDb, getOwnedProject } from '@/lib/feeds'
+import { getAccessibleProjectIds } from '@/lib/accounts'
 import { errorResponse } from '@/lib/errors'
 import type { ValidationIssue } from '@/lib/feedValidator'
 
@@ -14,13 +15,22 @@ export async function GET(req: Request) {
   const db = adminDb()
 
   // Optional ?projectId scopes the list to one project (project home page).
-  // Always filtered by user_id, so the project filter only narrows further.
+  // Always limited to projects in the user's accounts, so the project filter
+  // only narrows further.
   const projectId = new URL(req.url).searchParams.get('projectId')
-  let feedsQuery = db
+  let projectIds: string[]
+  try {
+    projectIds = await getAccessibleProjectIds(db, user.id)
+  } catch (err) {
+    return errorResponse(err, 'GET /api/feeds projects')
+  }
+  if (projectId) projectIds = projectIds.filter((id) => id === projectId)
+  if (projectIds.length === 0) return NextResponse.json({ feeds: [] })
+
+  const feedsQuery = db
     .from('feeds')
     .select('id, name, description, project_id, created_at, updated_at, last_synced_at')
-    .eq('user_id', user.id)
-  if (projectId) feedsQuery = feedsQuery.eq('project_id', projectId)
+    .in('project_id', projectIds)
 
   const { data: feeds, error: feedsErr } = await feedsQuery.order('created_at', {
     ascending: true,

@@ -133,9 +133,14 @@ async function connectFeed() {
   const db = adminDb()
   const { data: feed, error } = await db
     .from('feeds')
-    .select('id, name, user_id')
+    .select('id, name, user_id, projects(account_id)')
     .eq('id', feedId)
-    .maybeSingle<{ id: string; name: string; user_id: string }>()
+    .maybeSingle<{
+      id: string
+      name: string
+      user_id: string | null
+      projects: { account_id: string } | null
+    }>()
   if (error) throw new Error(error.message)
   if (!feed) {
     console.error(`Feed ${feedId} does not exist. Run --feeds to see the list.`)
@@ -157,8 +162,14 @@ async function connectFeed() {
     process.exit(1)
   }
 
-  const existing = await getConnection(db, feed.user_id)
-  const connection = await saveConnection(db, feed.user_id, {
+  // The grant belongs to the account that owns the feed's project (migration 052).
+  const accountId = feed.projects?.account_id
+  if (!accountId) {
+    console.error(`Feed ${feedId} has no project/account.`)
+    process.exit(1)
+  }
+  const existing = await getConnection(db, accountId)
+  const connection = await saveConnection(db, accountId, feed.user_id, {
     refreshToken: requireToken(),
     loginCustomerId: MANAGER,
     accountLabel: existing?.account_label ?? `MCC ${formatCustomerId(MANAGER)}`,

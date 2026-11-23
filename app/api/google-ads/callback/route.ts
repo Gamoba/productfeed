@@ -66,7 +66,8 @@ export async function GET(req: Request) {
     const { refreshToken } = await exchangeCode(code, redirectUri(req.url))
 
     const db = adminDb()
-    const connection = await saveConnection(db, user.id, {
+    // The grant is shared by everyone in the feed's account.
+    const connection = await saveConnection(db, feed.account_id, user.id, {
       refreshToken,
       accountLabel: user.email ?? null,
       // login_customer_id is unknown until an account is chosen — the picker

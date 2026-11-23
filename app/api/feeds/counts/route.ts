@@ -1,6 +1,8 @@
 import { NextResponse } from 'next/server'
 import { createSupabaseServerClient } from '@/lib/supabase-server'
 import { adminDb } from '@/lib/feeds'
+import { getAccessibleProjectIds } from '@/lib/accounts'
+import { errorResponse } from '@/lib/errors'
 import { countFilteredProducts } from '@/lib/feedGenerator'
 
 // LAG 2 endpoint for the dashboard. Per-feed countFilteredProducts pages
@@ -17,11 +19,21 @@ export async function GET(req: Request) {
   const db = adminDb()
 
   // Optional ?projectId narrows the (expensive) count workload to one project.
+  // Always limited to projects in the user's accounts.
   const projectId = new URL(req.url).searchParams.get('projectId')
-  let feedsQuery = db.from('feeds').select('id').eq('user_id', user.id)
-  if (projectId) feedsQuery = feedsQuery.eq('project_id', projectId)
+  let projectIds: string[]
+  try {
+    projectIds = await getAccessibleProjectIds(db, user.id)
+  } catch (err) {
+    return errorResponse(err, 'GET /api/feeds/counts projects')
+  }
+  if (projectId) projectIds = projectIds.filter((id) => id === projectId)
+  if (projectIds.length === 0) return NextResponse.json({ counts: [] })
 
-  const { data: feeds, error: feedsErr } = await feedsQuery
+  const { data: feeds, error: feedsErr } = await db
+    .from('feeds')
+    .select('id')
+    .in('project_id', projectIds)
 
   if (feedsErr) {
     return NextResponse.json({ error: feedsErr.message }, { status: 500 })

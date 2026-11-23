@@ -52,7 +52,7 @@ export async function POST(
     const body = (await req.json().catch(() => ({}))) as Body
     const db = adminDb()
 
-    const connection = await getConnection(db, user.id)
+    const connection = await getConnection(db, feed.account_id)
     if (!connection) {
       return NextResponse.json(
         { error: 'There is no Google Ads connection. Connect first.' },

@@ -26,7 +26,8 @@ export async function DELETE(
   } catch (err) {
     return errorResponse(err, 'DELETE /api/feeds/[feedId] purge')
   }
-  const { error } = await db.from('feeds').delete().eq('id', feedId).eq('user_id', user.id)
+  // Access was checked by getOwnedFeed (account membership) above.
+  const { error } = await db.from('feeds').delete().eq('id', feedId)
   if (error) return errorResponse(error, 'DELETE /api/feeds/[feedId]')
 
   return NextResponse.json({ ok: true })
@@ -59,7 +60,6 @@ export async function PATCH(
     .from('feeds')
     .update(update)
     .eq('id', feedId)
-    .eq('user_id', user.id)
     .select('id, name, description, created_at, updated_at')
     .single()
 

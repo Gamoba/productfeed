@@ -35,7 +35,6 @@ export async function DELETE(
     .from('projects')
     .delete()
     .eq('id', projectId)
-    .eq('user_id', user.id)
   if (error) return errorResponse(error, 'DELETE /api/projects/[projectId]')
 
   return NextResponse.json({ ok: true })
@@ -73,7 +72,6 @@ export async function PATCH(
     .from('projects')
     .update(update)
     .eq('id', projectId)
-    .eq('user_id', user.id)
     .select('id, name, description, shop_url, connection_status, last_verified_at, created_at, updated_at')
     .single()
 

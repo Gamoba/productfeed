@@ -129,7 +129,6 @@ export async function POST(
       updated_at: now,
     })
     .eq('id', projectId)
-    .eq('user_id', user.id)
 
   if (updateErr) {
     return NextResponse.json({ error: updateErr.message }, { status: 500 })
