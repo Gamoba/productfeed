@@ -20,6 +20,7 @@ import {
 } from '@/lib/googleAdsAnalytics'
 import { STALE_STOCK_DAYS } from '@/lib/inventoryAnalytics'
 import { GoogleAdsSetup } from './GoogleAdsSetup'
+import './performance.css'
 
 /**
  * Days of stock below which the note is worth drawing attention to.
@@ -42,7 +43,6 @@ type SettingsView = {
 
 type Props = {
   feedId: string
-  feedName: string
   days: Window
   windows: Window[]
   connected: boolean
@@ -232,7 +232,6 @@ function compare(a: number | null, b: number | null, dir: 1 | -1): number {
 
 export function GoogleAdsClient({
   feedId,
-  feedName,
   days,
   windows,
   connected,
@@ -472,63 +471,38 @@ export function GoogleAdsClient({
   }
 
   return (
-    <div className="min-h-screen" style={{ background: 'var(--bg-base)' }}>
-      {/* The product table is wide (11 numeric columns + variants), so the old
-          max-w-6xl (1152px) cap squeezed it while the AppShell content area —
-          flex-1, no cap — sat half empty. Inline maxWidth so it can't be silently
-          dropped by class generation; still centred so ultrawide doesn't sprawl. */}
-      <main className="mx-auto px-6 py-9 space-y-7" style={{ maxWidth: '1800px' }}>
+    <div className="pf">
         {/* ── Header ─────────────────────────────────────────────── */}
-        <header className="flex items-end justify-between gap-4 flex-wrap">
-          <div className="space-y-1.5">
-            <div className="wl-eyebrow truncate">{feedName}</div>
-            <h1
-              style={{
-                fontSize: '34px',
-                fontWeight: 500,
-                lineHeight: 1.1,
-                letterSpacing: '-0.02em',
-                color: 'var(--ink)',
-              }}
-            >
-              Product performance
-            </h1>
-            {connected && settings && (
-              <p style={{ fontSize: '13px', color: 'var(--ink-muted)' }}>
-                {settings.customerName ?? settings.customerId}
-                {settings.feedLabel ? ` · ${settings.feedLabel}` : ''}
-                {from && ` · ${from} → ${to}`}
-              </p>
-            )}
+        <header className="pf-head">
+          <div>
+            <h1>Performance</h1>
+            <p className="pf-lede">
+              Hvad hver vare har kostet og tjent i Google Ads, med margin og break-even ved siden af.
+              {connected && settings && (
+                <>
+                  {' '}
+                  {settings.customerName ?? settings.customerId}
+                  {settings.feedLabel ? ` · ${settings.feedLabel}` : ''}
+                  {from && ` · ${from} → ${to}`}
+                </>
+              )}
+            </p>
           </div>
 
           {connected && (
-            <div className="flex items-center gap-2">
-              <div className="flex items-center gap-1">
+            <div className="pf-actions">
+              <div className="pf-seg" role="group" aria-label="Periode">
                 {windows.map((w) => (
-                  <button
-                    key={w}
-                    onClick={() => router.push(urlWith({ days: w }))}
-                    className="wl-pill"
-                    style={{
-                      cursor: 'pointer',
-                      background: w === days ? 'var(--accent-purple)' : 'transparent',
-                      color: w === days ? '#fff' : 'var(--ink-muted)',
-                      border: w === days ? 'none' : '1px solid var(--hairline)',
-                    }}
-                  >
+                  <button key={w} type="button" aria-pressed={w === days} onClick={() => router.push(urlWith({ days: w }))}>
                     {w}d
                   </button>
                 ))}
               </div>
-              <button
-                onClick={() => setShowSetup((s) => !s)}
-                className="wl-btn-secondary shrink-0"
-              >
-                Settings
+              <button onClick={() => setShowSetup((s) => !s)} className="wl-btn-secondary shrink-0">
+                Opsætning
               </button>
               <button onClick={refresh} disabled={syncing} className="wl-btn-primary shrink-0">
-                {syncing ? 'Fetching…' : 'Refresh data'}
+                {syncing ? 'Henter…' : 'Hent tal'}
               </button>
             </div>
           )}
@@ -548,7 +522,7 @@ export function GoogleAdsClient({
             <div className="flex items-start gap-2.5">
               <span className="wl-dot shrink-0" style={{ background: 'var(--accent-green)', marginTop: '5px' }} />
               <p style={{ fontSize: '13px', color: 'var(--ink-secondary)' }}>
-                Google Ads is authorised. Now choose the account.
+                Google Ads er godkendt. Vælg nu kontoen.
               </p>
             </div>
           </div>
@@ -579,7 +553,7 @@ export function GoogleAdsClient({
               />
               <div>
                 <p style={{ fontSize: '13px', fontWeight: 500, color: 'var(--ink)' }}>
-                  Setup is incomplete
+                  Opsætningen er ikke færdig
                 </p>
                 {setupIssues.map((i) => (
                   <p key={i} style={{ fontSize: '12px', color: 'var(--ink-secondary)' }}>
@@ -615,14 +589,14 @@ export function GoogleAdsClient({
           <section className="wl-card" style={{ padding: '16px 18px' }}>
             <div className="flex flex-wrap items-end gap-4">
               <MetricPicker
-                label="Revenue (ROAS)"
+                label="Omsætning (ROAS)"
                 selected={activeActions.roas}
                 actions={availableActions}
                 currency={currency}
                 onChange={(v) => router.push(urlWith({ roas: v }))}
               />
               <MetricPicker
-                label="Gross profit (POAS)"
+                label="Bruttoprofit (POAS)"
                 selected={activeActions.poas}
                 actions={availableActions}
                 currency={currency}
@@ -634,7 +608,7 @@ export function GoogleAdsClient({
                   disabled={savingDefaults}
                   className="wl-btn-secondary"
                 >
-                  {savingDefaults ? 'Saving…' : 'Save as default'}
+                  {savingDefaults ? 'Gemmer…' : 'Gem som standard'}
                 </button>
               )}
             </div>
@@ -647,25 +621,25 @@ export function GoogleAdsClient({
                 maxWidth: '62ch',
               }}
             >
-              The same order is usually counted by several actions at once. The amount next
-              to each action is what it reports over the period
+              Samme ordre tælles ofte af flere handlinger på én gang. Beløbet ved hver handling er,
+              hvad den har rapporteret i perioden.
             </p>
           </section>
         )}
 
         {connected && totals && (
-          <section className="grid gap-3" style={{ gridTemplateColumns: 'repeat(auto-fit,minmax(150px,1fr))' }}>
+          <section className="pf-kpis">
             {/* Cost rising is not good news, so its arrow is inverted. Everything
                 else on this row is a figure you want larger. */}
             <Stat
-              label="Cost"
+              label="Forbrug"
               value={formatMoney(totals.cost, currency)}
               change={delta(totals.cost, comparison?.totals.cost ?? null)}
               invertChange
               suppressChange={comparison?.partial}
             />
             <Stat
-              label="Revenue"
+              label="Omsætning"
               value={formatMoney(totals.roas_value, currency)}
               change={delta(totals.roas_value, comparison?.totals.roasValue ?? null)}
               suppressChange={comparison?.partial}
@@ -678,25 +652,27 @@ export function GoogleAdsClient({
               suppressChange={comparison?.partial}
             />
             <Stat
-              label="Gross profit"
+              label="Bruttoprofit"
+              variant="hi"
               value={formatMoney(totals.poas_value, currency)}
               change={delta(totals.poas_value, comparison?.totals.poasValue ?? null)}
               suppressChange={comparison?.partial}
             />
             <Stat
               label="POAS"
+              variant="tint"
               value={formatRatio(totals.poas)}
               tone={totals.poas === null ? undefined : totals.poas >= 1 ? 'good' : 'bad'}
               hint={
                 totals.poas !== null && totals.poas < 1
-                  ? 'Below 1 = ads cost more than the gross profit they return'
+                  ? 'Under 1 betyder, at annoncerne koster mere end den bruttoprofit, de giver'
                   : undefined
               }
               change={delta(totals.poas, comparison?.totals.poas ?? null)}
               suppressChange={comparison?.partial}
             />
             <Stat
-              label="Clicks"
+              label="Klik"
               value={formatInt(totals.clicks)}
               change={delta(totals.clicks, comparison?.totals.clicks ?? null)}
               suppressChange={comparison?.partial}
@@ -730,15 +706,15 @@ export function GoogleAdsClient({
         {connected && rows.length === 0 && (
           <div className="wl-card py-16 flex flex-col items-center gap-3">
             <p style={{ fontSize: '15px', color: 'var(--ink-secondary)' }}>
-              No data in this period.
+              Ingen tal i perioden.
             </p>
             <p style={{ fontSize: '13px', color: 'var(--ink-muted)' }}>
               {settings?.lastSyncedAt
-                ? 'The account had no shopping impressions in this window.'
-                : 'The feed is connected, but no data has been fetched yet.'}
+                ? 'Kontoen havde ingen Shopping-visninger i perioden.'
+                : 'Feedet er koblet, men der er ikke hentet tal endnu.'}
             </p>
             <button onClick={refresh} disabled={syncing} className="wl-btn-secondary mt-1">
-              {syncing ? 'Fetching…' : 'Fetch data now'}
+              {syncing ? 'Henter…' : 'Hent tal nu'}
             </button>
           </div>
         )}
@@ -751,8 +727,8 @@ export function GoogleAdsClient({
             >
               <span style={{ fontSize: '12px', color: 'var(--ink-muted)' }}>
                 {query.trim()
-                  ? `${formatInt(visible.length)} of ${formatInt(sorted.length)} products`
-                  : `${formatInt(sorted.length)} products`}
+                  ? `${formatInt(visible.length)} af ${formatInt(sorted.length)} varer`
+                  : `${formatInt(sorted.length)} varer`}
               </span>
               <div className="flex items-center gap-4 flex-wrap">
                 {vatApplies && (
@@ -770,9 +746,9 @@ export function GoogleAdsClient({
                       type="checkbox"
                       checked={grossBasis}
                       onChange={(e) => setGrossBasis(e.target.checked)}
-                      style={{ accentColor: 'var(--accent-purple)' }}
+                      style={{ accentColor: 'var(--accent-ink)' }}
                     />
-                    Margin on gross prices
+                    Margin på bruttopriser
                   </label>
                 )}
                 {returnsContext && (
@@ -790,9 +766,9 @@ export function GoogleAdsClient({
                       type="checkbox"
                       checked={showReturns}
                       onChange={(e) => setShowReturns(e.target.checked)}
-                      style={{ accentColor: 'var(--accent-purple)' }}
+                      style={{ accentColor: 'var(--accent-ink)' }}
                     />
-                    Returns
+                    Returer
                   </label>
                 )}
                 {comparison && !comparison.partial && (
@@ -811,27 +787,27 @@ export function GoogleAdsClient({
                       type="checkbox"
                       checked={showCompare}
                       onChange={(e) => setShowCompare(e.target.checked)}
-                      style={{ accentColor: 'var(--accent-purple)' }}
+                      style={{ accentColor: 'var(--accent-ink)' }}
                     />
-                    Compare
+                    Sammenlign
                   </label>
                 )}
-                <SearchBox value={query} onChange={setQuery} placeholder="Search products…" />
+                <SearchBox value={query} onChange={setQuery} placeholder="Søg varer…" />
               </div>
             </div>
             <div style={{ overflowX: 'auto' }}>
               <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: '13px' }}>
                 <thead>
                   <tr style={{ borderBottom: '1px solid var(--hairline)' }}>
-                    <Th style={{ textAlign: 'left', paddingLeft: '18px' }}>Product</Th>
+                    <Th style={{ textAlign: 'left', paddingLeft: '18px' }}>Vare</Th>
                     <Th sortable active={sortKey === 'impressions'} dir={sortDir} onClick={() => setSort('impressions')}>
-                      Impressions
+                      Visninger
                     </Th>
                     <Th sortable active={sortKey === 'clicks'} dir={sortDir} onClick={() => setSort('clicks')}>
-                      Clicks
+                      Klik
                     </Th>
                     <Th sortable active={sortKey === 'cost'} dir={sortDir} onClick={() => setSort('cost')}>
-                      Cost
+                      Forbrug
                     </Th>
                     {showCompare && (
                       <Th
@@ -840,14 +816,14 @@ export function GoogleAdsClient({
                         dir={sortDir}
                         onClick={() => setSort('dCostPct')}
                       >
-                        Δ Cost
+                        Δ Forbrug
                       </Th>
                     )}
                     <Th sortable active={sortKey === 'margin'} dir={sortDir} onClick={() => setSort('margin')}>
                       Margin
                     </Th>
                     <Th sortable active={sortKey === 'roas_value'} dir={sortDir} onClick={() => setSort('roas_value')}>
-                      Revenue
+                      Omsætning
                       <CountPill n={activeActions.roas.length} />
                     </Th>
                     {showCompare && (
@@ -857,7 +833,7 @@ export function GoogleAdsClient({
                         dir={sortDir}
                         onClick={() => setSort('dRevenuePct')}
                       >
-                        Δ Revenue
+                        Δ Omsætning
                       </Th>
                     )}
                     <Th sortable active={sortKey === 'roas'} dir={sortDir} onClick={() => setSort('roas')}>
@@ -875,7 +851,7 @@ export function GoogleAdsClient({
                     )}
                     {showReturns && (
                       <Th sortable active={sortKey === 'netRoas'} dir={sortDir} onClick={() => setSort('netRoas')}>
-                        Net ROAS
+                        Netto ROAS
                       </Th>
                     )}
                     {/* Sits beside whichever ROAS is the operative one, because
@@ -910,7 +886,7 @@ export function GoogleAdsClient({
                     </Th>
                     {showReturns && (
                       <Th sortable active={sortKey === 'netPoas'} dir={sortDir} onClick={() => setSort('netPoas')}>
-                        Net POAS
+                        Netto POAS
                       </Th>
                     )}
                     {showReturns && (
@@ -920,10 +896,10 @@ export function GoogleAdsClient({
                         dir={sortDir}
                         onClick={() => setSort('refundedInWindow')}
                       >
-                        Refunded
+                        Refunderet
                       </Th>
                     )}
-                    <Th style={{ paddingRight: '18px' }}>Profit − cost</Th>
+                    <Th style={{ paddingRight: '18px' }}>Profit − forbrug</Th>
                   </tr>
                 </thead>
                 <tbody>
@@ -934,6 +910,7 @@ export function GoogleAdsClient({
                       <Fragment key={key}>
                         <tr
                           onClick={() => toggle(r.productRef)}
+                          className="pf-row"
                           style={{
                             borderBottom: '1px solid var(--hairline)',
                             cursor: r.productRef ? 'pointer' : 'default',
@@ -954,16 +931,16 @@ export function GoogleAdsClient({
                               </span>
                               <div className="min-w-0">
                                 <div className="truncate" style={{ color: 'var(--ink)' }}>
-                                  {r.title ?? r.productRef ?? 'Unknown item'}
+                                  {r.title ?? r.productRef ?? 'Ukendt vare'}
                                 </div>
                                 <div style={{ fontSize: '11px', color: 'var(--ink-muted)' }}>
                                   {r.unmatched ? (
                                     <span style={{ color: 'var(--accent-amber)' }}>
-                                      not found in the catalogue
+                                      ikke fundet i kataloget
                                     </span>
                                   ) : (
                                     <>
-                                      {`${r.variantCount} variant${r.variantCount === 1 ? '' : 's'}`}
+                                      {`${r.variantCount} ${r.variantCount === 1 ? 'variant' : 'varianter'}`}
                                       <StockNote stock={r.stock} stale={stockStale} />
                                     </>
                                   )}
@@ -1062,7 +1039,7 @@ export function GoogleAdsClient({
                             >
                               {loadingVariants === r.productRef ? (
                                 <p style={{ fontSize: '12px', color: 'var(--ink-muted)', padding: '10px 0' }}>
-                                  Loading variants…
+                                  Henter varianter…
                                 </p>
                               ) : (
                                 <VariantTable
@@ -1092,7 +1069,7 @@ export function GoogleAdsClient({
                   textAlign: 'center',
                 }}
               >
-                No product matches «{query.trim()}» in this window.
+                Ingen vare matcher «{query.trim()}» i perioden.
               </p>
             )}
           </section>
@@ -1149,11 +1126,10 @@ export function GoogleAdsClient({
               </p>
             )}
             {settings?.lastSyncedAt && (
-              <p>Last fetched {new Date(settings.lastSyncedAt).toLocaleString('da-DK')}</p>
+              <p>Sidst hentet {new Date(settings.lastSyncedAt).toLocaleString('da-DK')}</p>
             )}
           </div>
         )}
-      </main>
     </div>
   )
 }
@@ -1168,6 +1144,7 @@ function Stat({
   change,
   invertChange,
   suppressChange,
+  variant,
 }: {
   label: string
   value: string
@@ -1178,32 +1155,19 @@ function Stat({
   invertChange?: boolean
   /** Set when the comparison period is too thin to draw a conclusion from. */
   suppressChange?: boolean
+  /** 'hi' = the one Kobolt highlight on the page, 'tint' = soft emphasis. */
+  variant?: 'hi' | 'tint'
 }) {
   return (
-    <div className="wl-card" style={{ padding: '16px 18px' }}>
-      <div className="wl-eyebrow">{label}</div>
-      <div
-        style={{
-          fontSize: '26px',
-          fontWeight: 500,
-          letterSpacing: '-0.01em',
-          marginTop: '6px',
-          color:
-            tone === 'bad' ? 'var(--accent-red)' : tone === 'good' ? 'var(--ink)' : 'var(--ink)',
-        }}
-      >
-        {value}
-      </div>
+    <div className={`card pf-stat${variant ? ` ${variant}` : ''}`}>
+      <span className="pf-stat-l">{label}</span>
+      <strong className={`num${tone === 'bad' && !variant ? ' pf-bad' : ''}`}>{value}</strong>
       {!suppressChange && change && (
-        <div style={{ marginTop: '5px' }}>
+        <span className="pf-stat-d">
           <Change d={change} invert={invertChange} />
-        </div>
+        </span>
       )}
-      {hint && (
-        <div style={{ fontSize: '11px', color: 'var(--ink-muted)', marginTop: '4px', lineHeight: 1.4 }}>
-          {hint}
-        </div>
-      )}
+      {hint && <small>{hint}</small>}
     </div>
   )
 }
@@ -1222,7 +1186,7 @@ function Stat({
  */
 function Change({ d, invert = false }: { d: Delta; invert?: boolean }) {
   if (d.abs === 0) {
-    return <span style={{ fontSize: '11px', color: 'var(--ink-muted)' }}>no change</span>
+    return <span style={{ fontSize: '11px', color: 'var(--ink-muted)' }}>ingen ændring</span>
   }
   const up = d.abs > 0
   const good = invert ? !up : up
@@ -1235,11 +1199,11 @@ function Change({ d, invert = false }: { d: Delta; invert?: boolean }) {
         fontVariantNumeric: 'tabular-nums',
         whiteSpace: 'nowrap',
       }}
-      title={`${up ? '+' : ''}${abs} vs the previous period`}
+      title={`${up ? '+' : ''}${abs} mod perioden før`}
     >
       {up ? '▲' : '▼'}{' '}
       {d.pct === null
-        ? 'new'
+        ? 'ny'
         : `${d.pct > 0 ? '+' : ''}${(d.pct * 100).toLocaleString('da-DK', {
             maximumFractionDigits: 0,
           })} %`}
@@ -1286,7 +1250,7 @@ function Trend({
                 width: '8px',
                 height: '8px',
                 borderRadius: '2px',
-                background: 'var(--accent-purple)',
+                background: 'var(--accent-ink)',
                 display: 'inline-block',
               }}
             />
@@ -1341,7 +1305,7 @@ function Trend({
               style={{
                 flex: 1,
                 height: `${(p.cost / max) * 100}%`,
-                background: 'var(--accent-purple)',
+                background: 'var(--accent-ink)',
                 borderRadius: '1px 1px 0 0',
                 minHeight: p.cost > 0 ? '1px' : 0,
               }}
@@ -1488,7 +1452,7 @@ function MetricPicker({
                           on ? current.filter((n) => n !== a.name) : [...current, a.name]
                         )
                       }
-                      style={{ marginTop: '2px', accentColor: 'var(--accent-purple)' }}
+                      style={{ marginTop: '2px', accentColor: 'var(--accent-ink)' }}
                     />
                     <span style={{ minWidth: 0 }}>
                       <span
@@ -1759,7 +1723,7 @@ function TriChoice({
             className="wl-pill"
             style={{
               cursor: 'pointer',
-              background: value === opt ? 'var(--accent-purple)' : 'transparent',
+              background: value === opt ? 'var(--accent-ink)' : 'transparent',
               color: value === opt ? '#fff' : 'var(--ink-muted)',
               border: value === opt ? 'none' : '1px solid var(--hairline)',
             }}
@@ -1782,7 +1746,7 @@ const linkButton: React.CSSProperties = {
   border: 'none',
   padding: 0,
   font: 'inherit',
-  color: 'var(--accent-purple)',
+  color: 'var(--accent-ink)',
   cursor: 'pointer',
 }
 

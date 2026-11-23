@@ -70,7 +70,6 @@ export default async function GoogleAdsPage({
     return (
       <GoogleAdsClient
         feedId={feedId}
-        feedName={feed.name}
         days={days}
         windows={WINDOWS}
         connected={false}
@@ -179,7 +178,6 @@ export default async function GoogleAdsPage({
   return (
     <GoogleAdsClient
       feedId={feedId}
-      feedName={feed.name}
       days={days}
       windows={WINDOWS}
       connected
