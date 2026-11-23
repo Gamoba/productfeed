@@ -51,13 +51,11 @@ export default async function CampaignsPage({
 
   if (!settings?.customer_id) {
     return (
-      <Shell feedName={feed.name}>
-        <Empty
-          title="Not connected to Google Ads"
-          body="Campaign figures come from the same sync as the product table, so the feed needs a connection and at least one fetch first."
-          action={{ href: `/feed/${feedId}/google-ads`, label: 'Go to Performance →' }}
-        />
-      </Shell>
+      <Empty
+        title="Feedet er ikke koblet til Google Ads"
+        body="Kampagnetallene kommer fra samme synkronisering som Performance, så feedet skal have en forbindelse og mindst én hentning først."
+        action={{ href: `/feed/${feedId}/google-ads`, label: 'Gå til Performance' }}
+      />
     )
   }
 
@@ -103,8 +101,7 @@ export default async function CampaignsPage({
   }
 
   return (
-    <Shell feedName={feed.name}>
-      <CampaignsClient
+    <CampaignsClient
         feedId={feedId}
         days={days}
         windows={WINDOWS}
@@ -126,22 +123,10 @@ export default async function CampaignsPage({
         to={to}
         lastSyncedAt={settings.last_synced_at}
       />
-    </Shell>
   )
 }
 
 // ── pieces ───────────────────────────────────────────────────────────────────
-
-function Shell({ feedName, children }: { feedName: string; children: React.ReactNode }) {
-  return (
-    <div className="min-h-screen" style={{ background: 'var(--bg-base)' }}>
-      <main className="mx-auto px-6 py-9 space-y-6" style={{ maxWidth: '1800px' }}>
-        <div className="wl-eyebrow truncate">{feedName}</div>
-        {children}
-      </main>
-    </div>
-  )
-}
 
 function Empty({
   title,
@@ -153,16 +138,14 @@ function Empty({
   action?: { href: string; label: string }
 }) {
   return (
-    <div className="wl-card" style={{ padding: '40px' }}>
-      <div className="max-w-xl space-y-3">
-        <h2 style={{ fontSize: '20px', fontWeight: 500, color: 'var(--ink)' }}>{title}</h2>
-        <p style={{ fontSize: '15px', lineHeight: 1.6, color: 'var(--ink-secondary)' }}>{body}</p>
-        {action && (
-          <Link href={action.href} className="wl-btn-primary inline-block">
-            {action.label}
-          </Link>
-        )}
-      </div>
-    </div>
+    <section className="card" style={{ alignItems: 'flex-start' }}>
+      <h3 style={{ fontSize: '14px', fontWeight: 500, margin: 0 }}>{title}</h3>
+      <p style={{ fontSize: '13px', color: 'var(--muted)', margin: 0, maxWidth: '70ch' }}>{body}</p>
+      {action && (
+        <Link href={action.href} className="wl-btn-primary">
+          {action.label}
+        </Link>
+      )}
+    </section>
   )
 }
