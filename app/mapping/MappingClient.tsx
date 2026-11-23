@@ -2973,7 +2973,7 @@ function CustomFieldsSection({
       <div className="mp-group-h mp-static">
         <span className="mp-group-t">
           <b>Custom fields</b>
-          <small>Felter uden for Google-standarden. De skrives i feedet uden g:-præfiks.</small>
+          <small>Felter uden for Google-standarden, skrevet i feedet med det navn, du giver dem.</small>
         </span>
         <span className="mp-count">{mappedCount}/{customFields.length} mappet</span>
       </div>
