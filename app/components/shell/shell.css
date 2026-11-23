@@ -194,3 +194,11 @@
   .shell-menu { animation: none; }
   .shell-chev { transition: none; }
 }
+
+/* channel icon (also used outside the shell) */
+.ch-icon {
+  display: inline-grid; place-items: center; flex: none;
+  border-radius: 6px; color: #fff; font-weight: 700; line-height: 1;
+}
+.shell-feedcard .ch-icon { width: 30px !important; height: 30px !important; border-radius: 9px; font-size: 13px !important; }
+.shell-menu-sub { display: block; font-size: 11px; color: var(--muted); }

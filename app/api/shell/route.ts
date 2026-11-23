@@ -3,6 +3,7 @@ import { createSupabaseServerClient } from '@/lib/supabase-server'
 import { adminDb } from '@/lib/feeds'
 import { getMemberships } from '@/lib/accounts'
 import { errorResponse } from '@/lib/errors'
+import { channelOf, type ChannelId } from '@/lib/channels'
 
 // GET /api/shell — the small, cheap data set the app shell (sidebar, breadcrumbs,
 // switchers, user menu) needs on every page: who the user is, their accounts,
@@ -11,7 +12,7 @@ export type ShellData = {
   user: { email: string; name: string }
   accounts: { id: string; name: string; role: 'owner' | 'admin' | 'member' }[]
   projects: { id: string; accountId: string; name: string; shopUrl: string | null }[]
-  feeds: { id: string; name: string; projectId: string; country: string | null }[]
+  feeds: { id: string; name: string; projectId: string; channel: ChannelId; country: string | null }[]
 }
 
 export async function GET() {
@@ -56,11 +57,11 @@ export async function GET() {
     if (projectIds.length) {
       const { data: feedRows, error: feedErr } = await db
         .from('feeds')
-        .select('id, name, project_id')
+        .select('id, name, project_id, channel')
         .in('project_id', projectIds)
         .order('created_at', { ascending: true })
       if (feedErr) throw feedErr
-      const rows = (feedRows ?? []) as { id: string; name: string; project_id: string }[]
+      const rows = (feedRows ?? []) as { id: string; name: string; project_id: string; channel: string }[]
 
       // The feed's market (country) for the flag. Lives in shop_settings today.
       const country = new Map<string, string | null>()
@@ -78,6 +79,7 @@ export async function GET() {
         id: r.id,
         name: r.name,
         projectId: r.project_id,
+        channel: channelOf(r.channel).id,
         country: country.get(r.id) ?? null,
       }))
     }

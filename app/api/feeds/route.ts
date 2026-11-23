@@ -4,6 +4,7 @@ import { adminDb, getOwnedProject } from '@/lib/feeds'
 import { getAccessibleProjectIds } from '@/lib/accounts'
 import { errorResponse } from '@/lib/errors'
 import type { ValidationIssue } from '@/lib/feedValidator'
+import { channelAvailability, isChannelId, type ChannelId } from '@/lib/channels'
 
 export async function GET(req: Request) {
   const supabase = await createSupabaseServerClient()
@@ -29,7 +30,7 @@ export async function GET(req: Request) {
 
   const feedsQuery = db
     .from('feeds')
-    .select('id, name, description, project_id, created_at, updated_at, last_synced_at')
+    .select('id, name, description, project_id, channel, created_at, updated_at, last_synced_at')
     .in('project_id', projectIds)
 
   const { data: feeds, error: feedsErr } = await feedsQuery.order('created_at', {
@@ -107,6 +108,7 @@ export async function GET(req: Request) {
       name: f.name,
       description: f.description,
       project_id: f.project_id,
+      channel: f.channel as ChannelId,
       created_at: f.created_at,
       updated_at: f.updated_at,
       productCount: productCount.get(f.id) ?? 0,
@@ -136,9 +138,23 @@ export async function POST(req: Request) {
     name?: string
     description?: string
     project_id?: string
+    // Which channel the feed is for (lib/channels.ts). Defaults to Google
+    // Shopping, which is what every feed was before channels existed.
+    channel?: string
+    // The market's country, when known, to check the channel may be used there.
+    country?: string | null
   }
   const name = (body.name ?? '').trim()
   if (!name) return NextResponse.json({ error: 'Name is required' }, { status: 400 })
+
+  const channel = body.channel ?? 'google_shopping'
+  if (!isChannelId(channel)) {
+    return NextResponse.json({ error: 'Ukendt kanal' }, { status: 400 })
+  }
+  const availability = channelAvailability(channel, body.country)
+  if (!availability.available) {
+    return NextResponse.json({ error: availability.reason }, { status: 400 })
+  }
 
   // A feed hangs on a project — project_id is required and must be owned.
   if (!body.project_id) {
@@ -156,8 +172,9 @@ export async function POST(req: Request) {
       name,
       description: body.description?.trim() || null,
       project_id: projectId,
+      channel,
     })
-    .select('id, name, description, project_id, created_at, updated_at')
+    .select('id, name, description, project_id, channel, created_at, updated_at')
     .single()
 
   if (error) return errorResponse(error, 'POST /api/feeds')

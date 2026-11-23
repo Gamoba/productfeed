@@ -5,6 +5,7 @@ import { useEffect, useRef, useState } from 'react'
 import type { ValidationIssue } from '@/lib/feedValidator'
 import { staleSyncDays } from '@/lib/syncSchedule'
 import { FeedWizardModal } from './FeedWizardModal'
+import { ChannelIcon } from '@/app/components/ChannelIcon'
 
 type ValidationStatus = 'ok' | 'warnings' | 'errors' | null
 
@@ -12,6 +13,7 @@ type FeedSummary = {
   id: string
   name: string
   description: string | null
+  channel: string
   created_at: string
   updated_at: string
   productCount: number
@@ -184,6 +186,7 @@ function FeedCard({
       <div className="flex items-start justify-between gap-2" style={{ padding: '14px 16px' }}>
         <div className="min-w-0">
           <div className="flex items-center gap-1.5 min-w-0">
+            <ChannelIcon channel={feed.channel} />
             <div
               className="truncate"
               style={{ fontSize: '14px', fontWeight: 500, color: 'var(--ink)' }}

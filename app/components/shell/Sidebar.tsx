@@ -19,6 +19,8 @@ import {
   type NavLink,
 } from './nav'
 import { UserMenu } from './UserMenu'
+import { ChannelIcon } from '../ChannelIcon'
+import { channelOf } from '@/lib/channels'
 import type { Shell } from './useShell'
 
 export function navFor(shell: Shell): NavEntry[] {
@@ -67,10 +69,13 @@ export function Sidebar({ shell, pathname }: { shell: Shell; pathname: string })
             Tilbage til shop
           </Link>
           <Link href={`/feed/${level.feedId}`} className="shell-feedcard">
-            <span className="shell-flag">{flagEmoji(feed?.country) || '·'}</span>
+            <ChannelIcon channel={feed?.channel} />
             <span className="shell-ctx-text">
-              <b>Google Shopping</b>
-              <small>{feed ? `${feed.name} · du er inde på dette feed` : 'Indlæser feed'}</small>
+              <b>
+                {feed?.country && <span className="shell-flag-sm">{flagEmoji(feed.country)} </span>}
+                {feed ? channelOf(feed.channel).label : 'Indlæser feed'}
+              </b>
+              <small>{feed ? `${feed.name} · du er inde på dette feed` : ''}</small>
             </span>
           </Link>
         </>

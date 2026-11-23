@@ -577,3 +577,21 @@ body {
   border-radius: 50%;
   animation: ff-spin 0.6s linear infinite;
 }
+
+/* ── Shared primitives (Design B + Kobolt) ─────────────────────────────── */
+.note {
+  display: block; padding: 12px 14px; border-radius: var(--r-md);
+  background: var(--card-2); color: var(--card-fg); font-size: 12.5px; margin: 0;
+}
+.note.warn { background: var(--warn-bg); color: var(--warn); }
+.pill {
+  display: inline-flex; align-items: center; gap: 5px; white-space: nowrap;
+  padding: 3px 9px; border-radius: 999px; font-size: 12px; font-weight: 500;
+  background: var(--card-2); color: var(--muted);
+}
+.pill.good { background: var(--good-bg); color: var(--good); }
+.pill.warn, .pill.bad { background: var(--warn-bg); color: var(--warn); }
+.pill.dark { background: var(--dark); color: var(--dark-fg); }
+.pill.ai { background: var(--tint); color: var(--tint-fg); }
+.pos { color: var(--good); }
+.neg { color: var(--bad); font-weight: 500; }

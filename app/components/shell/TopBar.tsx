@@ -8,6 +8,8 @@ import { Popover } from './Popover'
 import { feedPageLabel, flagEmoji, isActive, samePageOnFeed, type NavLink } from './nav'
 import { navFor } from './Sidebar'
 import { UserMenu } from './UserMenu'
+import { ChannelIcon } from '../ChannelIcon'
+import { channelOf } from '@/lib/channels'
 import type { Shell } from './useShell'
 
 export function TopBar({ shell, pathname }: { shell: Shell; pathname: string }) {
@@ -85,7 +87,7 @@ function FeedSwitcher({ shell, pathname }: { shell: Shell; pathname: string }) {
       trigger={
         <>
           {feed?.country && <span className="shell-flag-sm">{flagEmoji(feed.country)}</span>}
-          <span>{feed?.name ?? 'Feed'}</span>
+          <span>{feed ? channelOf(feed.channel).label : 'Feed'}</span>
           {projectFeeds.length > 1 && <Icon name="chevron-down" size={12} />}
         </>
       }
@@ -103,8 +105,12 @@ function FeedSwitcher({ shell, pathname }: { shell: Shell; pathname: string }) {
               if (f.id !== level.feedId) router.push(samePageOnFeed(pathname, level.feedId, f.id))
             }}
           >
-            <span className="shell-flag-sm">{flagEmoji(f.country) || '·'}</span>
-            <span className="shell-grow">{f.name}</span>
+            <ChannelIcon channel={f.channel} size={20} />
+            <span className="shell-grow">
+              {f.country && <span className="shell-flag-sm">{flagEmoji(f.country)} </span>}
+              {channelOf(f.channel).label}
+              <small className="shell-menu-sub">{f.name}</small>
+            </span>
             {f.id === feed?.id && <Icon name="check" size={14} />}
           </button>
         ))

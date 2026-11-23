@@ -15,6 +15,8 @@ export type FeedRow = {
   name: string
   description: string | null
   project_id: string | null
+  // Which channel the feed is for (migration 053, lib/channels.ts).
+  channel: string
   created_at: string
   updated_at: string
 }

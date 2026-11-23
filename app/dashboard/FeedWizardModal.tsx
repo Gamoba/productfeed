@@ -5,38 +5,38 @@ import { useRouter } from 'next/navigation'
 import type { ShopifyMarket, ShopifyMarketLocale } from '@/lib/shopify'
 import { saveMappings, type MappingEntry } from '@/app/mapping/actions'
 import { getDefaultMappings } from '@/lib/defaultMappings'
+import { CHANNEL_IDS, CHANNELS, channelAvailability, type ChannelId } from '@/lib/channels'
+import { ChannelIcon } from '@/app/components/ChannelIcon'
 import { saveFeedMode } from './actions'
+import './FeedWizardModal.css'
 
-// ── Step constants ─────────────────────────────────────────────────────────
+// "Add new feed": a feed is one channel in one market (GUIDELINES §3).
+// Step 1 picks the market, step 2 the channel (filtered by the channel ×
+// country rules in lib/channels.ts), step 3 the name and structure.
 
 const STEPS = [
-  { id: 1, label: 'Name' },
-  { id: 2, label: 'Market & language' },
-  { id: 3, label: 'Feed mode' },
+  { id: 1, label: 'Marked' },
+  { id: 2, label: 'Kanal' },
+  { id: 3, label: 'Navn' },
 ] as const
-
-// ── Main component ─────────────────────────────────────────────────────────
 
 export function FeedWizardModal({
   projectId,
+  initialMarketId,
   onClose,
 }: {
   projectId: string
+  // Preselect a market, e.g. when opened from that market's row on Feeds.
+  initialMarketId?: string
   onClose: () => void
 }) {
   const router = useRouter()
   const [step, setStep] = useState<number>(1)
 
-  // Step 1
-  const [name, setName] = useState('')
-  const [description, setDescription] = useState('')
-
-  // Step 2
+  // Step 1: market. Loaded once on open; feed-URL projects have no markets.
   const [markets, setMarkets] = useState<ShopifyMarket[]>([])
-  const [loadingMarkets, setLoadingMarkets] = useState(false)
+  const [loadingMarkets, setLoadingMarkets] = useState(true)
   const [marketsError, setMarketsError] = useState<string | null>(null)
-  // Set once markets have loaded: 'feed_url' projects have no markets to pick.
-  // Also stops the lazy-load effect from refetching when the list is empty.
   const [marketsSource, setMarketsSource] = useState<'shopify' | 'feed_url' | null>(null)
   const [marketId, setMarketId] = useState('')
   const [locale, setLocale] = useState('en')
@@ -44,29 +44,16 @@ export function FeedWizardModal({
   const [country, setCountry] = useState('')
   const [marketUrl, setMarketUrl] = useState<string | null>(null)
 
-  // Step 3
+  // Step 2: channel
+  const [channel, setChannel] = useState<ChannelId>('google_shopping')
+
+  // Step 3: name + structure
+  const [name, setName] = useState('')
+  const [description, setDescription] = useState('')
   const [feedMode, setFeedMode] = useState<'product' | 'variant'>('product')
 
-  // Submit
   const [submitting, setSubmitting] = useState(false)
   const [error, setError] = useState<string | null>(null)
-
-  // Lazy-load markets when the user actually reaches step 2.
-  useEffect(() => {
-    if (step !== 2 || marketsSource !== null || loadingMarkets || marketsError) return
-    setLoadingMarkets(true)
-    fetch(`/api/shopify/markets?projectId=${encodeURIComponent(projectId)}`)
-      .then((r) => r.json())
-      .then((d: { markets?: ShopifyMarket[]; source?: 'feed_url'; error?: string }) => {
-        if (d.error) throw new Error(d.error)
-        setMarkets(d.markets ?? [])
-        setMarketsSource(d.source ?? 'shopify')
-      })
-      .catch((e: unknown) =>
-        setMarketsError(e instanceof Error ? e.message : 'Could not fetch markets')
-      )
-      .finally(() => setLoadingMarkets(false))
-  }, [step, marketsSource, loadingMarkets, marketsError, projectId])
 
   function selectMarket(m: ShopifyMarket) {
     setMarketId(m.id)
@@ -76,6 +63,30 @@ export function FeedWizardModal({
     if (m.defaultLocale) setLocale(m.defaultLocale.locale)
   }
 
+  useEffect(() => {
+    let cancelled = false
+    fetch(`/api/shopify/markets?projectId=${encodeURIComponent(projectId)}`)
+      .then((r) => r.json())
+      .then((d: { markets?: ShopifyMarket[]; source?: 'feed_url'; error?: string }) => {
+        if (cancelled) return
+        if (d.error) throw new Error(d.error)
+        const list = d.markets ?? []
+        setMarkets(list)
+        setMarketsSource(d.source ?? 'shopify')
+        const preset = list.find((m) => m.id === initialMarketId)
+        if (preset) selectMarket(preset)
+      })
+      .catch((e: unknown) => {
+        if (!cancelled) setMarketsError(e instanceof Error ? e.message : 'Markederne kunne ikke hentes')
+      })
+      .finally(() => {
+        if (!cancelled) setLoadingMarkets(false)
+      })
+    return () => {
+      cancelled = true
+    }
+  }, [projectId, initialMarketId])
+
   const selectedMarket = markets.find((m) => m.id === marketId) ?? null
   const availableLocales: ShopifyMarketLocale[] = selectedMarket
     ? [
@@ -84,26 +95,36 @@ export function FeedWizardModal({
       ]
     : []
 
-  const canNext = step !== 1 || name.trim() !== ''
+  const channelOk = channelAvailability(channel, country).available
+  // A Shopify project must pick a market: the feed is for one market.
+  const needsMarket = marketsSource === 'shopify' && markets.length > 0
+  const canNext =
+    step === 1
+      ? !loadingMarkets && (!needsMarket || !!marketId)
+      : step === 2
+        ? channelOk
+        : name.trim() !== ''
   const isLast = step === 3
 
-  function next() {
-    if (!isLast) {
-      setStep((s) => Math.min(3, s + 1))
-    } else {
-      void submit()
-    }
+  function suggestedName(): string {
+    return [CHANNELS[channel].label, country].filter(Boolean).join(' · ')
   }
 
-  function back() {
-    setStep((s) => Math.max(1, s - 1))
+  function next() {
+    if (isLast) {
+      void submit()
+      return
+    }
+    if (step === 2 && !name.trim()) setName(suggestedName())
+    setStep((s) => Math.min(3, s + 1))
   }
 
   async function submit() {
     setSubmitting(true)
     setError(null)
     try {
-      // 1. Create the feed.
+      // 1. The feed, with its channel. The server checks the channel may be
+      //    used in the market's country.
       const feedRes = await fetch('/api/feeds', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
@@ -111,6 +132,8 @@ export function FeedWizardModal({
           name: name.trim(),
           description: description.trim(),
           project_id: projectId,
+          channel,
+          country: country || null,
         }),
       })
       const feedData = (await feedRes.json()) as { feed?: { id: string }; error?: string }
@@ -119,7 +142,7 @@ export function FeedWizardModal({
       }
       const feedId = feedData.feed.id
 
-      // 2. shop_settings — only when a market was actually selected.
+      // 2. The market (shop_settings), when one was chosen.
       if (marketId) {
         const settingsRes = await fetch('/api/settings', {
           method: 'POST',
@@ -133,92 +156,66 @@ export function FeedWizardModal({
             market_url: marketUrl,
           }),
         })
-        if (!settingsRes.ok) {
-          console.warn('shop_settings gem fejlede:', await settingsRes.text())
-        }
+        if (!settingsRes.ok) console.warn('shop_settings gem fejlede:', await settingsRes.text())
       }
 
-      // 3. feed_mode — always saved (we always have a value).
+      // 3. Feed mode.
       const modeResult = await saveFeedMode(feedId, feedMode)
       if (modeResult.error) console.warn('feed_mode gem fejlede:', modeResult.error)
 
-      // 4. Default mappings — wizard always seeds the feed with sensible
-      // mappings (id, title, description, link, image_link, availability,
-      // price, brand). The wizard has no mapping step today, so there's no
-      // user override to honour — saveMappings is invoked unconditionally.
+      // 4. Default mappings (id, title, description, link, image_link,
+      //    availability, price, brand).
       const defaults: MappingEntry[] = getDefaultMappings(feedMode)
       const mappingsResult = await saveMappings(feedId, defaults)
       if (mappingsResult.error) console.warn('default mappings gem fejlede:', mappingsResult.error)
 
-      // 5. Kick off sync in the background — fire-and-forget. The browser
-      // keeps the request alive across the soft navigation below, so the
-      // sync runs server-side while the user lands on the new feed page.
-      // The ?syncing=1 query param tells FeedClient to show a status banner.
-      void fetch(`/api/shopify/sync?feedId=${encodeURIComponent(feedId)}`, {
-        method: 'POST',
-      }).catch((err) => {
-        console.warn('sync kick-off fejlede:', err)
-      })
+      // 5. First sync, fire-and-forget; the feed page shows a banner meanwhile.
+      void fetch(`/api/shopify/sync?feedId=${encodeURIComponent(feedId)}`, { method: 'POST' }).catch(
+        (err) => console.warn('sync kick-off fejlede:', err)
+      )
 
       router.push(`/feed/${feedId}?syncing=1`)
     } catch (e) {
-      setError(e instanceof Error ? e.message : 'Could not create feed')
+      setError(e instanceof Error ? e.message : 'Feedet kunne ikke oprettes')
       setSubmitting(false)
     }
   }
 
   return (
-    <div
-      className="fixed inset-0 z-50 flex items-start justify-center pt-12 px-4"
-      onClick={onClose}
-    >
-      <div className="absolute inset-0" style={{ background: 'rgba(0,0,0,0.3)' }} />
+    <div className="fw-overlay" onClick={onClose}>
       <div
-        className="relative ff-panel w-full"
-        style={{ maxWidth: '600px', maxHeight: 'calc(100vh - 96px)', display: 'flex', flexDirection: 'column' }}
+        className="fw-dialog"
+        role="dialog"
+        aria-modal="true"
+        aria-labelledby="fw-title"
         onClick={(e) => e.stopPropagation()}
       >
-        <div
-          className="ff-panel-header"
-          style={{ textTransform: 'none', letterSpacing: 0, fontSize: '12px' }}
-        >
-          <span style={{ fontSize: '13px', fontWeight: 500, color: 'var(--color-text-primary)' }}>
-            Create new feed
-          </span>
-          <button
-            type="button"
-            onClick={onClose}
-            aria-label="Close"
-            style={{
-              fontSize: '16px',
-              lineHeight: 1,
-              color: 'var(--color-text-tertiary)',
-              background: 'transparent',
-              border: 'none',
-              cursor: 'pointer',
-              padding: '2px 6px',
-            }}
-          >
+        <div className="fw-head">
+          <div>
+            <h2 id="fw-title">Nyt feed</h2>
+            <p>Et feed er én kanal i ét marked.</p>
+          </div>
+          <button type="button" onClick={onClose} aria-label="Luk" className="fw-x">
             ×
           </button>
         </div>
 
-        <ProgressBar step={step} />
+        <ol className="fw-steps">
+          {STEPS.map((s) => (
+            <li
+              key={s.id}
+              className={s.id < step ? 'done' : undefined}
+              aria-current={s.id === step ? 'step' : undefined}
+            >
+              <i>{s.id < step ? '✓' : s.id}</i>
+              {s.label}
+            </li>
+          ))}
+        </ol>
 
-        <div
-          className="px-3.5 py-3.5"
-          style={{ flex: 1, overflowY: 'auto', minHeight: '320px' }}
-        >
+        <div className="fw-body">
           {step === 1 && (
-            <Step1Name
-              name={name}
-              description={description}
-              onName={setName}
-              onDescription={setDescription}
-            />
-          )}
-          {step === 2 && (
-            <Step2Market
+            <StepMarket
               markets={markets}
               loading={loadingMarkets}
               error={marketsError}
@@ -227,159 +224,49 @@ export function FeedWizardModal({
               locale={locale}
               currency={currency}
               availableLocales={availableLocales}
+              selectedMarket={selectedMarket}
               onSelectMarket={selectMarket}
               onLocale={setLocale}
-              selectedMarket={selectedMarket}
             />
           )}
-          {step === 3 && <Step3Mode mode={feedMode} onMode={setFeedMode} />}
-
-          {error && (
-            <p
-              className="mt-3"
-              style={{ fontSize: '11px', color: 'var(--color-badge-danger-text)' }}
-            >
-              {error}
-            </p>
+          {step === 2 && <StepChannel channel={channel} country={country} onChannel={setChannel} />}
+          {step === 3 && (
+            <StepName
+              name={name}
+              description={description}
+              mode={feedMode}
+              onName={setName}
+              onDescription={setDescription}
+              onMode={setFeedMode}
+            />
           )}
+          {error && <p className="fw-error">{error}</p>}
         </div>
 
-        <div
-          className="px-3.5 py-3 flex items-center justify-between gap-2"
-          style={{ borderTop: '1px solid var(--color-border-tertiary)' }}
-        >
-          <div>
-            {step > 1 && (
-              <button
-                type="button"
-                onClick={back}
-                disabled={submitting}
-                className="ff-btn-secondary"
-              >
-                Back
-              </button>
-            )}
-          </div>
-          <div className="flex items-center gap-2">
+        <div className="fw-foot">
+          <span className="fw-foot-note">Trin {step} af 3</span>
+          {step > 1 && (
             <button
               type="button"
-              onClick={next}
-              disabled={!canNext || submitting}
-              className="ff-btn-primary"
+              onClick={() => setStep((s) => Math.max(1, s - 1))}
+              disabled={submitting}
+              className="ff-btn-secondary"
             >
-              {submitting ? 'Creating…' : isLast ? 'Create feed' : 'Next'}
+              Tilbage
             </button>
-          </div>
+          )}
+          <button type="button" onClick={next} disabled={!canNext || submitting} className="ff-btn-primary">
+            {submitting ? 'Opretter…' : isLast ? 'Opret feed' : 'Videre'}
+          </button>
         </div>
       </div>
     </div>
   )
 }
 
-// ── ProgressBar ────────────────────────────────────────────────────────────
+// ── Step 1: market ──────────────────────────────────────────────────────────
 
-function ProgressBar({ step }: { step: number }) {
-  return (
-    <div
-      className="px-3.5 py-2.5 flex items-center gap-2"
-      style={{ borderBottom: '1px solid var(--color-border-tertiary)' }}
-    >
-      {STEPS.map((s, i) => {
-        const isActive = s.id === step
-        const isDone = s.id < step
-        return (
-          <div key={s.id} className="flex items-center gap-2 flex-1 min-w-0">
-            <div
-              className="shrink-0 inline-flex items-center justify-center"
-              style={{
-                width: '20px',
-                height: '20px',
-                borderRadius: '50%',
-                background:
-                  isActive || isDone ? 'var(--color-accent)' : 'var(--color-background-secondary)',
-                color: isActive || isDone ? '#ffffff' : 'var(--color-text-tertiary)',
-                fontSize: '10px',
-                fontWeight: 600,
-              }}
-            >
-              {isDone ? '✓' : s.id}
-            </div>
-            <span
-              className="truncate"
-              style={{
-                fontSize: '11px',
-                fontWeight: isActive ? 600 : 400,
-                color: isActive
-                  ? 'var(--color-text-primary)'
-                  : isDone
-                    ? 'var(--color-text-secondary)'
-                    : 'var(--color-text-tertiary)',
-              }}
-            >
-              {s.label}
-            </span>
-            {i < STEPS.length - 1 && (
-              <div
-                className="shrink-0"
-                style={{
-                  height: '1px',
-                  flex: 1,
-                  background: isDone ? 'var(--color-accent)' : 'var(--color-border-tertiary)',
-                }}
-              />
-            )}
-          </div>
-        )
-      })}
-    </div>
-  )
-}
-
-// ── Step 1: Name + description ─────────────────────────────────────────────
-
-function Step1Name({
-  name,
-  description,
-  onName,
-  onDescription,
-}: {
-  name: string
-  description: string
-  onName: (s: string) => void
-  onDescription: (s: string) => void
-}) {
-  return (
-    <div className="space-y-3">
-      <div>
-        <label className="ff-label block mb-1.5">Name</label>
-        <input
-          type="text"
-          value={name}
-          onChange={(e) => onName(e.target.value)}
-          placeholder="e.g. Main feed US"
-          autoFocus
-          className="ff-input"
-          required
-        />
-      </div>
-      <div>
-        <label className="ff-label block mb-1.5">Description (optional)</label>
-        <textarea
-          value={description}
-          onChange={(e) => onDescription(e.target.value)}
-          placeholder="Short description — e.g. which market this feed targets"
-          rows={3}
-          className="ff-input"
-          style={{ resize: 'none' }}
-        />
-      </div>
-    </div>
-  )
-}
-
-// ── Step 2: Market + locale ────────────────────────────────────────────────
-
-function Step2Market({
+function StepMarket({
   markets,
   loading,
   error,
@@ -405,98 +292,76 @@ function Step2Market({
   onLocale: (s: string) => void
 }) {
   return (
-    <div className="space-y-3">
-      <p style={{ fontSize: '11px', color: 'var(--color-text-tertiary)' }}>
-        Choose which Shopify market this feed should use — it controls currency, language and
-        country pricing. You can always change it later.
+    <div className="fw-stack">
+      <p className="fw-lede">
+        Hvilket marked er feedet til? Markedet styrer land, sprog, valuta og priser.
       </p>
 
-      {loading && (
-        <div
-          className="flex items-center gap-2"
-          style={{ fontSize: '12px', color: 'var(--color-text-tertiary)' }}
-        >
-          <svg className="w-3.5 h-3.5 animate-spin" fill="none" viewBox="0 0 24 24">
-            <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4" />
-            <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8v8H4z" />
-          </svg>
-          Loading markets from Shopify…
-        </div>
-      )}
-
-      {error && (
-        <div
-          className="p-2.5"
-          style={{
-            background: 'var(--color-badge-danger-bg)',
-            border: '1px solid var(--color-badge-danger-text)',
-            borderRadius: '4px',
-          }}
-        >
-          <p style={{ fontSize: '11px', color: 'var(--color-badge-danger-text)' }}>{error}</p>
-        </div>
-      )}
+      {loading && <p className="fw-muted">Henter markeder fra Shopify…</p>}
+      {error && <p className="note warn">{error}</p>}
 
       {!loading && !error && fromFeedUrl && (
-        <p style={{ fontSize: '12px', color: 'var(--color-text-secondary)' }}>
-          This project imports products from a feed URL. Language and currency come from that
-          feed, so there is nothing to choose here — continue to the next step.
+        <p className="note">
+          Shoppen henter varer fra en feed-URL. Sprog og valuta kommer fra det feed, så der er
+          intet marked at vælge. Gå videre til kanal.
         </p>
       )}
-
       {!loading && !error && !fromFeedUrl && markets.length === 0 && (
-        <p style={{ fontSize: '12px', color: 'var(--color-text-tertiary)' }}>
-          No markets found — you can still create the feed and set it up later.
-        </p>
+        <p className="note">Shoppen har ingen markeder. Du kan stadig oprette feedet.</p>
       )}
 
       {markets.length > 0 && (
-        <div className="space-y-2">
-          {markets.map((market) => (
-            <MarketCard
-              key={market.id}
-              market={market}
-              selected={marketId === market.id}
-              onSelect={() => onSelectMarket(market)}
-            />
-          ))}
+        <div className="fw-options" role="radiogroup" aria-label="Marked">
+          {markets.map((m) => {
+            const locales = [...(m.defaultLocale ? [m.defaultLocale] : []), ...m.alternateLocales]
+            const selected = marketId === m.id
+            return (
+              <button
+                key={m.id}
+                type="button"
+                role="radio"
+                aria-checked={selected}
+                className="fw-option"
+                onClick={() => onSelectMarket(m)}
+              >
+                <span className="fw-option-main">
+                  <b>{m.name}</b>
+                  <small>
+                    {[
+                      m.countryCodes.slice(0, 4).join(', ') + (m.countryCodes.length > 4 ? ' …' : ''),
+                      m.currency,
+                      locales.map((l) => l.locale).join(', '),
+                    ]
+                      .filter(Boolean)
+                      .join(' · ')}
+                  </small>
+                </span>
+                {m.type === 'PRIMARY' && <span className="pill">Primært</span>}
+                {m.status !== 'ACTIVE' && <span className="pill">Kladde</span>}
+              </button>
+            )
+          })}
         </div>
       )}
 
       {selectedMarket && availableLocales.length > 0 && (
-        <div className="grid grid-cols-2 gap-3 pt-1">
-          <div>
-            <label className="ff-label block mb-1.5">Language</label>
-            <select
-              value={locale}
-              onChange={(e) => onLocale(e.target.value)}
-              className="ff-select"
-            >
+        <div className="fw-row">
+          <label className="fw-field">
+            <span>Sprog</span>
+            <select value={locale} onChange={(e) => onLocale(e.target.value)} className="ff-select">
               {availableLocales.map((l) => (
                 <option key={l.locale} value={l.locale}>
-                  {l.name} ({l.locale}){l.primary ? ' — default' : ''}
+                  {l.name} ({l.locale}){l.primary ? ', standard' : ''}
                 </option>
               ))}
             </select>
-          </div>
-          <div className="flex flex-col justify-end">
-            <div
-              className="px-3 py-2"
-              style={{
-                background: 'var(--color-background-secondary)',
-                border: '1px solid var(--color-border-tertiary)',
-                borderRadius: '4px',
-              }}
-            >
-              <p className="ff-label">Currency</p>
-              <p
-                className="mt-0.5"
-                style={{ fontSize: '12px', fontWeight: 500, color: 'var(--color-text-primary)' }}
-              >
-                {currency}
-                {selectedMarket.currencyName ? ` — ${selectedMarket.currencyName}` : ''}
-              </p>
-            </div>
+          </label>
+          <div className="fw-field">
+            <span>Valuta</span>
+            <p className="fw-static">
+              {currency}
+              {selectedMarket.currencyName ? ` · ${selectedMarket.currencyName}` : ''}
+            </p>
           </div>
         </div>
       )}
@@ -504,159 +369,121 @@ function Step2Market({
   )
 }
 
-function MarketCard({
-  market,
-  selected,
-  onSelect,
-}: {
-  market: ShopifyMarket
-  selected: boolean
-  onSelect: () => void
-}) {
-  const allLocales = [
-    ...(market.defaultLocale ? [market.defaultLocale] : []),
-    ...market.alternateLocales,
-  ]
-  const isPrimary = market.type === 'PRIMARY'
-  const isActive = market.status === 'ACTIVE'
-  return (
-    <label
-      className="flex items-start gap-2.5 p-3 cursor-pointer transition-colors"
-      style={{
-        background: selected ? 'var(--color-badge-accent-bg)' : '#ffffff',
-        border: `1px solid ${selected ? 'var(--color-accent)' : 'var(--color-border-tertiary)'}`,
-        borderRadius: '6px',
-      }}
-    >
-      <input
-        type="radio"
-        checked={selected}
-        onChange={onSelect}
-        className="mt-0.5 shrink-0"
-        style={{ accentColor: '#6c5ce7' }}
-      />
-      <div className="flex-1 min-w-0">
-        <div className="flex items-center gap-2 flex-wrap">
-          <span style={{ fontSize: '12px', fontWeight: 500, color: 'var(--color-text-primary)' }}>
-            {market.name}
-          </span>
-          {isPrimary && <span className="ff-badge ff-badge-accent">Primary</span>}
-          {!isActive && <span className="ff-badge ff-badge-neutral">Draft</span>}
-        </div>
-        <div
-          className="mt-1 flex flex-wrap gap-x-3 gap-y-0.5"
-          style={{ fontSize: '11px', color: 'var(--color-text-tertiary)' }}
-        >
-          <span>
-            <span style={{ fontWeight: 500, color: 'var(--color-text-secondary)' }}>Currency:</span>{' '}
-            {market.currency}
-            {market.currencyName ? ` — ${market.currencyName}` : ''}
-          </span>
-          {allLocales.length > 0 && (
-            <span>
-              <span style={{ fontWeight: 500, color: 'var(--color-text-secondary)' }}>Languages:</span>{' '}
-              {allLocales.map((l) => l.locale).join(', ')}
-            </span>
-          )}
-        </div>
-      </div>
-    </label>
-  )
-}
+// ── Step 2: channel ─────────────────────────────────────────────────────────
 
-// ── Step 3: Feed mode ──────────────────────────────────────────────────────
-
-function Step3Mode({
-  mode,
-  onMode,
+function StepChannel({
+  channel,
+  country,
+  onChannel,
 }: {
-  mode: 'product' | 'variant'
-  onMode: (m: 'product' | 'variant') => void
+  channel: ChannelId
+  country: string
+  onChannel: (c: ChannelId) => void
 }) {
   return (
-    <div className="space-y-3">
-      <p style={{ fontSize: '11px', color: 'var(--color-text-tertiary)' }}>
-        Choose how the feed should be structured. You can always change it later.
+    <div className="fw-stack">
+      <p className="fw-lede">
+        Hvor skal feedet bruges?{country ? ` Viser hvad der kan bruges i ${country}.` : ''}
       </p>
-      <div className="grid grid-cols-2 gap-3">
-        <ModeCard
-          selected={mode === 'product'}
-          title="Product"
-          description="One feed item per product. Uses the first variant's data."
-          onClick={() => onMode('product')}
-        />
-        <ModeCard
-          selected={mode === 'variant'}
-          title="Variant"
-          description="One feed item per variant. Groups variants with item_group_id."
-          onClick={() => onMode('variant')}
-        />
+      <div className="fw-options" role="radiogroup" aria-label="Kanal">
+        {CHANNEL_IDS.map((id) => {
+          const c = CHANNELS[id]
+          const avail = channelAvailability(id, country)
+          return (
+            <button
+              key={id}
+              type="button"
+              role="radio"
+              aria-checked={channel === id}
+              disabled={!avail.available}
+              className="fw-option"
+              onClick={() => onChannel(id)}
+            >
+              <ChannelIcon channel={id} size={28} />
+              <span className="fw-option-main">
+                <b>{c.label}</b>
+                <small className={avail.available ? undefined : 'neg'}>
+                  {avail.available ? c.description : avail.reason}
+                </small>
+              </span>
+            </button>
+          )
+        })}
       </div>
     </div>
   )
 }
 
-function ModeCard({
-  selected,
-  title,
+// ── Step 3: name + structure ────────────────────────────────────────────────
+
+function StepName({
+  name,
   description,
-  onClick,
+  mode,
+  onName,
+  onDescription,
+  onMode,
 }: {
-  selected: boolean
-  title: string
+  name: string
   description: string
-  onClick: () => void
+  mode: 'product' | 'variant'
+  onName: (s: string) => void
+  onDescription: (s: string) => void
+  onMode: (m: 'product' | 'variant') => void
 }) {
   return (
-    <button
-      type="button"
-      onClick={onClick}
-      className="text-left p-4 transition-colors"
-      style={{
-        background: selected ? 'var(--color-badge-accent-bg)' : '#ffffff',
-        border: `1px solid ${selected ? 'var(--color-accent)' : 'var(--color-border-tertiary)'}`,
-        borderRadius: '6px',
-        cursor: 'pointer',
-      }}
-    >
-      <div className="flex items-center gap-2 mb-1.5">
-        <span
-          className="inline-flex items-center justify-center shrink-0"
-          style={{
-            width: '14px',
-            height: '14px',
-            borderRadius: '50%',
-            border: `2px solid ${selected ? 'var(--color-accent)' : 'var(--color-border-secondary)'}`,
-            background: selected ? 'var(--color-accent)' : 'transparent',
-          }}
-        >
-          {selected && (
-            <span
-              style={{
-                width: '4px',
-                height: '4px',
-                borderRadius: '50%',
-                background: '#ffffff',
-              }}
-            />
-          )}
-        </span>
-        <span
-          style={{
-            fontSize: '13px',
-            fontWeight: 600,
-            color: 'var(--color-text-primary)',
-            textTransform: 'uppercase',
-            letterSpacing: '0.04em',
-          }}
-        >
-          {title}
-        </span>
+    <div className="fw-stack">
+      <label className="fw-field">
+        <span>Navn</span>
+        <input
+          type="text"
+          value={name}
+          onChange={(e) => onName(e.target.value)}
+          autoFocus
+          className="ff-input"
+          required
+        />
+      </label>
+      <label className="fw-field">
+        <span>Beskrivelse (valgfri)</span>
+        <textarea
+          value={description}
+          onChange={(e) => onDescription(e.target.value)}
+          rows={2}
+          className="ff-input"
+          style={{ resize: 'none' }}
+        />
+      </label>
+      <div className="fw-field">
+        <span>Opbygning</span>
+        <div className="fw-options fw-options-2" role="radiogroup" aria-label="Opbygning">
+          <button
+            type="button"
+            role="radio"
+            aria-checked={mode === 'product'}
+            className="fw-option"
+            onClick={() => onMode('product')}
+          >
+            <span className="fw-option-main">
+              <b>Pr. vare</b>
+              <small>Én linje pr. vare. Bruger den første variants data.</small>
+            </span>
+          </button>
+          <button
+            type="button"
+            role="radio"
+            aria-checked={mode === 'variant'}
+            className="fw-option"
+            onClick={() => onMode('variant')}
+          >
+            <span className="fw-option-main">
+              <b>Pr. variant</b>
+              <small>Én linje pr. variant, samlet med item_group_id.</small>
+            </span>
+          </button>
+        </div>
       </div>
-      <p style={{ fontSize: '11px', color: 'var(--color-text-secondary)', lineHeight: 1.5 }}>
-        {description}
-      </p>
-    </button>
+      <p className="fw-muted">Kanalen ligger fast. Navn, marked og opbygning kan ændres bagefter.</p>
+    </div>
   )
 }
-
