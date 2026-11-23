@@ -1,0 +1,441 @@
+# Raw transcript: gennemgang feed tool kompara.mp4 (16:56)
+# Auto-transcribed with Whisper large-v3 (Danish). Unedited: expect mis-heard words (e.g. 'beat' = feed, 'shotgun' = Shopify, 'Dasico' = Daisycon, 'MediCatalog' = Meta Catalog). Lines 12:47-13:12 are a Whisper repetition artifact.
+
+[00:00] Det her er designet, som vi gerne vil have kørt ind på FIT-tuglen.
+[00:07] Og der er en del flere elementer, som ikke er der lige nu.
+[00:10] Det kan også være, at jeg lige skal åbne den anden op, så vi har begge to at kigge på.
+[00:13] Den hedder Rank Climber.
+[00:18] Okay.
+[00:19] Det er en lille intro til, hvordan Rank Climber er i dag.
+[00:22] Man tror, at det fungerer stadig.
+[00:26] Det her niveau hedder Projects.
+[00:29] Men det er et projekt, der er svaret til en shotgun connection.
+[00:33] Og vi kan klikke ind på den her for eksempel.
+[00:39] Så har vi på...
+[00:44] De har skabt et beat, så der ligger beats herinde.
+[00:47] Og her har vi så niveauet, hvor man går ned i et beat.
+[00:54] Det er sådan de tre niveauer, vi kører på.
+[00:56] Det er mere relevant at se mere herinde på.
+[01:00] Det vi skal have nu, det er...
+[01:03] Vi har et niveau.
+[01:10] Det er et egentlig sjovt niveau.
+[01:11] Hvor man kan køre på, hvilken hjemmeside, der er connectet til.
+[01:18] Så vi har et overblik her.
+[01:21] Så har vi så også...
+[01:24] Skal vi se...
+[01:25] Ja, der er nogle forskellige views i forhold til performance på det.
+[01:28] Men overhovedet set, så er det det samme.
+[01:31] Så er der bare de her ting, vi selvfølgelig skal køre til.
+[01:33] Så er der sådan noget, der hedder CSS.
+[01:35] Det er noget helt andet, det har vi selvfølgelig ikke med ind endnu.
+[01:37] Men det fungerer heller ikke, når vi skal først have...
+[01:40] Løbet af samarbejdet med Firemuse.
+[01:42] Så det her, det skal man bare vente med.
+[01:44] Okay.
+[01:45] CSS venter vi med.
+[01:46] CSS venter vi med.
+[01:47] Det her, det tænker jeg, det er fint.
+[01:49] Ja, det kan man jo bare se, hvad der er med inde på.
+[01:51] Og nu kalder de det her for Agency.
+[01:54] Det her, det hedder kun Agency, fordi nu er der nogle andre ord, der skal ind.
+[01:58] Men det her, det er jo egentlig bare et login.
+[02:00] Ja.
+[02:01] Altså, du kunne godt have bare et login og sådan noget.
+[02:03] En normal bruger.
+[02:04] Jo.
+[02:06] Parameterne her, dem tænker jeg, dem skal vi kunne styre et eller andet sted.
+[02:09] Ja.
+[02:10] Hvor mange bruger eller med nogle pakker eller et eller andet.
+[02:13] Yes.
+[02:14] Vi ved da ikke lige helt, hvordan endnu.
+[02:15] Ja, så bare lige, så er jeg med på den der.
+[02:18] Lad os sige, at vi er lukket ind som...
+[02:21] Hvad hedder det nu?
+[02:22] Ja.
+[02:23] Så vil de have den der profil med Agency Users.
+[02:26] Vi vil ikke kunne se nødvendigvis det der.
+[02:29] De ser dem.
+[02:30] Nej.
+[02:31] Det er deres bruger.
+[02:32] Det er deres bruger.
+[02:33] Yes, lige præcis.
+[02:35] Så kan de så oprejse kun det.
+[02:36] Jeg tror ikke, de har lavet noget til det her endnu.
+[02:38] Men det skal selvfølgelig kunne virke.
+[02:39] Ja.
+[02:40] Hvor man kan tilføje dem.
+[02:41] Men ellers så...
+[02:42] Man kan sige lidt ligesom, det fungerer ikke på vores lige nu.
+[02:43] Præcis.
+[02:44] Ja.
+[02:45] Så er forskellen bare her, at vi kører på vores Shop Project niveau.
+[02:50] Og så bagefter, så har vi Bid niveau.
+[02:53] Det her det er også Bid niveau.
+[02:55] Men forskellen herfra til den anden der.
+[02:57] Vores Bid niveau før, det var stadig kun på Google.
+[03:02] Men på sprog.
+[03:04] Så hvis jeg går herover igen.
+[03:05] Jeg har valgt Bottles for History nu.
+[03:10] Som Shop eller Project.
+[03:12] Okay.
+[03:13] Og det her det er de tre Bid, specifikt til Google.
+[03:14] Så det er forskellige sprog.
+[03:15] Hvilke vi nu connecter.
+[03:16] Altså på Markeds niveau.
+[03:17] Det skal vi også gå på den anden.
+[03:18] Men der kom et ekstra flag på.
+[03:19] Det er, at nu kan vi både lave...
+[03:20] Vi skal kunne lave Bid til Google Shopping.
+[03:21] Men vi skal også kunne lave Bid til andre ting.
+[03:22] Ja.
+[03:23] Så får vi lige pludselig to...
+[03:24] To parametre eller niveauer inde under Bid-niveauet.
+[03:25] Ja.
+[03:26] Hvis det giver mening.
+[03:27] Så man skal kunne vælge...
+[03:28] Man skal kunne vælge...
+[03:29] Man skal kunne vælge...
+[03:30] Man skal kunne vælge...
+[03:31] Man skal kunne vælge...
+[03:32] Man skal kunne vælge...
+[03:33] Så skal vi lige pludselig...
+[03:34] Så får vi lige pludselig to...
+[03:35] To parametre eller niveauer inde under Bid-niveauet.
+[03:36] Ja.
+[03:37] Hvis det giver mening.
+[03:38] Så man skal kunne vælge om det skal være Google eller om det skal være...
+[03:39] Okay, det er altså ikke så mange andre.
+[03:40] Ja.
+[03:41] Så den her.
+[03:42] Nu ved jeg ikke hvorfor der står Connect Shop her.
+[03:43] Men her der skulle det jo være...
+[03:44] At Bid.
+[03:45] Ja.
+[03:46] Hvis det var.
+[03:47] Så sidder I her.
+[03:48] Hvis det er en Markeds shop, en eller Markeds bog, så skal Markedsne bare ligge her.
+[03:49] Og så kan jeg sige, så har de egentlig sat et knap der.
+[03:50] At Bid.
+[03:51] Nu ved jeg ikke hvorfor den...
+[03:52] Hvis det var.
+[03:53] Ja.
+[04:07] Så skal den hoppe ud derinde.
+[04:08] Men så skal den kunne oprette en ny Bid.
+[04:09] Og så skal man kunne vælge...
+[04:10] Hvilken Bid type vil vi gerne tilføje nu?
+[04:11] Er det en Google Shopping?
+[04:12] Yes.
+[04:13] Er det en MediCatalog?
+[04:14] Er det en Dasico Bid?
+[04:15] Yes.
+[04:16] Okay.
+[04:17] Ja.
+[04:18] Eller Microsoft Ads kan jeg sige.
+[04:19] Eller Microsoft Ads.
+[04:20] Ja.
+[04:21] Lige præcis.
+[04:22] Så det skal man...
+[04:23] Og så kan man koppe den til et forskelligt marked af den måde.
+[04:24] Ja.
+[04:25] Igen, vi ignorerer alt det her CSS lige på nu.
+[04:26] Yes.
+[04:27] Så er der en regel her.
+[04:28] Den hedder...
+[04:29] Den hedder Masterfields.
+[04:30] Og det er...
+[04:33] Vi har vores egne...
+[04:34] Pre-defined labels, som man kan mappe data til.
+[04:40] Så vi har...
+[04:41] Det her det er vores felt.
+[04:47] Og det her, det er så...
+[04:51] Det er så logikken, hvordan vi hælder dataen fra deres sids til det her.
+[04:57] Yes.
+[04:58] Og ideen ved det her, det er, hvis nu man har...
+[04:59] Jeg skal bare sige et titel, ikke?
+[05:00] Hvis man har en eller anden sindssyg kommuniceret oudeholdning af det her.
+[05:04] Så i stedet for at lave samme kompliceret opstilling til hver ene beat, så kan du konfigurere den én gang, og så kan du bare referere til den her ene på mapping-niveau.
+[05:17] Så er det egentlig Masterpiece her.
+[05:24] Lad os vente med det her, synes jeg. Vi kan lige arbejde bare på beatsene her.
+[05:31] Men da vi har Masterpiece, så er det her så på feed-niveau.
+[05:39] Her har vi valgt et Google Shopping feed.
+[05:43] Vi har en overview-side, og det er jo som alternativ til den her side.
+[05:49] Så det er egentlig faktisk meget det samme data, stillet op på en anden måde.
+[05:56] Vi har vores products.
+[06:00] Og...
+[06:02] Det samme, ja.
+[06:04] Bare meget pænere.
+[06:07] Men ideen er det samme.
+[06:09] Ja, den har man så kunnet åbne op.
+[06:11] Altså over mappingen se den som eksempel.
+[06:14] Øhm...
+[06:16] Og...
+[06:18] Dem har vi noget af her.
+[06:20] Vi har noget filtrering på dem.
+[06:22] Måde at synkronisere igen.
+[06:24] Det kan være, man også lige skal kunne se, hvornår det sidst synkroniserede.
+[06:28] Og så endnu noget opsætning.
+[06:30] Det er så opsætning på selve feedet.
+[06:32] Og vi har selvfølgelig vores mapping.
+[06:34] Vi har vores mapping.
+[06:38] Og det er altså også samme logik som før.
+[06:41] Jeg tror måske den eneste ekstra ting, vi har fået på her, det er...
+[06:45] Skal vi se...
+[06:47] Lookup table.
+[06:48] Det tror jeg nemlig ikke, vi har på herovre.
+[06:50] Og vi har heller ikke den der label.
+[06:56] Den der.
+[06:59] Yes.
+[07:00] Jeg ved faktisk ikke helt, hvad den er.
+[07:02] Det er noget mindre af et artefakt, hvis I ellers har droppet den.
+[07:06] Yes.
+[07:07] Men lookup table, det er hvor...
+[07:09] Du kan lave en regel.
+[07:10] Ja.
+[07:11] Der skal jeg næsten lige hive datafeedwatch over.
+[07:16] Så man kan se, hvordan den fungerer.
+[07:19] Det her er din datafeedwatch.
+[07:37] Og...
+[07:39] Nu prøver jeg lige at spille en med et lookup på.
+[07:43] Når man siger lookup, hvilken værdi, vil vi lave lookup på?
+[07:55] Det kunne f.eks. kunne være, at det her er et felt, vi laver lookup på.
+[08:03] Ja.
+[08:04] Man kører i det.
+[08:06] Så det lookup, vi laver, det er, at vi kigger på den her en gang.
+[08:09] Og så skal vi se, om vi kan matche den endnu i et lookup table.
+[08:12] Og i det her tilfælde, så er det det her nummer 1.
+[08:17] Hvor vi har alle dem herinde.
+[08:21] Yes.
+[08:22] Og så siger vi, hvis den matcher den her, så skulle vi indsætte den her værdi.
+[08:26] Ja.
+[08:27] Hvis den matcher den her, så skulle vi indsætte den her værdi.
+[08:29] Lige det.
+[08:30] Øh...
+[08:31] Det er det, du mener?
+[08:32] Ja.
+[08:33] Yes.
+[08:34] Så det er egentlig det.
+[08:35] Og så på det her, der har vi også...
+[08:37] Altså ikke lige på den her, men...
+[08:39] For dem har der også mulighed for at lave ekstra formateringsvejde på et niveau herude.
+[08:48] Og så er der også formateringsniveau herinde.
+[08:50] Ja.
+[08:51] Hvor man så kan manipulere med dataen yderligere.
+[08:54] Altså, du gør det først.
+[08:56] Du laver vores data en gang med, hvor det...
+[08:58] Så det er med data, du får hentet over.
+[09:01] Og med det, så kan du manipulere med det data gennem det her.
+[09:04] Ja.
+[09:05] Det er egentlig det.
+[09:06] De to ting, skal vi få.
+[09:09] Ellers, så er det det samme.
+[09:14] Tror jeg, den der.
+[09:16] Det er den der.
+[09:17] Ja, det er den der ekstra formatering.
+[09:18] Præcis.
+[09:19] Øh...
+[09:20] Preview og sådan noget, det fungerer vist som det samme.
+[09:26] Eller hvad har vi lavet?
+[09:28] Den her før.
+[09:31] Hvor man så kan vælge et produkt, og så kan man se dataen på det produkt hele vejen om.
+[09:37] Yes.
+[09:38] Alternativ.
+[09:39] Så kan man sige...
+[09:41] På...
+[09:43] Jeg kommer på det.
+[10:03] Nå, sådan har det været live.
+[10:07] Men det er så...
+[10:11] Den tror jeg ikke, den giver...
+[10:14] Det er et spil.
+[10:16] Ved deres live, den kører optikser automatisk, når du vælger et spil.
+[10:30] Så er det random produkter, og frem til det, det der bliver mappet til.
+[10:35] Ja.
+[10:36] Så det er output-resultatet.
+[10:38] Det kan også godt være, at det er sådan, at vi skal køre ind, og så kan man klippe den med.
+[10:40] Så kører live herover, hvor man ser på ét produkt.
+[10:45] Og den er én vare.
+[10:49] Ja, der skal man så se alle mapningerne for den vare.
+[10:53] Jo.
+[10:54] Og så er det her, der går ud for, at man skal kunne vælge...
+[10:57] Ja, der skal være med indgørende også.
+[10:59] Man skal udvide her, fordi der er mange flere data, end det er.
+[11:02] Så ud af dem er man med på til, så man kan kunne se dem derude.
+[11:05] Det er en fin opgave, den ligger heroppe, tror jeg.
+[11:07] Ja.
+[11:09] Så har vi inkluderet og ekskluderet.
+[11:13] Og hvor mange produkter skal den op.
+[11:15] Hvor mange skal den op.
+[11:17] AI titles.
+[11:19] Det er det, der fungerer.
+[11:20] Præcis.
+[11:21] En til en ligesom ingen anden.
+[11:22] Yes.
+[11:23] Så det er de forskellige niveauer, der er ikke lavet noget om.
+[11:26] Og så er det bare at lave noget på det.
+[11:30] Så den her, det er den, du har lavet?
+[11:32] Ja.
+[11:33] En i det andet?
+[11:34] Yes.
+[11:35] Ja.
+[11:36] Så kan man bare se sådan her.
+[11:37] Og der er lavet et par tilføjelser.
+[11:38] Ja.
+[11:39] Så jeg skal lige hurtigt ind og se, hvad de kører på.
+[11:52] Nej, nej, nej.
+[11:53] De skal ikke sikkert have kørt på nogen.
+[11:55] Hvad var problemet?
+[11:56] Jeg lavede et par til tvivls.
+[11:57] Okay.
+[11:58] Til stedet for.
+[11:59] Lad os lige prøve at se.
+[12:01] De tegner den her.
+[12:16] Den der her på?
+[12:17] Ja.
+[12:18] Okay.
+[12:19] Så.
+[12:21] Så det her, det er egentlig ens trakt, som går nedad.
+[12:26] Det giver op for andet.
+[12:27] Hvis der er masser af det, jeg kan tage, så går det.
+[12:29] Så bliver der sluttet der.
+[12:30] Så går den nedad til den næste.
+[12:31] Det er egentlig det, den her kan.
+[12:32] Ja.
+[12:35] Og så har vi så look back window her.
+[12:36] Og så har du, på hvilket niveau skal du køre den.
+[12:37] Det her niveau, det skal ikke være med herinde.
+[12:38] Fordi det er allerede valgt profitniveau et sted.
+[12:39] Ja, den skal.
+[12:40] Den skal bare arve den del.
+[12:41] Men.
+[12:42] Så vi har den der stadig.
+[12:43] Ignorer den der.
+[12:44] Jo.
+[12:45] Det kommer altså bare et andet sted.
+[12:46] Men.
+[12:47] Ellers.
+[12:48] Så.
+[12:49] Så.
+[12:50] Så.
+[12:51] Så.
+[12:52] Så.
+[12:53] Så.
+[12:54] Så.
+[12:55] Så.
+[12:56] Så.
+[12:57] Så.
+[12:58] Så.
+[12:59] Så.
+[13:02] Så.
+[13:03] Så.
+[13:04] Så.
+[13:05] Så.
+[13:06] Så.
+[13:07] Så.
+[13:08] Så.
+[13:09] Så.
+[13:10] Så.
+[13:11] Så.
+[13:12] Jo.
+[13:13] Ja.
+[13:14] Fem.
+[13:15] Jamen det her er sp少.
+[13:16] Og så.
+[13:17] Det vækkelige.
+[13:18] Fra skal man sætte.
+[13:19] I forfand, der specialiseres stor mæssige.
+[13:20] Så det kommer nogle indom
+[13:28] De er først en del, der er rundt om mere.
+[13:32] Bare lige.
+[13:37] De er her.
+[13:38] Man skal vælge, man har kosten level 0, 1, 2, 3 og 4.
+[13:42] Der skal man kunne vælge her, vælget.
+[13:48] Er det her, I kan gøre det?
+[13:57] Det skal være en valgknappe, man skal kunne vælge.
+[13:59] Den har vi puttet på.
+[14:01] Og det er det så, fordi man puttet på det felt.
+[14:03] Det her, det her skal ikke være.
+[14:08] Den skal ikke være, fordi det vælger man jo hernede.
+[14:11] I forhold til, hvordan det skal være.
+[14:13] Yes.
+[14:14] Whatever it is.
+[14:20] Du havde allerede lavet noget connection til Google Ads.
+[14:23] Du har connection til dataene.
+[14:28] Det skal bare opstilles sådan her.
+[14:30] Jeg ved ikke lige helt, hvilke regler der er på den her.
+[14:34] Det tror jeg, det er på Waste, tror jeg.
+[14:36] Ja, eller havde du allerede lavet sådan en?
+[14:38] Ja, nu har du allerede lavet noget.
+[14:40] Så bare få tilpasset det i det der.
+[14:44] Good.
+[14:46] Settings.
+[14:48] Det er jo stadig på feed-niveau.
+[14:50] Så det kan være Shop, Market, Illusion or whatever.
+[14:53] Det er så her, man skal kunne ændre blenderne.
+[14:55] Så er der også, ligesom i Kali 2.0.
+[14:57] Ja.
+[14:58] Og så er det her, det er skubbet herind.
+[15:00] Jeg tror nok før, der lå det inde i det her.
+[15:03] Eller det her.
+[15:05] Eller det der, man kunne waive op med.
+[15:07] Ja.
+[15:08] Det skal gøres ind på det her niveau.
+[15:11] Mhm.
+[15:14] That's basically it.
+[15:16] Og så er der kløk inde på det her.
+[15:19] Nej.
+[15:20] Nej.
+[15:21] Det ligner også kløk på Superbase.
+[15:23] Altså, det er også, det er lige meget for mig.
+[15:25] Der skal være et eller andet, når man kan klippe.
+[15:27] Så er der sådan en bruger og sådan noget her.
+[15:28] Ligesom det.
+[15:30] Og ellers så har du Shop-niveau her.
+[15:31] Jo.
+[15:32] Hvor du så kan klippe forbi de forskellige.
+[15:35] Og så når du vælger, så får du sådan en feed-niveau.
+[15:37] Ja.
+[15:38] Ja.
+[15:39] Så længe videoen ikke er tilbage til videoen.
+[15:41] Præcis.
+[15:42] Og når du så klikker på den der, jeg gør.
+[15:43] Den knap, den passer ikke til det her niveau.
+[15:45] Men inde i.
+[15:46] Hvis vi går herind.
+[15:49] Det er så herind på Shop.
+[15:51] Og så er du faktisk gået ud.
+[15:53] Du går ind på en shop.
+[15:54] Mhm.
+[15:55] Her er den channel.
+[15:56] Det er der, det svarer til.
+[15:58] Spænding.
+[15:59] Countries.
+[16:00] Country.
+[16:01] Ja.
+[16:02] Og.
+[16:05] Så der skal så være et niveau.
+[16:07] Fordi der er nogen countries.
+[16:09] Der kan du lave flere ting end andre.
+[16:11] Ja.
+[16:12] Så der skal ligesom være et regelsæt, som hedder.
+[16:14] Altså forestil dig, at vi har en tabel med alle de forskellige visnyder.
+[16:20] Yes.
+[16:21] Og så har vi så en nemme kolonne, hvor der står hvilke countries.
+[16:25] Yes.
+[16:26] At I har lavet dem.
+[16:27] Ja.
+[16:28] Altså alle nærmest.
+[16:29] Men der vil også være en hård registration på mange eller andet uden EU.
+[16:32] Ja.
+[16:33] Hvor vi kan have flinkere information på det.
+[16:35] Ja.
+[16:36] Det kan du godt.
+[16:37] Den.
+[16:38] Men det er måske nok bare at sætte logikken op, så man kan gøre det.
+[16:44] Ja.
+[16:45] Så kan vi altid tilføje til den tabel.
+[16:47] Yes.
+[16:48] Okay.
+[16:49] Men det var blevet vigtigt på den ende, tror jeg.
+[16:50] Mhm.
+[16:52] Ja.
+[16:53] Hvad til det?
+[16:54] Ja.
