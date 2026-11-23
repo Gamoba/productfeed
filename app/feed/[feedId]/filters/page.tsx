@@ -32,7 +32,6 @@ export default async function FeedFiltersPage({
   return (
     <FiltersClient
       feedId={feedId}
-      feedName={feed.name}
       initialInclude={
         includeRow
           ? { operator: includeRow.operator as 'AND' | 'OR', rules: includeRow.rules ?? [] }

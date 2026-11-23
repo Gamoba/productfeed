@@ -1,64 +1,45 @@
 'use client'
 
-import { useEffect, useState, useTransition } from 'react'
-import type { ShopifyProduct } from '@/lib/shopify'
+import Link from 'next/link'
+import { useRouter } from 'next/navigation'
+import { Fragment, useEffect, useRef, useState, useTransition } from 'react'
 import { saveFilters, getFeedMetafields } from './actions'
 import type { FilterRule, FilterConfig } from './actions'
-import { FilterSection, defaultRule, defaultConfig, type MetafieldOption } from '@/app/components/FilterEditor'
+import { RuleRow, defaultRule, defaultConfig, type MetafieldOption } from '@/app/components/FilterEditor'
+import type { ScopePreview } from '@/lib/feedGenerator'
+import { formatNumber } from '@/lib/formatDa'
+import { Icon } from '../components/shell/icons'
+import './filters.css'
 
-const NO_VALUE_OPS = new Set(['is_empty', 'is_not_empty'])
+// Feed › Inkludér / ekskludér (reference: references/feed_include_exclude.jpg).
+// Pick a side at the top (the included or the excluded products), edit the
+// rules for that side, and see straight away — before saving — what they do:
+// counts per rule and a searchable list of the products on that side. The
+// numbers come from the same filter code the generator uses.
 
-// ── Filter evaluation (client-side match count) ─────────────────────────────
+type Side = 'include' | 'exclude'
 
-function matchesConfig(product: ShopifyProduct, rules: FilterRule[], operator: 'AND' | 'OR'): boolean {
-  const activeRules = rules.filter((r) => r.value !== '' || r.operator === 'is_empty' || r.operator === 'is_not_empty')
-  if (activeRules.length === 0) return true
-
-  const results = activeRules.map((rule) => {
-    const fieldValue = String((product as Record<string, unknown>)[rule.field] ?? '').toLowerCase()
-    const ruleValue = rule.value.toLowerCase()
-
-    switch (rule.operator) {
-      case 'contains': return fieldValue.includes(ruleValue)
-      case 'does_not_contain': return !fieldValue.includes(ruleValue)
-      case 'equals': return fieldValue === ruleValue
-      case 'not_equals': return fieldValue !== ruleValue
-      case 'starts_with': return fieldValue.startsWith(ruleValue)
-      case 'ends_with': return fieldValue.endsWith(ruleValue)
-      case 'is_empty': return !fieldValue
-      case 'is_not_empty': return !!fieldValue
-      case 'greater_than': return parseFloat(fieldValue) > parseFloat(ruleValue)
-      case 'less_than': return parseFloat(fieldValue) < parseFloat(ruleValue)
-      default: return true
-    }
-  })
-
-  return operator === 'AND' ? results.every(Boolean) : results.some(Boolean)
-}
-
-// ── FiltersClient ──────────────────────────────────────────────────────────
+const PREVIEW_DEBOUNCE_MS = 450
 
 export function FiltersClient({
   feedId,
-  feedName,
   initialInclude,
   initialExclude,
 }: {
   feedId: string
-  feedName: string
   initialInclude: { operator: 'AND' | 'OR'; rules: FilterRule[] } | null
   initialExclude: { operator: 'AND' | 'OR'; rules: FilterRule[] } | null
 }) {
+  const router = useRouter()
   const [include, setInclude] = useState<FilterConfig>(initialInclude ?? defaultConfig())
   const [exclude, setExclude] = useState<FilterConfig>(initialExclude ?? defaultConfig())
-  const [products, setProducts] = useState<ShopifyProduct[] | null>(null)
+  const [saved, setSaved] = useState(() => JSON.stringify([initialInclude ?? defaultConfig(), initialExclude ?? defaultConfig()]))
+  const [side, setSide] = useState<Side>('exclude')
+  const [search, setSearch] = useState('')
   const [isPending, startTransition] = useTransition()
   const [saveError, setSaveError] = useState<string | null>(null)
-  const [saveSuccess, setSaveSuccess] = useState(false)
+  const [justSaved, setJustSaved] = useState(false)
 
-  // Feed's actual metafields → the rule editor's metafield dropdown (pick from
-  // what exists, with readable definition names instead of mangled keys).
-  // Undefined until loaded; while undefined the editor falls back to free text.
   const [metafields, setMetafields] = useState<MetafieldOption[] | undefined>(undefined)
   useEffect(() => {
     getFeedMetafields(feedId).then((r) => {
@@ -66,117 +47,261 @@ export function FiltersClient({
     })
   }, [feedId])
 
+  // ── Live preview of the rules as they stand (saved or not) ──
+  const previewKey = JSON.stringify([include, exclude, side, search.trim()])
+  const [preview, setPreview] = useState<{ key: string; data: ScopePreview } | null>(null)
+  const [previewError, setPreviewError] = useState<string | null>(null)
+  const ctrl = useRef<AbortController | null>(null)
   useEffect(() => {
-    fetch(`/api/products?feedId=${encodeURIComponent(feedId)}`)
-      .then((r) => r.json())
-      .then((d) => {
-        const ps = (d as { products?: ShopifyProduct[] }).products ?? []
-        setProducts(ps)
+    const t = setTimeout(() => {
+      ctrl.current?.abort()
+      const c = new AbortController()
+      ctrl.current = c
+      fetch(`/api/feeds/${encodeURIComponent(feedId)}/scope-preview`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ include, exclude, show: side === 'include' ? 'included' : 'excluded', search: search.trim(), limit: 50 }),
+        signal: c.signal,
       })
-      .catch(() => setProducts([]))
-  }, [feedId])
+        .then(async (r) => {
+          const d = (await r.json()) as ScopePreview & { error?: string }
+          if (!r.ok || d.error) throw new Error(d.error ?? `HTTP ${r.status}`)
+          setPreviewError(null)
+          setPreview({ key: previewKey, data: d })
+        })
+        .catch((e: unknown) => {
+          if (e instanceof DOMException && e.name === 'AbortError') return
+          setPreviewError(e instanceof Error ? e.message : 'Previewet kunne ikke beregnes')
+        })
+    }, PREVIEW_DEBOUNCE_MS)
+    return () => clearTimeout(t)
+  }, [feedId, include, exclude, side, search, previewKey])
+  useEffect(() => () => ctrl.current?.abort(), [])
 
-  const hasActiveExclude = exclude.rules.some(
-    (r) => NO_VALUE_OPS.has(r.operator) || r.value !== ''
-  )
+  const stale = preview?.key !== previewKey
+  const data = preview?.data ?? null
+  const dirty = JSON.stringify([include, exclude]) !== saved
 
-  const matchCount = !products
-    ? null
-    : products.filter((p) => {
-        const inc = include.rules.length === 0 || matchesConfig(p, include.rules, include.operator)
-        const exc = hasActiveExclude && matchesConfig(p, exclude.rules, exclude.operator)
-        return inc && !exc
-      }).length
+  const config = side === 'include' ? include : exclude
+  const setConfig = side === 'include' ? setInclude : setExclude
+  const ruleStats = side === 'include' ? data?.includeRules : data?.excludeRules
+  const otherCount = (side === 'include' ? exclude : include).rules.length
 
-  function addRule(type: 'include' | 'exclude') {
-    const setter = type === 'include' ? setInclude : setExclude
-    setter((prev) => ({ ...prev, rules: [...prev.rules, defaultRule()] }))
-  }
-
-  function removeRule(type: 'include' | 'exclude', idx: number) {
-    const setter = type === 'include' ? setInclude : setExclude
-    setter((prev) => ({ ...prev, rules: prev.rules.filter((_, i) => i !== idx) }))
-  }
-
-  function updateRule(type: 'include' | 'exclude', idx: number, patch: Partial<FilterRule>) {
-    const setter = type === 'include' ? setInclude : setExclude
-    setter((prev) => ({
-      ...prev,
-      rules: prev.rules.map((r, i) => (i === idx ? { ...r, ...patch } : r)),
-    }))
-  }
-
-  function setOperator(type: 'include' | 'exclude', op: 'AND' | 'OR') {
-    const setter = type === 'include' ? setInclude : setExclude
-    setter((prev) => ({ ...prev, operator: op }))
-  }
-
-  function handleSave() {
+  function save(then?: () => void) {
     setSaveError(null)
-    setSaveSuccess(false)
     startTransition(async () => {
       const result = await saveFilters(feedId, include, exclude)
       if (result.error) {
         setSaveError(result.error)
-      } else {
-        setSaveSuccess(true)
-        setTimeout(() => setSaveSuccess(false), 3000)
+        return
       }
+      setSaved(JSON.stringify([include, exclude]))
+      setJustSaved(true)
+      setTimeout(() => setJustSaved(false), 2500)
+      then?.()
     })
   }
 
-  const totalCount = products?.length ?? null
-
   return (
-    <div className="min-h-screen" style={{ background: 'var(--bg-base)' }}>
-      <main className="max-w-4xl mx-auto px-6 py-9 space-y-5">
-        <header className="flex items-start justify-between gap-4 flex-wrap">
-          <div className="space-y-1.5 min-w-0">
-            <div className="wl-eyebrow truncate">{feedName}</div>
-            <h1 style={{ fontSize: '30px', fontWeight: 500, letterSpacing: '-0.02em', lineHeight: 1.1, color: 'var(--ink)' }}>
-              Filters
-            </h1>
-            <p style={{ fontSize: '13px', color: 'var(--ink-muted)' }}>
-              {matchCount !== null && totalCount !== null
-                ? `${matchCount} of ${totalCount} products in feed`
-                : 'Loading…'}
-            </p>
-          </div>
-          <div className="flex items-center gap-2">
-            {saveError && (
-              <span style={{ fontSize: '11px', color: 'var(--accent-red)' }}>{saveError}</span>
-            )}
-            <button onClick={handleSave} disabled={isPending} className="ff-btn-primary">
-              {isPending ? 'Saving…' : saveSuccess ? 'Saved' : 'Save'}
-            </button>
-          </div>
-        </header>
+    <div className="fl">
+      <div className="fl-head">
+        <div>
+          <h1>Inkludér og ekskludér produkter</h1>
+          <p className="fl-lede">
+            Bestem hvilke varer der kommer med i feedet. Vælg øverst, om du arbejder med de inkluderede eller
+            de ekskluderede, og se i previewet, hvor hver vare lander. Intet ændres, før du gemmer.
+          </p>
+        </div>
+        <div className="fl-actions">
+          {dirty && !isPending && <span className="fl-dirty">Ikke gemt</span>}
+          <button type="button" className="wl-btn-primary" onClick={() => save()} disabled={isPending || !dirty}>
+            {isPending ? 'Gemmer…' : justSaved ? '✓ Gemt' : 'Gem'}
+          </button>
+        </div>
+      </div>
 
-        <FilterSection
-          title="Include products"
-          description="Only products matching these rules are included. No rules = all products included."
-          badge="INCLUDE"
-          badgeCls="ff-badge ff-badge-success"
-          config={include}
-          onAddRule={() => addRule('include')}
-          onRemoveRule={(i) => removeRule('include', i)}
-          onUpdateRule={(i, p) => updateRule('include', i, p)}
-          onSetOperator={(op) => setOperator('include', op)}
-          metafieldOptions={metafields}
-        />
-        <FilterSection
-          title="Exclude products"
-          description="Products matching these rules are removed from the feed, even if they match the include rules."
-          badge="EXCLUDE"
-          badgeCls="ff-badge ff-badge-danger"
-          config={exclude}
-          onAddRule={() => addRule('exclude')}
-          onRemoveRule={(i) => removeRule('exclude', i)}
-          onUpdateRule={(i, p) => updateRule('exclude', i, p)}
-          onSetOperator={(op) => setOperator('exclude', op)}
-          metafieldOptions={metafields}
-        />
-      </main>
+      {saveError && <p className="note warn">Reglerne kunne ikke gemmes: {saveError}</p>}
+
+      <div className="fl-sidebar">
+        <div className="fl-seg" role="tablist" aria-label="Vælg side">
+          {(['include', 'exclude'] as const).map((s) => (
+            <button
+              key={s}
+              type="button"
+              role="tab"
+              aria-selected={side === s}
+              onClick={() => setSide(s)}
+            >
+              {s === 'include' ? 'Inkluderede produkter' : 'Ekskluderede produkter'}
+              <b className="num">{data ? formatNumber(s === 'include' ? data.included : data.excluded) : '…'}</b>
+            </button>
+          ))}
+        </div>
+        <span className="fl-total">{data ? `${formatNumber(data.total)} aktive varer i shoppen` : 'Tæller varer…'}</span>
+      </div>
+
+      <div className="fl-grid">
+        <section className="card">
+          <div className="fl-card-h">
+            <h3>{side === 'include' ? 'Regler for inkludering' : 'Regler for ekskludering'}</h3>
+            <small>
+              {side === 'include'
+                ? 'Kun varer der matcher, kommer med. Ingen regler betyder, at alle aktive varer kommer med.'
+                : 'Varer der matcher, tages ud af feedet. Tjekkes efter inkluderingen.'}
+            </small>
+          </div>
+
+          {config.rules.length === 0 ? (
+            <p className="fl-empty">Ingen regler endnu.</p>
+          ) : (
+            <div className="fl-rules">
+              {config.rules.map((rule, i) => (
+                <div className="fl-rule" key={i}>
+                  {i === 0 ? (
+                    <span className="fl-kw">HVIS</span>
+                  ) : (
+                    <button
+                      type="button"
+                      className="fl-kw fl-kw-btn"
+                      title="Skift mellem OG og ELLER for alle regler"
+                      onClick={() => setConfig((c) => ({ ...c, operator: c.operator === 'AND' ? 'OR' : 'AND' }))}
+                    >
+                      {config.operator === 'AND' ? 'OG' : 'ELLER'}
+                    </button>
+                  )}
+                  <div className="fl-rule-body">
+                    <RuleRow
+                      rule={rule}
+                      metafieldOptions={metafields}
+                      onChange={(patch) =>
+                        setConfig((c) => ({ ...c, rules: c.rules.map((r, j) => (j === i ? { ...r, ...patch } : r)) }))
+                      }
+                      onDelete={() => setConfig((c) => ({ ...c, rules: c.rules.filter((_, j) => j !== i) }))}
+                    />
+                  </div>
+                </div>
+              ))}
+            </div>
+          )}
+          <button
+            type="button"
+            className="fl-add"
+            onClick={() => setConfig((c) => ({ ...c, rules: [...c.rules, defaultRule()] }))}
+          >
+            + Tilføj regel
+          </button>
+
+          {(ruleStats?.length ?? 0) > 0 && (
+            <div className={`fl-stats${stale ? ' is-stale' : ''}`}>
+              <p className="fl-label">
+                {side === 'include' ? 'Så mange varer holder hver regel ude' : 'Så mange varer tager hver regel ud'}
+              </p>
+              <dl>
+                {ruleStats!.map((r, i) => (
+                  <Fragment key={i}>
+                    <dt>{r.label}</dt>
+                    <dd className={r.count > 0 ? 'neg num' : 'fl-muted num'}>{formatNumber(r.count)}</dd>
+                  </Fragment>
+                ))}
+              </dl>
+              {config.operator === 'AND' && config.rules.length > 1 && (
+                <p className="fl-muted fl-small">
+                  Reglerne gælder samlet (OG), så tallene her er for hver regel alene.
+                </p>
+              )}
+            </div>
+          )}
+          {otherCount > 0 && (
+            <p className="fl-muted fl-small">
+              Der er også {otherCount} {otherCount === 1 ? 'regel' : 'regler'} for{' '}
+              <button type="button" className="fl-link" onClick={() => setSide(side === 'include' ? 'exclude' : 'include')}>
+                {side === 'include' ? 'ekskludering' : 'inkludering'}
+              </button>
+              .
+            </p>
+          )}
+        </section>
+
+        <section className="card">
+          <div className="fl-card-h">
+            <h3>Preview</h3>
+            <small>Søg en vare frem og se, om den bliver {side === 'include' ? 'inkluderet' : 'ekskluderet'}, og hvorfor.</small>
+          </div>
+          <label className="fl-search">
+            <Icon name="search" size={14} />
+            <input
+              type="search"
+              value={search}
+              onChange={(e) => setSearch(e.target.value)}
+              placeholder="Søg på titel, producent eller id"
+              aria-label="Søg i previewet"
+            />
+          </label>
+
+          {previewError ? (
+            <p className="note warn">{previewError}</p>
+          ) : !data ? (
+            <p className="fl-muted fl-small">Regner på reglerne… Første gang kan tage lidt tid på en stor shop.</p>
+          ) : (
+            <div className={stale ? 'is-stale' : undefined} aria-busy={stale}>
+              {data.products.length === 0 ? (
+                <p className="fl-muted fl-small fl-none">
+                  {search.trim()
+                    ? 'Ingen varer matcher søgningen på denne side.'
+                    : side === 'include'
+                      ? 'Ingen varer kommer med i feedet med disse regler.'
+                      : 'Ingen varer bliver ekskluderet med disse regler.'}
+                </p>
+              ) : (
+                <ul className="fl-list">
+                  {data.products.map((p) => (
+                    <li key={p.id}>
+                      {p.image ? (
+                        // eslint-disable-next-line @next/next/no-img-element
+                        <img src={p.image} alt="" className="fl-thumb" loading="lazy" />
+                      ) : (
+                        <span className="fl-thumb">
+                          <Icon name="box" size={13} />
+                        </span>
+                      )}
+                      <span className="fl-p">
+                        <b>{p.title}</b>
+                        <small>
+                          {[p.vendor, p.id, p.stock != null ? `lager ${formatNumber(p.stock)}` : null].filter(Boolean).join(' · ')}
+                        </small>
+                      </span>
+                      <span className="fl-state">
+                        {p.inFeed ? <span className="st">Inkluderet</span> : <span className="neg">Ekskluderet</span>}
+                        {p.reason && <small>{p.reason}</small>}
+                      </span>
+                    </li>
+                  ))}
+                </ul>
+              )}
+              <p className="fl-muted fl-small">
+                Viser {formatNumber(data.products.length)} af {formatNumber(data.matching)}{' '}
+                {side === 'include' ? 'inkluderede' : 'ekskluderede'} varer
+                {search.trim() ? ' der matcher søgningen' : ''}.
+              </p>
+            </div>
+          )}
+        </section>
+      </div>
+
+      <div className="fl-step">
+        <span>Trin 2 af 5 i opsætningen af feedet</span>
+        <Link href={`/feed/${feedId}/mapping`} className="wl-btn-secondary">
+          Tilbage til Mapping
+        </Link>
+        <button
+          type="button"
+          className="wl-btn-primary"
+          disabled={isPending}
+          onClick={() => (dirty ? save(() => router.push(`/feed/${feedId}/optimize`)) : router.push(`/feed/${feedId}/optimize`))}
+        >
+          {dirty ? 'Gem og videre til AI Titles' : 'Videre til AI Titles'}
+        </button>
+      </div>
     </div>
   )
 }

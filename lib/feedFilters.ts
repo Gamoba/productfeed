@@ -204,9 +204,30 @@ const OP_LABEL: Record<string, string> = {
   less_than: 'er under',
 }
 
-function describeRule(rule: FeedFilterRule): string {
+// Readable names for the fields the rule editor offers; anything else (a
+// metafield, a custom token) is shown as its key.
+const FIELD_LABEL: Record<string, string> = {
+  title: 'titel',
+  vendor: 'producent',
+  product_type: 'varetype',
+  tags: 'tags',
+  status: 'status',
+  handle: 'handle',
+  collections: 'kollektioner',
+  'variants[0].price': 'pris',
+  'variants[0].sku': 'SKU',
+  'variants[0].inventory_quantity': 'lager',
+  'variants[0].barcode': 'stregkode',
+}
+
+function fieldLabel(field: string): string {
+  return FIELD_LABEL[field] ?? field.replace(/^metafield:/, '')
+}
+
+export function describeRule(rule: FeedFilterRule): string {
   const op = OP_LABEL[rule.operator] ?? rule.operator
-  return NO_VALUE_OPS.has(rule.operator) ? `${rule.field} ${op}` : `${rule.field} ${op} ${rule.value}`
+  const field = fieldLabel(rule.field)
+  return NO_VALUE_OPS.has(rule.operator) ? `${field} ${op}` : `${field} ${op} ${rule.value}`
 }
 
 export type ScopeExplanation = { inFeed: true } | { inFeed: false; reason: string }
@@ -247,4 +268,15 @@ export function explainScope(
 function matchesExclude(product: SupabaseProduct, filter: FeedFilter, marketUrl: string | null): boolean {
   if (!filter.rules.some((r) => NO_VALUE_OPS.has(r.operator) || r.value !== '')) return false
   return matchesFilter(product, filter, marketUrl)
+}
+
+// One rule against one product, exactly as the filters evaluate it. For
+// per-rule counts on the Inkludér / ekskludér page.
+export function ruleMatches(rule: FeedFilterRule, product: SupabaseProduct, marketUrl: string | null): boolean {
+  return evalFilterRule(rule, product, marketUrl)
+}
+
+// A rule counts when it has a value, or its operator needs none.
+export function isActiveRule(rule: FeedFilterRule): boolean {
+  return NO_VALUE_OPS.has(rule.operator) || rule.value !== ''
 }

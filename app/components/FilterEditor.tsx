@@ -24,30 +24,30 @@ export function metafieldLabel(m: { namespace: string; key: string; name?: strin
 }
 
 export const FILTER_FIELDS = [
-  { value: 'title', label: 'Title' },
-  { value: 'vendor', label: 'Vendor' },
-  { value: 'product_type', label: 'Product type' },
+  { value: 'title', label: 'Titel' },
+  { value: 'vendor', label: 'Producent' },
+  { value: 'product_type', label: 'Varetype' },
   { value: 'tags', label: 'Tags' },
   { value: 'status', label: 'Status' },
   { value: 'handle', label: 'Handle' },
-  { value: 'variants[0].price', label: 'Price' },
+  { value: 'variants[0].price', label: 'Pris' },
   { value: 'variants[0].sku', label: 'SKU' },
-  { value: 'variants[0].inventory_quantity', label: 'Inventory' },
-  { value: 'variants[0].barcode', label: 'Barcode' },
-  { value: '__metafield__', label: 'Metafield…' },
+  { value: 'variants[0].inventory_quantity', label: 'Lager' },
+  { value: 'variants[0].barcode', label: 'Stregkode' },
+  { value: '__metafield__', label: 'Metafelt…' },
 ]
 
 export const OPERATORS = [
-  { value: 'contains', label: 'contains' },
-  { value: 'does_not_contain', label: 'does not contain' },
-  { value: 'equals', label: 'equals' },
-  { value: 'not_equals', label: 'does not equal' },
-  { value: 'starts_with', label: 'starts with' },
-  { value: 'ends_with', label: 'ends with' },
-  { value: 'is_empty', label: 'is empty' },
-  { value: 'is_not_empty', label: 'is not empty' },
-  { value: 'greater_than', label: '> greater than' },
-  { value: 'less_than', label: '< less than' },
+  { value: 'contains', label: 'indeholder' },
+  { value: 'does_not_contain', label: 'indeholder ikke' },
+  { value: 'equals', label: 'er' },
+  { value: 'not_equals', label: 'er ikke' },
+  { value: 'starts_with', label: 'starter med' },
+  { value: 'ends_with', label: 'slutter med' },
+  { value: 'is_empty', label: 'er tom' },
+  { value: 'is_not_empty', label: 'er ikke tom' },
+  { value: 'greater_than', label: 'er over' },
+  { value: 'less_than', label: 'er under' },
 ]
 
 export const NO_VALUE_OPS = new Set(['is_empty', 'is_not_empty'])
@@ -85,7 +85,7 @@ function XIcon() {
   )
 }
 
-function RuleRow({
+export function RuleRow({
   rule,
   onChange,
   onDelete,
@@ -130,11 +130,11 @@ function RuleRow({
             onChange={(e) => onChange({ field: `metafield:${e.target.value}` })}
             className={`${selectCls} w-48 shrink-0`}
           >
-            <option value="">Select metafield…</option>
+            <option value="">Vælg metafelt…</option>
             {/* If a saved value isn't among the feed's current metafields, keep it
                 selectable so editing an existing rule doesn't silently drop it. */}
             {metafieldKey && !metafieldOptions.some((m) => `${m.namespace}.${m.key}` === metafieldKey) && (
-              <option value={metafieldKey}>{metafieldKey} (not in feed)</option>
+              <option value={metafieldKey}>{metafieldKey} (findes ikke i feedet)</option>
             )}
             {metafieldOptions.map((m) => {
               const k = `${m.namespace}.${m.key}`
@@ -167,7 +167,7 @@ function RuleRow({
           type="text"
           value={rule.value}
           onChange={(e) => onChange({ value: e.target.value })}
-          placeholder="Value…"
+          placeholder="Værdi…"
           className={`${selectCls} flex-1 min-w-24`}
         />
       ) : (
@@ -179,10 +179,10 @@ function RuleRow({
           value={(rule.caseSensitive ?? true) ? 'cs' : 'ci'}
           onChange={(e) => onChange({ caseSensitive: e.target.value === 'cs' })}
           className={`${selectCls} w-32 shrink-0`}
-          title="Whether text matching is case-sensitive"
+          title="Om store og små bogstaver skal være ens"
         >
-          <option value="ci">Ignore case</option>
-          <option value="cs">Match case</option>
+          <option value="ci">Ignorér store/små</option>
+          <option value="cs">Skeln store/små</option>
         </select>
       )}
 
@@ -190,7 +190,7 @@ function RuleRow({
         type="button"
         onClick={onDelete}
         className="ff-btn-ghost shrink-0 w-6 h-6"
-        aria-label="Delete rule"
+        aria-label="Slet regel"
       >
         <XIcon />
       </button>
@@ -239,7 +239,7 @@ export function FilterSection({
       <div className="p-3.5">
         {config.rules.length === 0 ? (
           <p className="text-center py-3" style={{ fontSize: '11px', color: 'var(--ink-muted)' }}>
-            No rules — click + to add one
+            Ingen regler endnu. Tilføj en nedenfor.
           </p>
         ) : (
           <div className="space-y-1">
@@ -262,8 +262,8 @@ export function FilterSection({
                             fontWeight: 600,
                             letterSpacing: '0.4px',
                             borderLeft: j > 0 ? '1px solid var(--hairline)' : 'none',
-                            background: config.operator === op ? 'var(--accent-purple)' : 'transparent',
-                            color: config.operator === op ? '#ffffff' : 'var(--ink-muted)',
+                            background: config.operator === op ? 'var(--dark)' : 'transparent',
+                            color: config.operator === op ? 'var(--dark-fg)' : 'var(--ink-muted)',
                           }}
                         >
                           {op}
@@ -287,10 +287,10 @@ export function FilterSection({
         <button
           onClick={onAddRule}
           className="mt-3 flex items-center gap-1.5 transition-colors"
-          style={{ fontSize: '11px', fontWeight: 500, color: 'var(--accent-purple)' }}
+          style={{ fontSize: '12px', fontWeight: 500, color: 'var(--accent-ink)' }}
         >
           <PlusIcon />
-          Add rule
+          Tilføj regel
         </button>
       </div>
     </div>

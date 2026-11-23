@@ -2,7 +2,15 @@ import { createClient } from '@supabase/supabase-js'
 import Anthropic from '@anthropic-ai/sdk'
 import type { SupabaseProduct } from '@/lib/sync'
 import { applyLookup, type LookupConfig } from '@/lib/mappingLookup'
-import { resolveField, applyFeedFilters, explainScope, type FeedFilter } from '@/lib/feedFilters'
+import {
+  resolveField,
+  applyFeedFilters,
+  explainScope,
+  describeRule,
+  isActiveRule,
+  ruleMatches,
+  type FeedFilter,
+} from '@/lib/feedFilters'
 import { applyTransforms, stripHtml, type FindReplacePair } from '@/lib/mappingTransforms'
 import {
   selectBranchValue,
@@ -841,4 +849,142 @@ export async function feedView(
     })
   }
   return out
+}
+
+
+// ── Scope preview (Inkludér / ekskludér page) ────────────────────────────────
+
+export type ScopePreviewRule = { label: string; count: number }
+
+export type ScopePreviewProduct = {
+  id: string
+  title: string
+  vendor: string | null
+  image: string | null
+  stock: number | null
+  inFeed: boolean
+  reason: string | null
+}
+
+export type ScopePreview = {
+  // Active products in the shop (the generator only ever considers these).
+  total: number
+  included: number
+  excluded: number
+  // How many products each rule decides on its own:
+  //  include rules → products the rule alone keeps out
+  //  exclude rules → products (that pass the include rules) the rule alone takes out
+  includeRules: ScopePreviewRule[]
+  excludeRules: ScopePreviewRule[]
+  // Products matching `show` and `search`, first `limit` of them.
+  products: ScopePreviewProduct[]
+  matching: number
+}
+
+// Loading every active product is most of a preview's cost (seconds on a
+// 10k–30k catalogue), and someone editing rules asks for a preview after every
+// change. So the loaded catalogue is kept briefly per feed: edits within
+// SCOPE_CACHE_MS only re-run the rules. Best effort and per server instance;
+// a sync elsewhere shows up once the entry expires. Small on purpose.
+const SCOPE_CACHE_MS = 60_000
+const SCOPE_CACHE_MAX = 3
+const scopeCache = new Map<string, { at: number; products: SupabaseProduct[] }>()
+
+async function scopeCatalogue(
+  db: ReturnType<typeof adminClient>,
+  feedId: string,
+  withMetafields: boolean
+): Promise<SupabaseProduct[]> {
+  const key = `${feedId}:${withMetafields ? 'mf' : 'plain'}`
+  const hit = scopeCache.get(key)
+  if (hit && Date.now() - hit.at < SCOPE_CACHE_MS) return hit.products
+  const products = await fetchAllActiveProducts(db, feedId, { withMetafields })
+  // A rule on ai_optimized_title must see the same titles the generator does.
+  await attachOptimizedTitles(db, feedId, products)
+  scopeCache.delete(key)
+  scopeCache.set(key, { at: Date.now(), products })
+  while (scopeCache.size > SCOPE_CACHE_MAX) scopeCache.delete(scopeCache.keys().next().value as string)
+  return products
+}
+
+// What a set of include/exclude rules would do to the feed, BEFORE they are
+// saved: the same evaluation the generator runs (lib/feedFilters), over every
+// active product. Read-only.
+export async function scopePreview(
+  feedId: string,
+  filters: FeedFilter[],
+  opts: { show: 'included' | 'excluded'; search?: string; limit?: number }
+): Promise<ScopePreview> {
+  const db = adminClient()
+  const { data: shopSettingsData } = await db
+    .from('shop_settings')
+    .select('market_url')
+    .eq('feed_id', feedId)
+    .maybeSingle()
+
+  const needsMetafields = filters.some((f) => (f.rules ?? []).some((r) => r.field?.startsWith('metafield:')))
+  const marketUrl = await resolveFeedBaseUrl(db, feedId, (shopSettingsData?.market_url as string | null) ?? null)
+  const products = await scopeCatalogue(db, feedId, needsMetafields)
+
+  const includeFilter = filters.find((f) => f.filter_type === 'include')
+  const excludeFilter = filters.find((f) => f.filter_type === 'exclude')
+  const includeRules = (includeFilter?.rules ?? []).filter(isActiveRule)
+  const excludeRules = (excludeFilter?.rules ?? []).filter(isActiveRule)
+  const includeCounts = includeRules.map(() => 0)
+  const excludeCounts = excludeRules.map(() => 0)
+
+  const q = (opts.search ?? '').trim().toLowerCase()
+  const limit = Math.min(Math.max(opts.limit ?? 50, 1), 200)
+  const out: ScopePreviewProduct[] = []
+  let included = 0
+  let matching = 0
+
+  for (const p of products) {
+    const scope = explainScope(p, filters, marketUrl)
+    if (scope.inFeed) included++
+
+    // Per-rule counts. Include: rules this product fails. Exclude: only for
+    // products the include rules let through, rules this product matches.
+    includeRules.forEach((r, i) => {
+      if (!ruleMatches(r, p, marketUrl)) includeCounts[i]++
+    })
+    const passesInclude =
+      !includeFilter || includeFilter.rules.length === 0 || applyFeedFilters([p], [includeFilter], marketUrl).length === 1
+    if (passesInclude) {
+      excludeRules.forEach((r, i) => {
+        if (ruleMatches(r, p, marketUrl)) excludeCounts[i]++
+      })
+    }
+
+    if (scope.inFeed !== (opts.show === 'included')) continue
+    if (q) {
+      const hay = `${p.title ?? ''} ${p.vendor ?? ''} ${p.shopify_id ?? ''} ${p.handle ?? ''}`.toLowerCase()
+      if (!hay.includes(q)) continue
+    }
+    matching++
+    if (out.length < limit) {
+      const variants = (p.variants as { inventory_quantity?: number }[] | null) ?? []
+      const qs = variants.map((v) => v.inventory_quantity).filter((n): n is number => typeof n === 'number')
+      const images = (p.images as { src?: string }[] | null) ?? []
+      out.push({
+        id: p.shopify_id,
+        title: p.title ?? p.shopify_id,
+        vendor: p.vendor ?? null,
+        image: images[0]?.src ?? null,
+        stock: qs.length ? qs.reduce((a, b) => a + b, 0) : null,
+        inFeed: scope.inFeed,
+        reason: scope.inFeed ? null : scope.reason,
+      })
+    }
+  }
+
+  return {
+    total: products.length,
+    included,
+    excluded: products.length - included,
+    includeRules: includeRules.map((r, i) => ({ label: describeRule(r), count: includeCounts[i] })),
+    excludeRules: excludeRules.map((r, i) => ({ label: describeRule(r), count: excludeCounts[i] })),
+    products: out,
+    matching,
+  }
 }
