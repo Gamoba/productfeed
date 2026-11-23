@@ -1,93 +1,61 @@
+// FeedFlow design tokens (Design B + Kobolt), for TypeScript call sites.
+//
+// The source of truth is the :root block in app/globals.css. These are
+// references to those CSS variables, not copies of the values, so a token
+// changed there changes here too. See .claude/skills/feedflow-design.
+
 export const colors = {
-  sidebar: {
-    bg: '#13111f',
-    border: '#1e1c2e',
-    textInactive: 'rgba(255,255,255,0.4)',
-    textActive: 'white',
-    activeBorder: '#6c5ce7',
-    activeBg: 'rgba(108,92,231,0.15)',
-    marketBg: 'rgba(108,92,231,0.1)',
-    marketText: '#6c5ce7',
-  },
-  accent: '#6c5ce7',
-  accentHover: '#5a4bd1',
-  badge: {
-    success: { bg: 'rgba(63,153,34,0.1)', text: '#3b6d11' },
-    warning: { bg: 'rgba(186,117,23,0.1)', text: '#854f0b' },
-    danger: { bg: 'rgba(226,75,74,0.1)', text: '#a32d2d' },
-    accent: { bg: 'rgba(108,92,231,0.1)', text: '#534ab7' },
-  },
+  canvas: 'var(--canvas)',
+  canvas2: 'var(--canvas-2)',
+  canvasLine: 'var(--canvas-line)',
+  onCanvas: 'var(--on-canvas)',
+  onCanvasMuted: 'var(--on-canvas-muted)',
+  card: 'var(--card)',
+  card2: 'var(--card-2)',
+  cardFg: 'var(--card-fg)',
+  muted: 'var(--muted)',
+  line: 'var(--line)',
+  tint: 'var(--tint)',
+  tintFg: 'var(--tint-fg)',
+  hi: 'var(--hi)',
+  hiFg: 'var(--hi-fg)',
+  hiMuted: 'var(--hi-muted)',
+  accentInk: 'var(--accent-ink)',
+  dark: 'var(--dark)',
+  darkFg: 'var(--dark-fg)',
+  good: 'var(--good)',
+  goodBg: 'var(--good-bg)',
+  warn: 'var(--warn)',
+  warnBg: 'var(--warn-bg)',
+  bad: 'var(--bad)',
+  badBg: 'var(--bad-bg)',
 } as const
 
-export const typography = {
-  fontMono: 'var(--font-mono)',
-  fontSans: 'var(--font-sans)',
-  sizes: {
-    label: '10px',
-    body: '12px',
-    bodyMd: '13px',
-    mono: '11px',
-  },
-  labelStyle: {
-    fontSize: '10px',
-    textTransform: 'uppercase' as const,
-    letterSpacing: '0.6px',
-  },
+// Channel icon colours: only for the small 22px channel square.
+export const channelColors = {
+  google: 'var(--ch-google)',
+  meta: 'var(--ch-meta)',
+  daisycon: 'var(--ch-daisycon)',
+  microsoft: 'var(--ch-microsoft)',
+  klaviyo: 'var(--ch-klaviyo)',
+  pricerunner: 'var(--ch-pricerunner)',
+} as const
+
+export const radius = {
+  lg: 'var(--r-lg)', // cards
+  md: 'var(--r-md)', // inner boxes
+  sm: 'var(--r-sm)',
+  pill: '999px', // buttons, pills, chips, segments
 } as const
 
 export const layout = {
-  sidebarWidth: '210px',
-  topbarHeight: '44px',
-  contentPadding: '16px',
-  panelRadius: '6px',
-  badgeRadius: '3px',
-  buttonRadius: '4px',
+  sidebarWidth: 'var(--sidebar-w)',
+  appMaxWidth: 'var(--app-max)',
+  // Below this width the sidebar is hidden and a top pill nav is shown.
+  mobileBreakpoint: 820,
 } as const
 
-export const borders = {
-  panel: '1px solid var(--color-border-tertiary)',
-  subtle: '0.5px solid var(--color-border-tertiary)',
-} as const
-
-// ── Interactive states ────────────────────────────────────────────────────
-// Reusable Tailwind class fragments for cursors, transitions, focus rings and
-// disabled treatments. Prefer these over hard-coding equivalent classes so we
-// can tune them centrally.
-export const interactive = {
-  cursor: {
-    pointer: 'cursor-pointer',
-    notAllowed: 'cursor-not-allowed',
-    grab: 'cursor-grab',
-    grabbing: 'cursor-grabbing',
-    wait: 'cursor-wait',
-    text: 'cursor-text',
-  },
-  transition: {
-    colors: 'transition-colors duration-150',
-    all: 'transition-all duration-150',
-    opacity: 'transition-opacity duration-150',
-  },
-  focus: {
-    ring: 'focus:outline-none focus:ring-2 focus:ring-[#6c5ce7] focus:ring-offset-1',
-  },
-  disabled: {
-    base: 'disabled:opacity-50 disabled:cursor-not-allowed',
-  },
-} as const
-
-// Hover treatments grouped by component family. Most call sites should use the
-// matching ff-* CSS class instead (ff-btn-primary, ff-card, ff-table-row,
-// ff-nav-item, ff-chip-close) — these tokens cover the few inline spots where
-// adding a class isn't practical.
-export const hover = {
-  button: {
-    primary: 'hover:bg-[#5a4bd1] active:bg-[#4a3bc1]',
-    secondary: 'hover:bg-[var(--color-background-secondary)]',
-    danger: 'hover:bg-red-50',
-    ghost: 'hover:bg-[var(--color-background-secondary)]',
-  },
-  row: 'hover:bg-[var(--color-background-secondary)]',
-  card: 'hover:shadow-md hover:-translate-y-0.5 transition-all duration-150',
-  navItem: 'hover:bg-[rgba(108,92,231,0.1)] hover:text-white',
-  chip: 'hover:opacity-80',
+export const typography = {
+  font: 'var(--font)',
+  code: 'var(--code)', // code/XML and API tokens only
 } as const

@@ -1,83 +1,109 @@
 @import "tailwindcss";
 
 :root {
-  --background: #ffffff;
-  --foreground: #18181b;
+  /* ── FeedFlow tokens: Design B + Kobolt (.claude/skills/feedflow-design) ──
+     The single source of truth for colour, shape and type. Everything below
+     this block is a legacy alias that points INTO these tokens, so pages that
+     have not been redesigned yet still pick up the new palette. */
 
-  --color-background-primary: #ffffff;
-  --color-background-secondary: #f4f4f5;
-  --color-background-tertiary: #fafafa;
+  /* typography (fonts are loaded by next/font in app/layout.tsx) */
+  --font: var(--font-outfit), "Avenir Next", "Segoe UI", system-ui, sans-serif;
+  --code: var(--font-jetbrains), ui-monospace, Menlo, monospace; /* code/XML and API tokens only */
 
-  --color-border-primary: #d4d4d8;
-  --color-border-secondary: #e4e4e7;
-  --color-border-tertiary: #ececef;
+  /* surfaces */
+  --canvas: #f2eee8; --canvas-2: #e9e3da; --canvas-line: #ddd5c9;
+  --on-canvas: #101312; --on-canvas-muted: #69716e;
+  --chip: #ffffff; --chip-hover: #f6f8f7;
+  --card: #ffffff; --card-2: #f5f2ec; --card-fg: #101312;
+  --muted: #69716e; --line: #e7e1d7;
 
-  --color-text-primary: #18181b;
-  --color-text-secondary: #52525b;
-  --color-text-tertiary: #71717a;
+  /* peach: selected / active, soft emphasis */
+  --tint: #ffd9c4; --tint-fg: #4a1f0a;
 
-  --color-accent: #6c5ce7;
-  --color-accent-hover: #5a4bd1;
+  /* kobolt: one highlighted card per page + links */
+  --hi: #2743d6; --hi-fg: #ffffff; --hi-muted: #c5cdf8; --hi-2: #3c57e6; --hi-accent: #ffd9c4;
+  --accent-ink: #2743d6;
 
-  --color-sidebar-bg: #13111f;
-  --color-sidebar-border: #1e1c2e;
-  --color-sidebar-text-inactive: rgba(255, 255, 255, 0.4);
-  --color-sidebar-text-active: #ffffff;
-  --color-sidebar-active-border: #6c5ce7;
-  --color-sidebar-active-bg: rgba(108, 92, 231, 0.15);
-  --color-sidebar-market-bg: rgba(108, 92, 231, 0.1);
-  --color-sidebar-market-text: #6c5ce7;
+  /* dark: primary buttons, pressed segments and chips */
+  --dark: #16181f; --dark-2: #262a36; --dark-fg: #f2f5f4; --dark-muted: #98a39f;
 
-  --color-badge-success-bg: rgba(63, 153, 34, 0.1);
-  --color-badge-success-text: #3b6d11;
-  --color-badge-warning-bg: rgba(186, 117, 23, 0.1);
-  --color-badge-warning-text: #854f0b;
-  --color-badge-danger-bg: rgba(226, 75, 74, 0.1);
-  --color-badge-danger-text: #a32d2d;
-  --color-badge-accent-bg: rgba(108, 92, 231, 0.1);
-  --color-badge-accent-text: #534ab7;
+  /* status: warnings are red everywhere */
+  --good: #1f7a55; --good-bg: #d3eedd;
+  --warn: #b3261e; --warn-bg: #f5d6d1;
+  --bad: #b3261e; --bad-bg: #f5d6d1;
 
-  /* ── FeedFlow design-system tokens (.claude/skills/feedflow-design) ─────────
-     Light, warm, airy. Neutral foundation; colour only as small accents. Added
-     alongside the legacy --color-* tokens so converted pages adopt it first. */
-  --bg-base: #fdfcfb;          /* primary page background, warm offwhite */
-  --bg-surface: #f4f3f0;       /* muted panels / sections */
-  --ink: #1a1a18;              /* primary text, warm near-black */
-  --ink-secondary: #57564f;    /* body / secondary text */
-  --ink-muted: #8a8980;        /* labels / hints */
-  --hairline: rgba(26, 26, 24, 0.1); /* fine card / row borders */
-  --dark-bg: #1e1e1a;          /* dark contrast bands / sidebar */
+  /* charts */
+  --series-1: #101312; --series-2: #ff9d6e; --series-3: #c79a2b; --series-4: #a9b3af; --series-5: #b3261e;
 
-  /* Semantic accents — small doses only (buttons, pills, dots, thin lines). */
-  --accent-purple: #7c5cfc;        /* brand: primary buttons, active nav, key numbers */
-  --accent-purple-hover: #6a49ea;
-  --accent-green: #1fb46a;         /* success / active / ok */
-  --accent-amber: #e8a317;         /* warning */
-  --accent-red: #e0524c;           /* error */
+  /* channel icons (22px square with a white letter) */
+  --ch-google: #3b78e7; --ch-meta: #0a66ff; --ch-daisycon: #e2572b;
+  --ch-microsoft: #0f8a6a; --ch-klaviyo: #232426; --ch-pricerunner: #7a3fd1;
 
-  /* Soft tints for SMALL (~40px) icon-fields only — never large fills. Paired
-     with a dark (--ink) border: the small-field signature. */
-  --field-purple: #ddd3fe;
-  --field-amber: #fbe6a3;
-  --field-pink: #f9cce6;
-  --field-mint: #c2ead7;
+  /* shape */
+  --r-lg: 18px; --r-md: 12px; --r-sm: 8px;
+  --shadow: 0 1px 2px rgba(16, 19, 18, .05);
 
-  /* Dark sidebar — kept dark for contrast/signature against the light pages.
-     Active item = filled brand purple, white text. */
-  --sidebar-bg: var(--dark-bg);
-  --sidebar-border: rgba(255, 255, 255, 0.08);
-  --sidebar-text: rgba(255, 255, 255, 0.55);
-  --sidebar-text-active: #ffffff;
-  --sidebar-hover: rgba(255, 255, 255, 0.06);
+  /* layout */
+  --sidebar-w: 216px;
+  --app-max: 1440px;
+
+  /* ── Legacy aliases ────────────────────────────────────────────────────────
+     Older pages use these names. They are mapped onto the Kobolt tokens so the
+     whole app moves to the new palette at once; remove them as pages are
+     redesigned and no longer reference them. */
+  --background: var(--canvas);
+  --foreground: var(--on-canvas);
+
+  --color-background-primary: var(--card);
+  --color-background-secondary: var(--card-2);
+  --color-background-tertiary: var(--canvas);
+  --color-border-primary: var(--canvas-line);
+  --color-border-secondary: var(--line);
+  --color-border-tertiary: var(--line);
+  --color-text-primary: var(--on-canvas);
+  --color-text-secondary: #464c4a;
+  --color-text-tertiary: var(--muted);
+  --color-accent: var(--dark);
+  --color-accent-hover: var(--dark-2);
+
+  --color-badge-success-bg: var(--good-bg);
+  --color-badge-success-text: var(--good);
+  --color-badge-warning-bg: var(--warn-bg);
+  --color-badge-warning-text: var(--warn);
+  --color-badge-danger-bg: var(--bad-bg);
+  --color-badge-danger-text: var(--bad);
+  --color-badge-accent-bg: var(--tint);
+  --color-badge-accent-text: var(--tint-fg);
+
+  --bg-base: var(--canvas);
+  --bg-surface: var(--card-2);
+  --ink: var(--on-canvas);
+  --ink-secondary: #464c4a;
+  --ink-muted: var(--muted);
+  --hairline: var(--line);
+  --dark-bg: var(--dark);
+
+  /* The old purple brand: primary actions are dark now, links Kobolt. */
+  --accent-purple: var(--dark);
+  --accent-purple-hover: var(--dark-2);
+  --accent-green: var(--good);
+  --accent-amber: var(--warn);
+  --accent-red: var(--bad);
+
+  --field-purple: var(--tint);
+  --field-amber: var(--warn-bg);
+  --field-pink: var(--tint);
+  --field-mint: var(--good-bg);
 }
 
 /* ── FeedFlow design-system primitives ───────────────────────────────────────
    Calm neutral cards on the warm base; colour lives only in small icon-fields,
    pills and the single brand button. Flat — hairlines, no heavy boxes. */
 .wl-card {
-  background: #ffffff;
-  border: 1px solid var(--hairline);
-  border-radius: 14px;
+  background: var(--card);
+  border: 1px solid transparent;
+  box-shadow: var(--shadow);
+  border-radius: var(--r-lg);
 }
 
 /* Feature / navigation card — neutral, with a small colour icon-field inside. */
@@ -86,14 +112,15 @@
   flex-direction: column;
   gap: 13px;
   padding: 16px;
-  background: #ffffff;
-  border: 1px solid var(--hairline);
-  border-radius: 14px;
+  background: var(--card);
+  border: 1px solid transparent;
+  box-shadow: var(--shadow);
+  border-radius: var(--r-lg);
   text-decoration: none;
   transition: border-color 150ms ease, transform 150ms ease;
 }
 .wl-feature:hover {
-  border-color: rgba(26, 26, 24, 0.22);
+  border-color: var(--card-fg);
   transform: translateY(-2px);
 }
 
@@ -123,43 +150,47 @@
   display: inline-flex;
   align-items: center;
   gap: 6px;
-  padding: 7px 14px;
+  padding: 8px 14px;
   background: var(--accent-purple);
-  color: #ffffff;
+  color: var(--dark-fg);
   font-size: 13px;
   font-weight: 500;
-  border-radius: 10px;
+  border-radius: 999px;
   border: 1px solid var(--accent-purple);
   cursor: pointer;
   white-space: nowrap;
-  transition: background-color 120ms ease, border-color 120ms ease;
+  transition: transform 120ms ease, background-color 120ms ease, border-color 120ms ease;
 }
 .wl-btn-primary:hover:not(:disabled) {
   background: var(--accent-purple-hover);
   border-color: var(--accent-purple-hover);
 }
-.wl-btn-primary:disabled { opacity: 0.5; cursor: not-allowed; }
+.wl-btn-primary:disabled { opacity: 0.4; cursor: not-allowed; }
 
 .wl-btn-secondary {
   display: inline-flex;
   align-items: center;
   gap: 6px;
-  padding: 7px 14px;
-  background: var(--bg-base);
+  padding: 8px 14px;
+  background: transparent;
   color: var(--ink);
   font-size: 13px;
   font-weight: 500;
-  border-radius: 10px;
-  border: 1px solid var(--hairline);
+  border-radius: 999px;
+  border: 1px solid var(--line);
   cursor: pointer;
   white-space: nowrap;
-  transition: border-color 120ms ease, background-color 120ms ease;
+  transition: transform 120ms ease, border-color 120ms ease, background-color 120ms ease;
 }
 .wl-btn-secondary:hover:not(:disabled) {
-  border-color: var(--ink);
+  border-color: var(--line);
   background: var(--bg-surface);
 }
-.wl-btn-secondary:disabled { opacity: 0.5; cursor: not-allowed; }
+.wl-btn-secondary:disabled { opacity: 0.4; cursor: not-allowed; }
+.wl-btn-primary:active:not(:disabled),
+.wl-btn-secondary:active:not(:disabled),
+.ff-btn-primary:active:not(:disabled),
+.ff-btn-secondary:active:not(:disabled) { transform: scale(0.97); }
 
 /* Inline-editable text — a name that sits in the layout rather than in a form.
    Reads as plain text until pointed at, then admits it is a field. Without this
@@ -204,8 +235,8 @@
 @theme inline {
   --color-background: var(--background);
   --color-foreground: var(--foreground);
-  --font-sans: var(--font-geist-sans);
-  --font-mono: var(--font-geist-mono);
+  --font-sans: var(--font);
+  --font-mono: var(--code);
 
   --color-bg-primary: var(--color-background-primary);
   --color-bg-secondary: var(--color-background-secondary);
@@ -224,18 +255,26 @@
 }
 
 body {
-  background: var(--color-background-tertiary);
-  color: var(--color-text-primary);
-  font-family: var(--font-sans), Arial, Helvetica, sans-serif;
-  font-size: 13px;
+  background: var(--canvas);
+  color: var(--on-canvas);
+  font-family: var(--font);
+  font-size: 14px;
+  line-height: 1.45;
+  -webkit-font-smoothing: antialiased;
+}
+
+:focus-visible {
+  outline: 2px solid var(--accent-ink);
+  outline-offset: 2px;
 }
 
 /* ── FeedFlow component primitives ──────────────────────────────────────── */
 
 .ff-panel {
-  background: #ffffff;
-  border: 1px solid var(--hairline);
-  border-radius: 10px;
+  background: var(--card);
+  border: 1px solid transparent;
+  box-shadow: var(--shadow);
+  border-radius: var(--r-lg);
   overflow: hidden;
 }
 
@@ -272,12 +311,12 @@ body {
   gap: 6px;
   padding: 6px 12px;
   background: var(--accent-purple);
-  color: #ffffff;
+  color: var(--dark-fg);
   font-size: 12px;
   font-weight: 500;
-  border-radius: 9px;
+  border-radius: 999px;
   border: 1px solid var(--accent-purple);
-  transition: background-color 150ms ease, border-color 150ms ease, opacity 150ms ease;
+  transition: transform 120ms ease, background-color 150ms ease, border-color 150ms ease, opacity 150ms ease;
   cursor: pointer;
   white-space: nowrap;
 }
@@ -290,7 +329,7 @@ body {
   border-color: var(--accent-purple-hover);
 }
 .ff-btn-primary:focus-visible {
-  outline: 2px solid var(--accent-purple);
+  outline: 2px solid var(--accent-ink);
   outline-offset: 2px;
 }
 .ff-btn-primary:disabled {
@@ -303,22 +342,22 @@ body {
   align-items: center;
   gap: 6px;
   padding: 6px 12px;
-  background: var(--bg-base);
+  background: transparent;
   color: var(--ink);
   font-size: 12px;
   font-weight: 500;
-  border-radius: 9px;
-  border: 1px solid var(--hairline);
-  transition: background-color 150ms ease, border-color 150ms ease, opacity 150ms ease;
+  border-radius: 999px;
+  border: 1px solid var(--line);
+  transition: transform 120ms ease, background-color 150ms ease, border-color 150ms ease, opacity 150ms ease;
   cursor: pointer;
   white-space: nowrap;
 }
 .ff-btn-secondary:hover:not(:disabled) {
   background: var(--bg-surface);
-  border-color: var(--ink);
+  border-color: var(--line);
 }
 .ff-btn-secondary:focus-visible {
-  outline: 2px solid var(--accent-purple);
+  outline: 2px solid var(--accent-ink);
   outline-offset: 2px;
 }
 .ff-btn-secondary:disabled {
@@ -337,9 +376,9 @@ body {
   color: var(--color-text-tertiary);
   font-size: 12px;
   font-weight: 500;
-  border-radius: 4px;
+  border-radius: 999px;
   border: none;
-  transition: background-color 150ms ease, color 150ms ease, opacity 150ms ease;
+  transition: transform 120ms ease, background-color 150ms ease, color 150ms ease, opacity 150ms ease;
   cursor: pointer;
   white-space: nowrap;
 }
@@ -348,7 +387,7 @@ body {
   color: var(--color-text-primary);
 }
 .ff-btn-ghost:focus-visible {
-  outline: 2px solid #6c5ce7;
+  outline: 2px solid var(--accent-ink);
   outline-offset: 2px;
 }
 .ff-btn-ghost:disabled {
@@ -359,17 +398,17 @@ body {
 .ff-input {
   width: 100%;
   padding: 7px 11px;
-  font-size: 12px;
-  background: #ffffff;
-  border: 1px solid var(--hairline);
-  border-radius: 9px;
+  font-size: 12.5px;
+  background: var(--card);
+  border: 1px solid var(--line);
+  border-radius: 10px;
   color: var(--ink);
   outline: none;
   transition: border-color 150ms ease, box-shadow 150ms ease;
 }
 .ff-input:focus {
-  border-color: var(--accent-purple);
-  box-shadow: 0 0 0 2px rgba(124, 92, 252, 0.18);
+  border-color: var(--accent-ink);
+  box-shadow: 0 0 0 2px rgba(39, 67, 214, 0.15);
   outline: none;
 }
 .ff-input:disabled {
@@ -381,18 +420,18 @@ body {
 .ff-select {
   width: 100%;
   padding: 7px 11px;
-  font-size: 12px;
-  background: #ffffff;
-  border: 1px solid var(--hairline);
-  border-radius: 9px;
+  font-size: 12.5px;
+  background: var(--card);
+  border: 1px solid var(--line);
+  border-radius: 10px;
   color: var(--ink);
   outline: none;
   cursor: pointer;
   transition: border-color 150ms ease, box-shadow 150ms ease;
 }
 .ff-select:focus {
-  border-color: var(--accent-purple);
-  box-shadow: 0 0 0 2px rgba(124, 92, 252, 0.18);
+  border-color: var(--accent-ink);
+  box-shadow: 0 0 0 2px rgba(39, 67, 214, 0.15);
   outline: none;
 }
 .ff-select:disabled {
@@ -455,7 +494,7 @@ body {
   background: rgba(0, 0, 0, 0.08);
 }
 .ff-chip-close:focus-visible {
-  outline: 2px solid #6c5ce7;
+  outline: 2px solid var(--accent-ink);
   outline-offset: 1px;
   opacity: 1;
 }
@@ -463,17 +502,17 @@ body {
 .ff-badge {
   display: inline-flex;
   align-items: center;
-  padding: 1px 7px;
-  font-size: 10px;
+  padding: 2px 8px;
+  font-size: 11px;
   font-weight: 500;
   letter-spacing: 0.3px;
-  border-radius: 5px;
+  border-radius: 999px;
   white-space: nowrap;
 }
-.ff-badge-success { background: rgba(31, 180, 106, 0.13); color: #15784a; }
-.ff-badge-warning { background: rgba(232, 163, 23, 0.16); color: #946008; }
-.ff-badge-danger  { background: rgba(224, 82, 76, 0.13);  color: #b23a34; }
-.ff-badge-accent  { background: rgba(124, 92, 252, 0.13); color: #5b3fd6; }
+.ff-badge-success { background: var(--good-bg); color: var(--good); }
+.ff-badge-warning { background: var(--warn-bg); color: var(--warn); }
+.ff-badge-danger  { background: var(--bad-bg);  color: var(--bad); }
+.ff-badge-accent  { background: var(--tint); color: var(--tint-fg); }
 .ff-badge-neutral { background: var(--bg-surface); color: var(--ink-muted); }
 
 .ff-table {

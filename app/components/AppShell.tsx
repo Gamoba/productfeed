@@ -1,25 +1,27 @@
 'use client'
 
 import { usePathname } from 'next/navigation'
-import { Sidebar } from './Sidebar'
+import { Sidebar } from './shell/Sidebar'
+import { TopBar } from './shell/TopBar'
+import { useShell } from './shell/useShell'
+import './shell/shell.css'
 
-const NO_SIDEBAR = ['/login', '/']
+// Pages that render without the shell.
+const NO_SHELL = ['/login']
 
 export function AppShell({ children }: { children: React.ReactNode }) {
   const pathname = usePathname()
-  const showSidebar = !NO_SIDEBAR.includes(pathname)
+  if (NO_SHELL.includes(pathname)) return <>{children}</>
+  return <Shell pathname={pathname}>{children}</Shell>
+}
 
-  if (!showSidebar) return <>{children}</>
-
+function Shell({ pathname, children }: { pathname: string; children: React.ReactNode }) {
+  const shell = useShell(pathname)
   return (
-    <div className="flex h-screen">
-      <Sidebar />
-      <div
-        className="flex-1 min-w-0 overflow-y-auto"
-        style={{ background: 'var(--bg-base)' }}
-      >
-        {children}
-      </div>
+    <div className="shell">
+      <Sidebar shell={shell} pathname={pathname} />
+      <TopBar shell={shell} pathname={pathname} />
+      <main className="shell-main">{children}</main>
     </div>
   )
 }

@@ -1,0 +1,150 @@
+'use client'
+
+import Link from 'next/link'
+import { useRouter } from 'next/navigation'
+import { useEffect, useRef } from 'react'
+import { Icon } from './icons'
+import { Popover } from './Popover'
+import { feedPageLabel, flagEmoji, isActive, samePageOnFeed, type NavLink } from './nav'
+import { navFor } from './Sidebar'
+import { UserMenu } from './UserMenu'
+import type { Shell } from './useShell'
+
+export function TopBar({ shell, pathname }: { shell: Shell; pathname: string }) {
+  return (
+    <header className="shell-top">
+      <Link href="/" className="shell-brand shell-mobile-only">
+        <span className="shell-brand-mark">
+          <Icon name="bolt" size={15} />
+        </span>
+        FeedFlow
+      </Link>
+
+      <Crumbs shell={shell} pathname={pathname} />
+
+      <div className="shell-top-tools shell-mobile-only">
+        <UserMenu shell={shell} variant="avatar" />
+      </div>
+
+      <MobileNav shell={shell} pathname={pathname} />
+    </header>
+  )
+}
+
+function Crumbs({ shell, pathname }: { shell: Shell; pathname: string }) {
+  const { level, account, project } = shell
+
+  if (level.kind === 'feed') {
+    return (
+      <nav className="shell-crumbs" aria-label="Brødkrummer">
+        {project && <Link href={`/project/${project.id}`}>{project.name}</Link>}
+        <Sep />
+        <FeedSwitcher shell={shell} pathname={pathname} />
+        <Sep />
+        <b>{feedPageLabel(pathname, level.feedId)}</b>
+      </nav>
+    )
+  }
+
+  if (level.kind === 'shop') {
+    return (
+      <nav className="shell-crumbs" aria-label="Brødkrummer">
+        {account && <Link href="/">{account.name}</Link>}
+        <Sep />
+        <Link href={project ? `/project/${project.id}` : '/'}>{project?.name ?? ''}</Link>
+        <Sep />
+        <b>Feeds</b>
+      </nav>
+    )
+  }
+
+  return (
+    <nav className="shell-crumbs" aria-label="Brødkrummer">
+      {account && <span>{account.name}</span>}
+      {account && <Sep />}
+      <b>Shops</b>
+    </nav>
+  )
+}
+
+function Sep() {
+  return <span className="shell-sep" aria-hidden="true">›</span>
+}
+
+// The current feed as a pill; opens the shop's other feeds and lands on the
+// same page there.
+function FeedSwitcher({ shell, pathname }: { shell: Shell; pathname: string }) {
+  const router = useRouter()
+  const { feed, projectFeeds, level } = shell
+  if (level.kind !== 'feed') return null
+
+  return (
+    <Popover
+      label="Skift feed"
+      triggerClassName="shell-feedpill"
+      trigger={
+        <>
+          {feed?.country && <span className="shell-flag-sm">{flagEmoji(feed.country)}</span>}
+          <span>{feed?.name ?? 'Feed'}</span>
+          {projectFeeds.length > 1 && <Icon name="chevron-down" size={12} />}
+        </>
+      }
+    >
+      {(close) =>
+        projectFeeds.map((f) => (
+          <button
+            key={f.id}
+            type="button"
+            role="menuitem"
+            className="shell-menu-item"
+            aria-current={f.id === feed?.id ? 'true' : undefined}
+            onClick={() => {
+              close()
+              if (f.id !== level.feedId) router.push(samePageOnFeed(pathname, level.feedId, f.id))
+            }}
+          >
+            <span className="shell-flag-sm">{flagEmoji(f.country) || '·'}</span>
+            <span className="shell-grow">{f.name}</span>
+            {f.id === feed?.id && <Icon name="check" size={14} />}
+          </button>
+        ))
+      }
+    </Popover>
+  )
+}
+
+// Below 820px the sidebar is hidden; its links become a horizontal pill row.
+function MobileNav({ shell, pathname }: { shell: Shell; pathname: string }) {
+  const links: NavLink[] = navFor(shell).flatMap((e) => (e.kind === 'group' ? e.items : [e]))
+  const row = useRef<HTMLElement>(null)
+
+  // Keep the current page's pill in view; it can sit far right in the row.
+  useEffect(() => {
+    const el = row.current?.querySelector<HTMLElement>('[aria-current="page"]')
+    if (el && row.current) {
+      row.current.scrollLeft = el.offsetLeft - row.current.clientWidth / 2 + el.clientWidth / 2
+    }
+  }, [pathname])
+
+  return (
+    <nav ref={row} className="shell-mobnav shell-mobile-only" aria-label="Menu">
+      {shell.level.kind === 'feed' && shell.project && (
+        <Link href={`/project/${shell.project.id}`}>
+          <Icon name="back" size={13} />
+          Shop
+        </Link>
+      )}
+      {shell.level.kind === 'shop' && (
+        <Link href="/">
+          <Icon name="back" size={13} />
+          Alle shops
+        </Link>
+      )}
+      {links.map((l) => (
+        <Link key={l.href} href={l.href} aria-current={isActive(pathname, l) ? 'page' : undefined}>
+          {l.label}
+        </Link>
+      ))}
+    </nav>
+  )
+}
