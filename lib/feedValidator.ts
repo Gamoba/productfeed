@@ -26,7 +26,8 @@ export type ValidationResult = {
 
 // ── Constants ──────────────────────────────────────────────────────────────
 
-const REQUIRED_GOOGLE_FIELDS = [
+// Exported for the Overview page, which counts how many of these are unmapped.
+export const REQUIRED_GOOGLE_FIELDS = [
   'id', 'title', 'description', 'link', 'image_link', 'availability', 'price', 'brand',
 ]
 

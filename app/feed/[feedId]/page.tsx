@@ -2,10 +2,9 @@ import { redirect, notFound } from 'next/navigation'
 import { createSupabaseServerClient } from '@/lib/supabase-server'
 import { adminDb, getOwnedFeed } from '@/lib/feeds'
 import { FeedClient } from '@/app/feed/FeedClient'
-import type { ValidationIssue, ValidationResult } from '@/lib/feedValidator'
+import { REQUIRED_GOOGLE_FIELDS, type ValidationIssue, type ValidationResult } from '@/lib/feedValidator'
 
-// Total Google Shopping fields the mapping UI exposes. Drives the progress
-// bar in the status overview ("X of TOTAL_GOOGLE_FIELDS fields mapped").
+// Total Google Shopping fields the mapping UI exposes ("X / TOTAL fields mapped").
 const TOTAL_GOOGLE_FIELDS = 39
 
 // LAG 1 — server fetches everything except the slow paginated
@@ -33,9 +32,9 @@ export default async function FeedDetailPage({
   const [
     { data: settingsData },
     { data: cacheInfo },
-    mappingsCountRes,
+    { data: mappedRows },
     { data: lastSyncRow },
-    optimizedCountRes,
+    { data: marketRow },
   ] = await Promise.all([
     db.from('feed_settings').select('feed_mode').eq('feed_id', feedId).maybeSingle(),
     db
@@ -43,21 +42,17 @@ export default async function FeedDetailPage({
       .select('generated_at, product_count, validation_status, validation_errors')
       .eq('feed_id', feedId)
       .maybeSingle(),
-    db
-      .from('feed_mappings')
-      .select('feed_id', { count: 'exact', head: true })
-      .eq('feed_id', feedId)
-      .neq('mapping_type', ''),
+    // Which Google fields are mapped: the count, and which required ones are not.
+    db.from('feed_mappings').select('google_field').eq('feed_id', feedId).neq('mapping_type', ''),
     // Set when a sync succeeds (migration 051) — max(products.synced_at) no
     // longer moves for products that didn't change.
     db.from('feeds').select('last_synced_at').eq('id', feedId).maybeSingle(),
-    // Optimized-title count for the AI Titles card (rows with an applied title).
-    db
-      .from('product_title_optimizations')
-      .select('feed_id', { count: 'exact', head: true })
-      .eq('feed_id', feedId)
-      .not('optimized_title', 'is', null),
+    // The feed's market, for the lede ("Google Shopping · Tyskland").
+    db.from('shop_settings').select('selected_country').eq('feed_id', feedId).maybeSingle(),
   ])
+
+  const mapped = new Set(((mappedRows ?? []) as { google_field: string }[]).map((m) => m.google_field))
+  const missingRequired = REQUIRED_GOOGLE_FIELDS.filter((f) => !mapped.has(f))
 
   // Auto-insert default feed_settings row if missing — keeps the invariant
   // that every feed has a settings row before downstream pages need it.
@@ -70,8 +65,8 @@ export default async function FeedDetailPage({
   }
 
   // Reconstruct a ValidationResult from the cached columns. productsChecked
-  // isn't persisted, so it reads as 0 here; FeedValidation treats that as
-  // "loaded from cache" and adjusts its subtitle accordingly.
+  // isn't persisted, so it reads as 0 here; the Overview treats that as
+  // "loaded from cache" and says so under the issue list.
   const cachedStatus = cacheInfo?.validation_status as ValidationResult['status'] | null | undefined
   const cachedIssues = cacheInfo?.validation_errors as ValidationIssue[] | null | undefined
   const initialValidation: ValidationResult | null =
@@ -82,13 +77,14 @@ export default async function FeedDetailPage({
   return (
     <FeedClient
       feedId={feedId}
-      feedName={feed.name}
+      channel={feed.channel}
+      country={(marketRow?.selected_country as string | null) ?? null}
       initialCacheInfo={cacheInfo ?? null}
       initialValidation={initialValidation}
-      mappingCount={mappingsCountRes.count ?? 0}
+      mappingCount={mapped.size}
       totalFields={TOTAL_GOOGLE_FIELDS}
+      missingRequired={missingRequired}
       lastSynced={(lastSyncRow?.last_synced_at as string | null) ?? null}
-      optimizedCount={optimizedCountRes.count ?? 0}
     />
   )
 }

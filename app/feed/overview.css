@@ -1,0 +1,63 @@
+/* Feed › Overview (Design B + Kobolt). Reference: references/feed_overview.jpg */
+
+/* Opacity only: an animated transform would trap position:fixed descendants. */
+.ov { display: flex; flex-direction: column; gap: 14px; animation: ov-fade .35s ease both; }
+@keyframes ov-fade { from { opacity: 0; } to { opacity: 1; } }
+
+.ov-head { display: flex; align-items: flex-end; justify-content: space-between; gap: 16px; flex-wrap: wrap; padding: 2px 2px 0; }
+.ov-head h1 { font-size: clamp(24px, 2.4vw, 30px); font-weight: 500; letter-spacing: -0.02em; line-height: 1.1; margin: 0; }
+.ov-lede { font-size: 13px; color: var(--on-canvas-muted); max-width: 78ch; margin: 6px 0 0; }
+.ov-actions { display: flex; gap: 8px; flex-wrap: wrap; }
+
+.ov-card-h { display: flex; align-items: flex-start; justify-content: space-between; gap: 10px; flex-wrap: wrap; }
+.ov-card-h h3 { font-size: 14px; font-weight: 500; margin: 0; }
+.ov-card-h small { display: block; font-size: 12px; color: var(--muted); margin-top: 1px; }
+
+.ov-stats { display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); }
+.ov-stat { display: flex; flex-direction: column; gap: 2px; padding: 4px 16px 6px; min-width: 0; }
+.ov-stat + .ov-stat { border-left: 1px solid var(--line); }
+.ov-stat:first-child { padding-left: 0; }
+.ov-stat-l { font-size: 12px; color: var(--muted); }
+.ov-stat strong { font-size: 32px; font-weight: 400; letter-spacing: -0.02em; line-height: 1.1; }
+.ov-stat strong sub { font-size: 14px; color: var(--muted); vertical-align: baseline; letter-spacing: 0; }
+.ov-stat strong.neg-num { color: var(--bad); }
+.ov-stat small { font-size: 12px; color: var(--muted); }
+.ov-stat small.neg { color: var(--bad); }
+
+.ov-link { display: flex; flex-direction: column; gap: 6px; padding-top: 4px; }
+.ov-label { font-size: 11px; text-transform: uppercase; letter-spacing: .08em; color: var(--muted); margin: 0; }
+.ov-url {
+  display: flex; align-items: center; gap: 12px; flex-wrap: wrap;
+  padding: 10px 12px; border-radius: var(--r-md);
+  border: 1px solid var(--line); background: var(--card-2);
+}
+.ov-url > svg { color: var(--muted); flex: none; }
+.ov-url-text { flex: 1; min-width: 200px; font-size: 15px; font-weight: 500; overflow-wrap: anywhere; }
+
+.ov-list { list-style: none; margin: 0; padding: 0; }
+.ov-list li + li { border-top: 1px solid var(--line); }
+.ov-issue {
+  display: flex; align-items: center; gap: 12px; width: 100%;
+  padding: 11px 4px; border: 0; border-radius: 0; background: none;
+  font: inherit; color: inherit; text-align: left; text-decoration: none; cursor: pointer;
+}
+.ov-issue:hover { background: var(--card-2); }
+.ov-issue:disabled { opacity: .6; cursor: progress; }
+.ov-ic {
+  width: 28px; height: 28px; border-radius: 8px; flex: none;
+  display: grid; place-items: center; background: var(--bad-bg); color: var(--bad);
+}
+.ov-issue-text { display: flex; flex-direction: column; min-width: 0; flex: 1; }
+.ov-issue-text b { font-weight: 500; font-size: 13px; }
+.ov-issue-text small { font-size: 12px; color: var(--muted); overflow-wrap: anywhere; }
+.ov-checked { font-size: 12px; color: var(--muted); margin: 0; }
+
+.ov-banner b { font-weight: 500; }
+.ov-banner-bar { margin-top: 10px; }
+.ov-banner-ok { background: var(--good-bg); color: var(--good); }
+
+@media (max-width: 900px) {
+  .ov-stats { grid-template-columns: 1fr 1fr; row-gap: 14px; }
+  .ov-stat:nth-child(3) { border-left: 0; padding-left: 0; }
+}
+@media (prefers-reduced-motion: reduce) { .ov { animation: none; } }
