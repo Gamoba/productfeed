@@ -1,7 +1,7 @@
 import { redirect, notFound } from 'next/navigation'
 import { createSupabaseServerClient } from '@/lib/supabase-server'
 import { getOwnedProject } from '@/lib/feeds'
-import { ProjectHomeClient } from './ProjectHomeClient'
+import { ShopFeedsClient } from './ShopFeedsClient'
 
 export default async function ProjectPage({
   params,
@@ -20,7 +20,7 @@ export default async function ProjectPage({
   if (!project) notFound()
 
   return (
-    <ProjectHomeClient
+    <ShopFeedsClient
       projectId={project.id}
       projectName={project.name}
       shopUrl={project.shop_url}

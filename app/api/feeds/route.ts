@@ -57,11 +57,20 @@ export async function GET(req: Request) {
   // Per-feed product count uses head:true so PostgREST returns just a count
   // header. Last-sync is feeds.last_synced_at (migration 051), already on the
   // feed rows above.
+  type MarketRow = {
+    feed_id: string
+    selected_market_id: string | null
+    selected_country: string | null
+    selected_locale: string | null
+    currency: string | null
+  }
+
   const productCount = new Map<string, number>()
   let caches: CacheRow[] | null = []
+  let markets: MarketRow[] = []
 
   try {
-    const [productCountResults, cacheResult] = await Promise.all([
+    const [productCountResults, cacheResult, marketResult] = await Promise.all([
       Promise.allSettled(
         feedIds.map(
           async (id) =>
@@ -80,6 +89,13 @@ export async function GET(req: Request) {
             .select('feed_id, generated_at, product_count, validation_status, validation_errors')
             .in('feed_id', feedIds)
         : Promise.resolve({ data: [] as CacheRow[] }),
+      // The feed's market (shop_settings, one row per feed).
+      feedIds.length
+        ? db
+            .from('shop_settings')
+            .select('feed_id, selected_market_id, selected_country, selected_locale, currency')
+            .in('feed_id', feedIds)
+        : Promise.resolve({ data: [] as MarketRow[] }),
     ])
 
     for (const r of productCountResults) {
@@ -92,6 +108,7 @@ export async function GET(req: Request) {
     }
 
     caches = (cacheResult.data as CacheRow[] | null) ?? []
+    markets = (marketResult.data as MarketRow[] | null) ?? []
   } catch (err) {
     return errorResponse(err, 'GET /api/feeds dashboard data')
   }
@@ -101,14 +118,25 @@ export async function GET(req: Request) {
     cacheByFeed.set(row.feed_id, row)
   }
 
+  const marketByFeed = new Map(markets.map((m) => [m.feed_id, m] as const))
+
   const enriched = (feeds ?? []).map((f) => {
     const cache = cacheByFeed.get(f.id)
+    const market = marketByFeed.get(f.id)
     return {
       id: f.id,
       name: f.name,
       description: f.description,
       project_id: f.project_id,
       channel: f.channel as ChannelId,
+      market: market
+        ? {
+            marketId: market.selected_market_id,
+            country: market.selected_country,
+            locale: market.selected_locale,
+            currency: market.currency,
+          }
+        : null,
       created_at: f.created_at,
       updated_at: f.updated_at,
       productCount: productCount.get(f.id) ?? 0,

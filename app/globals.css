@@ -595,3 +595,18 @@ body {
 .pill.ai { background: var(--tint); color: var(--tint-fg); }
 .pos { color: var(--good); }
 .neg { color: var(--bad); font-weight: 500; }
+.card {
+  background: var(--card); color: var(--card-fg);
+  border-radius: var(--r-lg); box-shadow: var(--shadow);
+  padding: 16px; display: flex; flex-direction: column; gap: 12px; min-width: 0;
+}
+.card.flush { padding: 0; gap: 0; }
+.st {
+  display: inline-flex; align-items: center; gap: 6px; white-space: nowrap;
+  font-size: 12px; color: var(--muted);
+}
+.st::before { content: ""; width: 7px; height: 7px; border-radius: 50%; background: var(--good); flex: none; }
+.st.st-off::before { background: var(--canvas-line); }
+.link { color: var(--accent-ink); font-weight: 500; font-size: 12.5px; text-decoration: none; }
+.link:hover { text-decoration: underline; }
+.num { font-variant-numeric: tabular-nums; }
