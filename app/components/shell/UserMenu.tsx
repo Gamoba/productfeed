@@ -1,7 +1,7 @@
 'use client'
 
 import { useRouter } from 'next/navigation'
-import { supabase } from '@/lib/supabase'
+import { getSupabase } from '@/lib/supabase'
 import { Icon } from './icons'
 import { Popover } from './Popover'
 import { initials, ROLE_LABEL } from './nav'
@@ -17,7 +17,7 @@ export function UserMenu({ shell, variant }: { shell: Shell; variant: 'card' | '
   const sub = account ? `${account.name} · ${ROLE_LABEL[account.role]}` : ''
 
   async function signOut() {
-    await supabase.auth.signOut()
+    await getSupabase().auth.signOut()
     router.push('/login')
   }
 
