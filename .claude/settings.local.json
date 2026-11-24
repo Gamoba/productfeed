@@ -102,7 +102,15 @@
       "Bash(curl -s -o /dev/null -w \"optimize route: %{http_code}\\\\n\" \"http://localhost:3000/feed/test/optimize/test\")",
       "Bash(curl -s -o /dev/null -w \"route: %{http_code}\\\\n\" \"http://localhost:3000/feed/test/optimize/test\")",
       "Bash(cd \"c:/Users/kenne/km-product-feed-generator\" && cp \"C:/Users/kenne/AppData/Local/Temp/claude/c--Users-kenne-km-product-feed-generator/dfd9f2e9-883b-45b5-847a-7d090cfbeee2/scratchpad/who-owns.ts\" scripts/_tmp-who-owns.ts && npx tsx scripts/_tmp-who-owns.ts 2>&1 | tail -60; rm -f scripts/_tmp-who-owns.ts)",
-      "Bash(node -e \"console.log\\(JSON.stringify\\(require\\('./package.json'\\).scripts,null,2\\)\\)\")"
+      "Bash(node -e \"console.log\\(JSON.stringify\\(require\\('./package.json'\\).scripts,null,2\\)\\)\")",
+      "mcp__4ff8a44f-a299-4845-9b92-70a0285f70b9__search_docs_chunks",
+      "PowerShell(node -v; npm -v; npm config get engine-strict; Write-Output \"--- npmrc files ---\"; foreach \\($p in @\\(\"$env:USERPROFILE\\\\.npmrc\", \"$env:APPDATA\\\\npm\\\\etc\\\\npmrc\", \"C:\\\\Users\\\\Theis Larsen\\\\Desktop\\\\Work\\\\datafeed\\\\.npmrc\"\\)\\) { if \\(Test-Path $p\\) { Write-Output \"== $p\"; Get-Content $p } else { Write-Output \"\\(none\\) $p\" } }; Write-Output \"--- nvm? ---\"; if \\(Get-Command nvm -ErrorAction SilentlyContinue\\) { nvm list } else { Write-Output \"nvm not on PATH\" })",
+      "Bash(curl -sS -L -A \"feed-inspector\" -o feed.raw -D headers.txt -w \"status=%{http_code} size=%{size_download} type=%{content_type} time=%{time_total}\\\\n\" \"https://jp-group.euwest01.umbraco.io/api/content/googlefeed/products?host=hovwdiaudi.dk&lang=da\")",
+      "Bash(NODE_PATH=\"C:/Users/Theis Larsen/Desktop/Work/datafeed/node_modules\" npx tsx \"C:/Users/THEISL~1/AppData/Local/Temp/claude/937294a362ee0cd9/72103b97-9ed9-4997-b585-d7364ae02a1f/scratchpad/tools/verify-031.ts\")",
+      "Bash(git fetch *)",
+      "Bash(git rev-list *)",
+      "Bash(git merge *)",
+      "Bash(git reset *)"
     ],
     "additionalDirectories": [
       "C:\\Users\\kenne\\km-product-feed-generator\\scripts"
