@@ -1,0 +1,52 @@
+/* Shop › Connections (Design B + Kobolt). Reference: the prototype's #connections view. */
+
+/* Opacity only: an animated transform would trap position:fixed descendants. */
+.cn { display: flex; flex-direction: column; gap: 14px; animation: cn-fade .35s ease both; }
+@keyframes cn-fade { from { opacity: 0; } to { opacity: 1; } }
+
+.cn-head { display: flex; align-items: flex-end; justify-content: space-between; gap: 16px; flex-wrap: wrap; padding: 2px 2px 0; }
+.cn-head h1 { font-size: clamp(24px, 2.4vw, 30px); font-weight: 500; letter-spacing: -0.02em; line-height: 1.1; margin: 0; }
+.cn-lede { font-size: 13px; color: var(--on-canvas-muted); max-width: 78ch; margin: 6px 0 0; }
+.cn-muted { color: var(--muted); font-size: 12px; }
+
+.cn-tools { display: flex; gap: 10px; align-items: center; flex-wrap: wrap; }
+.cn-search {
+  display: flex; align-items: center; gap: 8px; padding: 7px 12px; border-radius: 999px; flex: 0 1 260px; min-width: 180px;
+  background: var(--card); box-shadow: var(--shadow); color: var(--muted);
+}
+.cn-search:focus-within { outline: 2px solid var(--accent-ink); }
+.cn-search input { flex: 1; min-width: 0; border: 0; outline: 0; background: none; font: inherit; font-size: 12.5px; color: var(--card-fg); }
+.cn-chips { display: flex; gap: 6px; flex-wrap: wrap; }
+.cn-chip {
+  display: inline-flex; align-items: center; gap: 6px; padding: 5px 11px; border-radius: 999px; font: inherit; font-size: 12px;
+  border: 1px solid var(--canvas-line); background: var(--chip); color: var(--on-canvas-muted); cursor: pointer;
+}
+.cn-chip b { font-weight: 500; opacity: .7; }
+.cn-chip[aria-pressed="true"] { background: var(--dark); border-color: var(--dark); color: var(--dark-fg); }
+
+.cn-card-h { display: flex; align-items: flex-start; justify-content: space-between; gap: 12px; }
+.cn-card-h h3 { font-size: 14px; font-weight: 500; margin: 0; }
+.cn-card-h small { display: block; font-size: 12px; color: var(--muted); margin-top: 2px; max-width: 90ch; }
+
+.cn-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(230px, 1fr)); gap: 8px; }
+.cn-tile { display: flex; align-items: center; gap: 10px; padding: 10px 12px; border-radius: var(--r-md); background: var(--card-2); min-width: 0; }
+.cn-tile.on, .cn-tile.bad { background: var(--card); box-shadow: inset 0 0 0 1px var(--line); }
+.cn-tile.planned { opacity: .72; }
+.cn-av {
+  width: 30px; height: 30px; border-radius: 9px; flex: none; display: grid; place-items: center;
+  background: var(--card); color: var(--muted); font-size: 11px; font-weight: 600; text-transform: uppercase;
+}
+.cn-tile.on .cn-av { background: var(--tint); color: var(--tint-fg); }
+.cn-tile.bad .cn-av { background: var(--warn-bg); color: var(--warn); }
+.cn-t { flex: 1; min-width: 0; display: flex; flex-direction: column; gap: 1px; }
+.cn-t b { font-weight: 500; font-size: 13px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.cn-t small { font-size: 11.5px; color: var(--muted); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; display: block; }
+.cn-t small.st { display: inline-flex; max-width: 100%; }
+.cn-t small.neg { color: var(--bad); }
+.cn-btn { border: 0; background: none; padding: 0; cursor: pointer; font-family: inherit; flex: none; }
+.cn-tile .link { flex: none; }
+
+.cn-none p { margin: 0; text-align: center; font-size: 13px; color: var(--muted); padding: 16px 0; }
+.cn-foot { margin: 0 2px; font-size: 12px; color: var(--on-canvas-muted); max-width: 100ch; }
+
+@media (prefers-reduced-motion: reduce) { .cn { animation: none; } }

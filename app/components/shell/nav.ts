@@ -115,6 +115,12 @@ export function shopNav(projectId: string): NavEntry[] {
   return [
     { kind: 'link', label: 'Feeds', href: `/project/${projectId}`, icon: 'feeds', exact: true },
     { kind: 'link', label: 'General performance', href: `/project/${projectId}/performance`, icon: 'chart' },
+    {
+      kind: 'group',
+      label: 'Værktøjer',
+      icon: 'setup',
+      items: [{ kind: 'link', label: 'Connections', href: `/project/${projectId}/connections`, icon: 'link' }],
+    },
   ]
 }
 

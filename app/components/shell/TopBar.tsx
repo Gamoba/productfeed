@@ -69,9 +69,11 @@ function Crumbs({ shell, pathname }: { shell: Shell; pathname: string }) {
   )
 }
 
-// The shop-level page's menu label ("Feeds", "General performance").
+// The shop-level page's menu label ("Feeds", "General performance",
+// "Connections"), group items included.
 function shopPageLabel(pathname: string, projectId: string): string {
-  const link = shopNav(projectId).find((e): e is NavLink => e.kind === 'link' && isActive(pathname, e))
+  const links = shopNav(projectId).flatMap((e) => (e.kind === 'group' ? e.items : [e]))
+  const link = links.find((e) => isActive(pathname, e))
   return link?.label ?? 'Feeds'
 }
 
