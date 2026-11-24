@@ -112,7 +112,10 @@ export function feedNav(feedId: string): NavEntry[] {
 }
 
 export function shopNav(projectId: string): NavEntry[] {
-  return [{ kind: 'link', label: 'Feeds', href: `/project/${projectId}`, icon: 'feeds', exact: true }]
+  return [
+    { kind: 'link', label: 'Feeds', href: `/project/${projectId}`, icon: 'feeds', exact: true },
+    { kind: 'link', label: 'General performance', href: `/project/${projectId}/performance`, icon: 'chart' },
+  ]
 }
 
 export function accountNav(): NavEntry[] {

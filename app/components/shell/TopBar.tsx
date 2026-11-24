@@ -5,7 +5,7 @@ import { useRouter } from 'next/navigation'
 import { useEffect, useRef } from 'react'
 import { Icon } from './icons'
 import { Popover } from './Popover'
-import { accountNav, feedPageLabel, flagEmoji, isActive, samePageOnFeed, type NavLink } from './nav'
+import { accountNav, shopNav, feedPageLabel, flagEmoji, isActive, samePageOnFeed, type NavLink } from './nav'
 import { navFor } from './Sidebar'
 import { UserMenu } from './UserMenu'
 import { ChannelIcon } from '../ChannelIcon'
@@ -55,7 +55,7 @@ function Crumbs({ shell, pathname }: { shell: Shell; pathname: string }) {
         <Sep />
         <Link href={project ? `/project/${project.id}` : '/'}>{project?.name ?? ''}</Link>
         <Sep />
-        <b>Feeds</b>
+        <b>{shopPageLabel(pathname, level.projectId)}</b>
       </nav>
     )
   }
@@ -67,6 +67,12 @@ function Crumbs({ shell, pathname }: { shell: Shell; pathname: string }) {
       <b>{accountPageLabel(pathname)}</b>
     </nav>
   )
+}
+
+// The shop-level page's menu label ("Feeds", "General performance").
+function shopPageLabel(pathname: string, projectId: string): string {
+  const link = shopNav(projectId).find((e): e is NavLink => e.kind === 'link' && isActive(pathname, e))
+  return link?.label ?? 'Feeds'
 }
 
 // The account-level page's menu label ("Agency dashboard", "Agency users").
