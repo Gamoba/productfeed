@@ -8,6 +8,7 @@ import {
   type CombineBlock,
   type OnlyIf,
 } from '@/lib/mappingRules'
+import { applyExtract, extractWithPatterns, type ExtractConfig } from '@/lib/mappingExtract'
 
 // ── Types ──────────────────────────────────────────────────────────────────
 
@@ -19,6 +20,7 @@ type MappingType =
   | 'FIND_REPLACE'
   | 'TRUNCATE'
   | 'STRIP_HTML'
+  | 'EXTRACT'
   | 'AI'
 
 type Config = Record<string, unknown>
@@ -146,6 +148,9 @@ async function applyMapping(
     case 'STRIP_HTML':
       return stripHtml(resolveField(String(config.field ?? ''), product, marketUrl))
 
+    case 'EXTRACT':
+      return applyExtract(config, fieldResolver(product, marketUrl)).value
+
     case 'AI': {
       if (!anthropic) return ''
       const prompt = String(config.prompt ?? '')
@@ -271,6 +276,97 @@ export async function countFilteredProducts(
   const filtered = applyFeedFilters(rawProducts, filterRows, marketUrl)
 
   return { total: rawProducts.length, included: filtered.length }
+}
+
+// ── Extract coverage (used by the mapping editor) ──────────────────────────
+
+export type ExtractCoverage = {
+  feedMode: 'product' | 'variant'
+  // Feed items checked: products in product mode, variants in variant mode —
+  // after the feed's filters, i.e. exactly the items the feed would contain.
+  total: number
+  matched: number
+  // How many items each pattern caught (index-aligned with config.patterns).
+  perPattern: number[]
+  // The most common output values, most frequent first — the quickest way to
+  // spot a pattern that matches but produces the wrong thing.
+  topValues: { value: string; count: number }[]
+  // A sample of items no pattern matched, with the input they were tested on.
+  unmatched: { id: string; title: string; input: string }[]
+}
+
+const COVERAGE_TOP_VALUES = 30
+const COVERAGE_UNMATCHED_SAMPLE = 25
+
+/**
+ * Runs an EXTRACT config over every item the feed would emit and reports how
+ * well it covers them. Read-only and cheap: the regexes are compiled once
+ * (lib/mappingExtract caches them) and metafields are only loaded when the
+ * source field or a feed filter needs them.
+ *
+ * Ignores the mapping's Only-if and filters on purpose — the question it
+ * answers is "do my patterns find the value", not "what does the feed say".
+ */
+export async function extractCoverage(feedId: string, config: ExtractConfig): Promise<ExtractCoverage> {
+  const db = adminClient()
+  const field = config.field ?? ''
+
+  const [{ data: settingsData }, { data: shopSettingsData }, { data: filtersData }] = await Promise.all([
+    db.from('feed_settings').select('feed_mode').eq('feed_id', feedId).maybeSingle(),
+    db.from('shop_settings').select('market_url').eq('feed_id', feedId).maybeSingle(),
+    db.from('feed_filters').select('filter_type, operator, rules').eq('feed_id', feedId),
+  ])
+  const feedMode = (settingsData?.feed_mode as 'product' | 'variant') ?? 'product'
+  const filterRows = (filtersData ?? []) as FeedFilter[]
+  const needsMetafields =
+    field.startsWith('metafield:') ||
+    filterRows.some((f) => (f.rules ?? []).some((r) => r.field?.startsWith('metafield:')))
+
+  const [rawProducts, marketUrl] = await Promise.all([
+    fetchAllActiveProducts(db, feedId, { withMetafields: needsMetafields }),
+    resolveFeedBaseUrl(db, feedId, (shopSettingsData?.market_url as string | null) ?? null),
+  ])
+  await attachOptimizedTitles(db, feedId, rawProducts)
+  const products = applyFeedFilters(rawProducts, filterRows, marketUrl)
+
+  const patterns = config.patterns ?? []
+  const perPattern = patterns.map(() => 0)
+  const counts = new Map<string, number>()
+  const unmatched: ExtractCoverage['unmatched'] = []
+  let total = 0
+  let matched = 0
+
+  const check = (item: SupabaseProduct, id: string) => {
+    total++
+    const input = resolveField(field, item, marketUrl)
+    const r = extractWithPatterns(input, patterns, config.lookup)
+    if (r.patternIndex >= 0) {
+      matched++
+      perPattern[r.patternIndex]++
+      counts.set(r.value, (counts.get(r.value) ?? 0) + 1)
+    } else if (unmatched.length < COVERAGE_UNMATCHED_SAMPLE) {
+      unmatched.push({ id, title: item.title ?? '', input })
+    }
+  }
+
+  for (const product of products) {
+    if (feedMode === 'product') {
+      const id = String(product.shopify_id ?? '')
+      check(withFeedItemId(product, id), id)
+    } else {
+      for (const variant of product.variants as StoredVariant[]) {
+        const id = `${product.shopify_id}_${variant.id}`
+        check(withFeedItemId(withVariantFirst(product, variant), id), id)
+      }
+    }
+  }
+
+  const topValues = [...counts.entries()]
+    .sort((a, b) => b[1] - a[1])
+    .slice(0, COVERAGE_TOP_VALUES)
+    .map(([value, count]) => ({ value, count }))
+
+  return { feedMode, total, matched, perPattern, topValues, unmatched }
 }
 
 // ── Main export ────────────────────────────────────────────────────────────

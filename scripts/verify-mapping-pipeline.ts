@@ -9,6 +9,7 @@
 // mojibake in every feed.
 import { stripHtml, applyTransforms, LATIN1_ANCHORS } from '../lib/mappingTransforms'
 import { selectBranchValue, type OnlyIf } from '../lib/mappingRules'
+import { extractWithPatterns, patternError, type ExtractPattern } from '../lib/mappingExtract'
 
 let fails = 0
 function eq(label: string, got: unknown, want: unknown) {
@@ -142,6 +143,71 @@ const legacy: OnlyIf = {
 }
 eq('legacy config unchanged', selectBranchValue(legacy, 'BASE', resolve), 'out_of_stock')
 eq('no conditions = base value', selectBranchValue(undefined, 'BASE', resolve), 'BASE')
+
+// ── extract with pattern ───────────────────────────────────────────────────
+const sizePatterns: ExtractPattern[] = [
+  { pattern: '-(\\d{2})(\\d{2})-tall-', template: '$1/$2 Tall', ignoreCase: true },
+  { pattern: '-(\\d{2})(\\d{2})-[a-z]+$', template: '$1/$2', ignoreCase: true },
+  { pattern: '-(xs|s|ml|m|l|xl)-[a-z]+$', template: '$1', ignoreCase: true },
+]
+const sizeLookup = [{ from: 'ml', to: 'M/L' }, { from: 'groen', to: 'Grøn' }]
+const ex = (s: string) => extractWithPatterns(s, sizePatterns, sizeLookup)
+
+eq('extract: 3637 -> 36/37', ex('https://shop.dk/products/fuga-v3-3637-sort'), { value: '36/37', patternIndex: 1 })
+eq('extract: first matching pattern wins', ex('/products/fuga-v3-3637-tall-sort'), { value: '36/37 Tall', patternIndex: 0 })
+eq('extract: lookup rewrites a group', ex('/products/top-ml-sort'), { value: 'M/L', patternIndex: 2 })
+eq('extract: lookup is case-insensitive', ex('/products/top-ML-sort'), { value: 'M/L', patternIndex: 2 })
+eq('extract: unmapped group passes through', ex('/products/top-xl-sort'), { value: 'xl', patternIndex: 2 })
+eq('extract: no match is empty', ex('/products/gift-card'), { value: '', patternIndex: -1 })
+eq('extract: empty input is empty', ex(''), { value: '', patternIndex: -1 })
+eq(
+  'extract: colour via lookup',
+  extractWithPatterns('fuga-v3-3637-groen', [{ pattern: '-([a-z]+)$', template: '$1' }], sizeLookup),
+  { value: 'Grøn', patternIndex: 0 }
+)
+eq(
+  'extract: named groups, $& and $$',
+  extractWithPatterns('size-42', [{ pattern: '(?<n>\\d+)', template: '$<n> ($&) $$' }]),
+  { value: '42 (42) $', patternIndex: 0 }
+)
+eq(
+  'extract: optional group that did not match is empty',
+  extractWithPatterns('36', [{ pattern: '(\\d+)(x)?', template: '$1$2' }]),
+  { value: '36', patternIndex: 0 }
+)
+eq(
+  'extract: $n beyond the group count stays visible',
+  extractWithPatterns('36', [{ pattern: '(\\d+)', template: '$1 $3' }]),
+  { value: '36 $3', patternIndex: 0 }
+)
+eq(
+  'extract: invalid pattern is skipped, next one used',
+  extractWithPatterns('abc', [{ pattern: '([a-', template: 'X' }, { pattern: 'b', template: 'B' }]),
+  { value: 'B', patternIndex: 1 }
+)
+eq(
+  'extract: nested repetition is refused, not run',
+  extractWithPatterns('a'.repeat(40) + '!', [{ pattern: '(a+)+$', template: 'BAD' }]),
+  { value: '', patternIndex: -1 }
+)
+eq('extract: case-sensitive by default', extractWithPatterns('SORT', [{ pattern: 'sort', template: 'x' }]).patternIndex, -1)
+eq('patternError: ok pattern', patternError('-(\\d{2})(\\d{2})-'), null)
+eq('patternError: bounded repeat of a group is allowed', patternError('(\\d{2}){2}'), null)
+eq('patternError: nested quantifier flagged', typeof patternError('(\\w*)*'), 'string')
+eq('patternError: syntax error flagged', typeof patternError('(abc'), 'string')
+eq('patternError: too long flagged', typeof patternError('a'.repeat(301)), 'string')
+eq(
+  'extract + only-if: else branch still applies',
+  selectBranchValue(
+    {
+      conditions: [{ field: 'vendor', operator: 'equals', value: 'Fuga', logic: null }],
+      else: { type: 'static', value: 'One size' },
+    },
+    ex('/products/fuga-v3-3637-sort').value,
+    (f) => ({ vendor: 'Other' } as Record<string, string>)[f] ?? ''
+  ),
+  'One size'
+)
 
 console.log(fails === 0 ? '\nAll checks passed.' : `\n${fails} check(s) FAILED.`)
 process.exit(fails === 0 ? 0 : 1)

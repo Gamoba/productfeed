@@ -19,6 +19,12 @@ import {
   type Rule,
   type ValueSpec,
 } from '@/lib/mappingRules'
+import {
+  applyExtract,
+  patternError,
+  type ExtractPattern,
+  type LookupEntry,
+} from '@/lib/mappingExtract'
 
 // Lets all FieldSelect / ShopifyFieldsModal usages pick up the active feed
 // mode without prop-drilling through 8+ render sites.
@@ -30,6 +36,14 @@ const FeedModeContext = createContext<'product' | 'variant'>('product')
 // via context so the deep field pickers can show it without prop-drilling.
 // Missing entries fall back to the raw key.
 const MetafieldLabelsContext = createContext<Map<string, string>>(new Map())
+
+// Page-level state a config editor may need without prop-drilling through
+// FieldRow / SectionPanel / CustomFieldsSection.
+const EditorContext = createContext<{
+  feedId: string
+  previewProduct: PreviewProduct | null
+  marketUrl: string | null
+}>({ feedId: '', previewProduct: null, marketUrl: null })
 
 // Readable label for a "metafield:ns.key" token: the definition name when known,
 // else the raw "ns.key" (the token minus its "metafield:" prefix).
@@ -48,6 +62,7 @@ type MappingType =
   | 'FIND_REPLACE'
   | 'TRUNCATE'
   | 'STRIP_HTML'
+  | 'EXTRACT'
   | 'AI'
 
 type Config = Record<string, unknown>
@@ -204,6 +219,7 @@ const MAPPING_TYPES: { value: MappingType; label: string }[] = [
   { value: 'FIND_REPLACE', label: 'Find & Replace' },
   { value: 'TRUNCATE', label: 'Truncate' },
   { value: 'STRIP_HTML', label: 'Strip HTML' },
+  { value: 'EXTRACT', label: 'Extract with pattern' },
   { value: 'AI', label: 'AI' },
 ]
 
@@ -402,6 +418,8 @@ function applyClientMapping(
     }
     case 'STRIP_HTML':
       return stripHtml(resolveClientField(String(config.field ?? ''), product, marketUrl, feedMode))
+    case 'EXTRACT':
+      return applyExtract(config, (f) => resolveClientField(f, product, marketUrl, feedMode)).value
     case 'AI':
       return AI_PLACEHOLDER
     default:
@@ -947,6 +965,352 @@ function TextInputPanel({
   )
 }
 
+// ── ExtractEditor ("Extract with pattern") ────────────────────────────────
+
+// Mirrors lib/feedGenerator's ExtractCoverage (kept local: that module is
+// server-only).
+type ExtractCoverageResult = {
+  feedMode: 'product' | 'variant'
+  total: number
+  matched: number
+  perPattern: number[]
+  topValues: { value: string; count: number }[]
+  unmatched: { id: string; title: string; input: string }[]
+}
+
+const nf = new Intl.NumberFormat('en-US')
+
+function ExtractEditor({
+  config,
+  onChange,
+  allFields,
+}: {
+  config: Config
+  onChange: (c: Config) => void
+  allFields: string[]
+}) {
+  const feedMode = useContext(FeedModeContext)
+  const { feedId, previewProduct, marketUrl } = useContext(EditorContext)
+
+  const field = String(config.field ?? '')
+  const savedPatterns = config.patterns as ExtractPattern[] | undefined
+  const patterns: ExtractPattern[] = savedPatterns?.length
+    ? savedPatterns
+    : [{ pattern: '', template: '$1', ignoreCase: true }]
+  const lookup = (config.lookup as LookupEntry[] | undefined) ?? []
+  const [showLookup, setShowLookup] = useState(lookup.length > 0)
+
+  const [coverage, setCoverage] = useState<ExtractCoverageResult | null>(null)
+  const [coverageKey, setCoverageKey] = useState('')
+  const [testing, setTesting] = useState(false)
+  const [testError, setTestError] = useState<string | null>(null)
+
+  const set = (key: string, val: unknown) => onChange({ ...config, [key]: val })
+  const setPatterns = (next: ExtractPattern[]) => set('patterns', next)
+  const setLookup = (next: LookupEntry[]) => set('lookup', next)
+
+  function updatePattern(i: number, patch: Partial<ExtractPattern>) {
+    const next = [...patterns]
+    next[i] = { ...next[i], ...patch }
+    setPatterns(next)
+  }
+  function movePattern(i: number, dir: -1 | 1) {
+    const j = i + dir
+    if (j < 0 || j >= patterns.length) return
+    const next = [...patterns]
+    ;[next[i], next[j]] = [next[j], next[i]]
+    setPatterns(next)
+  }
+
+  // Which pattern the preview product hits, and the input it was tested on —
+  // the editor's immediate feedback while typing.
+  const previewInput = previewProduct && field
+    ? resolveClientField(field, previewProduct, marketUrl, feedMode)
+    : null
+  const previewHit = previewProduct
+    ? applyExtract(config, (f) => resolveClientField(f, previewProduct, marketUrl, feedMode))
+    : null
+
+  // Coverage results describe the config they were run with; once the user
+  // edits, they're marked stale instead of silently showing old numbers.
+  const currentKey = JSON.stringify({ field, patterns, lookup })
+  const stale = coverage !== null && coverageKey !== currentKey
+
+  async function runCoverage() {
+    if (!field) {
+      setTestError('Choose a source field first')
+      return
+    }
+    setTesting(true)
+    setTestError(null)
+    try {
+      const res = await fetch(`/api/mapping/extract-test?feedId=${encodeURIComponent(feedId)}`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ field, patterns, lookup }),
+      })
+      const data = await res.json()
+      if (!res.ok) throw new Error(data?.error ?? `HTTP ${res.status}`)
+      setCoverage(data as ExtractCoverageResult)
+      setCoverageKey(currentKey)
+    } catch (err) {
+      setTestError(err instanceof Error ? err.message : 'Test failed')
+    } finally {
+      setTesting(false)
+    }
+  }
+
+  const itemNoun = (coverage?.feedMode ?? feedMode) === 'variant' ? 'variants' : 'products'
+  const iconBtn =
+    'w-7 h-7 shrink-0 inline-flex items-center justify-center rounded-md border border-[var(--hairline)] bg-white text-[11px] text-[var(--ink-muted)] hover:bg-[var(--bg-surface)] disabled:opacity-30 disabled:cursor-default'
+
+  return (
+    <div className="space-y-3">
+      <FieldSelect value={field} onChange={(v) => set('field', v)} allFields={allFields} />
+
+      {previewInput !== null && (
+        <p className="ff-mono truncate" style={{ fontSize: '11px', color: 'var(--ink-muted)' }} title={previewInput}>
+          <span style={{ fontFamily: 'inherit', textTransform: 'uppercase', letterSpacing: '0.08em', fontSize: '10px' }}>
+            Input
+          </span>{' '}
+          {previewInput || '—'}
+        </p>
+      )}
+
+      <div className="space-y-2">
+        <p style={{ fontSize: '11px', color: 'var(--ink-muted)' }}>
+          Patterns are tried top to bottom — the first that matches is used. No match leaves the field empty.
+        </p>
+        {patterns.map((p, i) => {
+          const err = patternError(p.pattern, !!p.ignoreCase)
+          const isHit = previewHit?.patternIndex === i
+          const count = coverage && !stale ? coverage.perPattern[i] : undefined
+          return (
+            <div key={i} className="space-y-1">
+              <div className="flex gap-2 items-center">
+                <span
+                  className="ff-mono shrink-0 text-center"
+                  style={{ width: '18px', fontSize: '11px', color: 'var(--ink-muted)' }}
+                >
+                  {i + 1}
+                </span>
+                <input
+                  type="text"
+                  value={p.pattern}
+                  onChange={(e) => updatePattern(i, { pattern: e.target.value })}
+                  placeholder="Regex, e.g. -(\d{2})(\d{2})-"
+                  spellCheck={false}
+                  aria-label={`Pattern ${i + 1}`}
+                  aria-invalid={!!err}
+                  className={`${inpSm} ff-mono flex-1 min-w-0`}
+                  style={err ? { borderColor: 'var(--accent-red)' } : undefined}
+                />
+                <span className="text-gray-400 text-sm shrink-0">→</span>
+                <input
+                  type="text"
+                  value={p.template}
+                  onChange={(e) => updatePattern(i, { template: e.target.value })}
+                  placeholder="$1/$2"
+                  spellCheck={false}
+                  aria-label={`Output for pattern ${i + 1}`}
+                  className={`${inpSm} ff-mono`}
+                  style={{ maxWidth: '9rem' }}
+                />
+                <button
+                  type="button"
+                  onClick={() => updatePattern(i, { ignoreCase: !p.ignoreCase })}
+                  aria-pressed={!!p.ignoreCase}
+                  title={p.ignoreCase ? 'Ignoring upper/lower case' : 'Case-sensitive'}
+                  className={iconBtn}
+                  style={
+                    p.ignoreCase
+                      ? { color: 'var(--accent-purple)', borderColor: 'rgba(124,92,252,0.35)', background: 'rgba(124,92,252,0.08)' }
+                      : undefined
+                  }
+                >
+                  Aa
+                </button>
+                <button type="button" onClick={() => movePattern(i, -1)} disabled={i === 0} aria-label="Move up" className={iconBtn}>
+                  ↑
+                </button>
+                <button
+                  type="button"
+                  onClick={() => movePattern(i, 1)}
+                  disabled={i === patterns.length - 1}
+                  aria-label="Move down"
+                  className={iconBtn}
+                >
+                  ↓
+                </button>
+                <button
+                  type="button"
+                  onClick={() => setPatterns(patterns.filter((_, j) => j !== i))}
+                  disabled={patterns.length <= 1}
+                  aria-label={`Remove pattern ${i + 1}`}
+                  className={iconBtn}
+                >
+                  ×
+                </button>
+              </div>
+              {(err || isHit || count !== undefined) && (
+                <div className="flex items-center gap-2 flex-wrap" style={{ paddingLeft: '26px' }}>
+                  {err && <span style={{ fontSize: '11px', color: 'var(--accent-red)' }}>{err}</span>}
+                  {isHit && <span className="ff-badge ff-badge-success">Matches preview product</span>}
+                  {count !== undefined && (
+                    <span className="ff-badge ff-badge-neutral">
+                      {nf.format(count)} {itemNoun}
+                    </span>
+                  )}
+                </div>
+              )}
+            </div>
+          )
+        })}
+        <div className="flex gap-2 flex-wrap" style={{ paddingLeft: '26px' }}>
+          <button
+            type="button"
+            onClick={() => setPatterns([...patterns, { pattern: '', template: '$1', ignoreCase: true }])}
+            className={`${btnSm} bg-[rgba(124,92,252,0.08)] text-[var(--accent-purple)] hover:bg-[rgba(124,92,252,0.14)]`}
+          >
+            + Add pattern
+          </button>
+          {!showLookup && (
+            <button type="button" onClick={() => setShowLookup(true)} className={btnSm}>
+              + Lookup table
+            </button>
+          )}
+        </div>
+      </div>
+
+      {showLookup && (
+        <div className="space-y-2 pt-3" style={{ borderTop: '1px dashed var(--hairline)' }}>
+          <div className="flex items-center justify-between gap-2">
+            <p style={{ fontSize: '11px', color: 'var(--ink-muted)' }}>
+              Lookup — rewrites each captured value before it goes into the output (ignores case).
+            </p>
+            <button
+              type="button"
+              onClick={() => {
+                onChange(withoutKey(config, 'lookup'))
+                setShowLookup(false)
+              }}
+              className={btnSm}
+            >
+              Remove
+            </button>
+          </div>
+          {(lookup.length ? lookup : [{ from: '', to: '' }]).map((row, i, rows) => (
+            <div key={i} className="flex gap-2 items-center">
+              <input
+                type="text"
+                value={row.from}
+                onChange={(e) => {
+                  const next = [...rows]
+                  next[i] = { ...row, from: e.target.value }
+                  setLookup(next)
+                }}
+                placeholder="Captured, e.g. ml"
+                aria-label={`Lookup ${i + 1} from`}
+                className={inpSm}
+              />
+              <span className="text-gray-400 text-sm shrink-0">→</span>
+              <input
+                type="text"
+                value={row.to}
+                onChange={(e) => {
+                  const next = [...rows]
+                  next[i] = { ...row, to: e.target.value }
+                  setLookup(next)
+                }}
+                placeholder="Output, e.g. M/L"
+                aria-label={`Lookup ${i + 1} to`}
+                className={inpSm}
+              />
+              <button
+                type="button"
+                onClick={() => setLookup(rows.filter((_, j) => j !== i))}
+                disabled={rows.length <= 1}
+                aria-label={`Remove lookup ${i + 1}`}
+                className={iconBtn}
+              >
+                ×
+              </button>
+            </div>
+          ))}
+          <button
+            type="button"
+            onClick={() => setLookup([...(lookup.length ? lookup : [{ from: '', to: '' }]), { from: '', to: '' }])}
+            className={`${btnSm} bg-[rgba(124,92,252,0.08)] text-[var(--accent-purple)] hover:bg-[rgba(124,92,252,0.14)]`}
+          >
+            + Add row
+          </button>
+        </div>
+      )}
+
+      {/* Coverage over the whole feed */}
+      <div className="space-y-2 pt-3" style={{ borderTop: '1px dashed var(--hairline)' }}>
+        <div className="flex items-center gap-3 flex-wrap">
+          <button
+            type="button"
+            onClick={runCoverage}
+            disabled={testing || !feedId}
+            className="ff-btn-secondary"
+            style={{ fontSize: '11px' }}
+          >
+            {testing ? 'Testing…' : coverage ? 'Test again' : `Test on all ${itemNoun}`}
+          </button>
+          {coverage && (
+            <span style={{ fontSize: '12px', color: stale ? 'var(--ink-muted)' : 'var(--ink)' }}>
+              <span style={{ fontWeight: 500 }}>{nf.format(coverage.matched)}</span> of{' '}
+              {nf.format(coverage.total)} {itemNoun} matched
+              {coverage.total > 0 && ` (${((coverage.matched / coverage.total) * 100).toFixed(1)}%)`}
+              {stale && ' · edited since, test again'}
+            </span>
+          )}
+          {testError && <span style={{ fontSize: '11px', color: 'var(--accent-red)' }}>{testError}</span>}
+        </div>
+
+        {coverage && !stale && coverage.topValues.length > 0 && (
+          <div className="flex flex-wrap gap-1.5">
+            {coverage.topValues.map((v) => (
+              <span key={v.value} className="ff-badge ff-badge-accent ff-mono" title={`${v.count} ${itemNoun}`}>
+                {v.value || '(empty)'} · {nf.format(v.count)}
+              </span>
+            ))}
+          </div>
+        )}
+
+        {coverage && !stale && coverage.unmatched.length > 0 && (
+          <details>
+            <summary style={{ fontSize: '11px', color: 'var(--ink-secondary)', cursor: 'pointer' }}>
+              {nf.format(coverage.total - coverage.matched)} without a match — show {coverage.unmatched.length}
+            </summary>
+            <div
+              className="mt-2 rounded-lg"
+              style={{ border: '1px solid var(--hairline)', maxHeight: '240px', overflowY: 'auto' }}
+            >
+              {coverage.unmatched.map((u) => (
+                <div
+                  key={u.id}
+                  className="px-3 py-1.5"
+                  style={{ borderBottom: '1px solid var(--hairline)' }}
+                >
+                  <p className="truncate" style={{ fontSize: '11px', color: 'var(--ink)' }}>
+                    {u.title || u.id}
+                  </p>
+                  <p className="ff-mono truncate" style={{ fontSize: '10px', color: 'var(--ink-muted)' }} title={u.input}>
+                    {u.input || '(source field is empty)'}
+                  </p>
+                </div>
+              ))}
+            </div>
+          </details>
+        )}
+      </div>
+    </div>
+  )
+}
+
 // ── ConfigEditor ───────────────────────────────────────────────────────────
 
 function ConfigEditor({
@@ -1104,6 +1468,9 @@ function ConfigEditor({
           allFields={allFields}
         />
       )
+
+    case 'EXTRACT':
+      return <ExtractEditor config={config} onChange={onChange} allFields={allFields} />
 
     case 'AI':
       return (
@@ -2172,7 +2539,8 @@ function collectUsedFields(state: FieldState): string[] {
     case 'PREFIX_SUFFIX':
     case 'FIND_REPLACE':
     case 'TRUNCATE':
-    case 'STRIP_HTML': {
+    case 'STRIP_HTML':
+    case 'EXTRACT': {
       const f = String(cfg.field ?? '')
       if (f) used.push(f)
       break
@@ -3986,6 +4354,13 @@ export default function MappingClient({
     return result
   }, [mappings, previewProduct, marketUrl, feedMode, customFields])
 
+  // What config editors need beyond their own config (the EXTRACT editor shows
+  // which pattern hits the preview product, and runs the coverage check).
+  const editorContext = useMemo(
+    () => ({ feedId, previewProduct, marketUrl }),
+    [feedId, previewProduct, marketUrl]
+  )
+
   // ── Field helpers ────────────────────────────────────────────────────────
   const allFields: string[] = [
     ...STANDARD_FIELDS,
@@ -4076,6 +4451,7 @@ export default function MappingClient({
   return (
     <FeedModeContext.Provider value={feedMode}>
     <MetafieldLabelsContext.Provider value={metafieldLabels}>
+    <EditorContext.Provider value={editorContext}>
     <div className="min-h-screen" style={{ background: 'var(--bg-base)' }}>
       <main className="max-w-6xl mx-auto px-6 py-9 space-y-5">
       <header className="flex items-start justify-between gap-4 flex-wrap">
@@ -4298,6 +4674,7 @@ export default function MappingClient({
         />
       )}
     </div>
+    </EditorContext.Provider>
     </MetafieldLabelsContext.Provider>
     </FeedModeContext.Provider>
   )
