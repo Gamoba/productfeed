@@ -5,6 +5,7 @@ export type IconName =
   | 'eye' | 'chart' | 'megaphone' | 'drop' | 'settings' | 'feeds' | 'shops'
   | 'chevron' | 'chevron-down' | 'back' | 'logout' | 'check' | 'menu' | 'search'
   | 'hash' | 'link' | 'image' | 'price' | 'truck' | 'text' | 'users' | 'plus'
+  | 'key' | 'building' | 'card' | 'bell' | 'award' | 'pulse' | 'tools' | 'account'
 
 const PATHS: Record<IconName, React.ReactNode> = {
   bolt: <path d="M13 2 4 14h7l-1 8 9-12h-7l1-8z" />,
@@ -104,6 +105,34 @@ const PATHS: Record<IconName, React.ReactNode> = {
     </>
   ),
   plus: <path d="M12 5v14M5 12h14" />,
+  key: (
+    <>
+      <circle cx="8" cy="15" r="4" />
+      <path d="m10.8 12.2 8.2-8.2M16 7l3 3M14 9l2 2" />
+    </>
+  ),
+  building: <path d="M4 21V5a1 1 0 0 1 1-1h9a1 1 0 0 1 1 1v16M15 9h4a1 1 0 0 1 1 1v11M3 21h18M8 8h3M8 12h3M8 16h3" />,
+  card: (
+    <>
+      <rect x="3" y="5.5" width="18" height="13" rx="2" />
+      <path d="M3 10h18M7 15h4" />
+    </>
+  ),
+  bell: <path d="M6 16V11a6 6 0 0 1 12 0v5l1.5 2h-15L6 16zM10 20.5a2 2 0 0 0 4 0" />,
+  award: (
+    <>
+      <circle cx="12" cy="9" r="5" />
+      <path d="m9 13.5-1.5 7L12 18l4.5 2.5-1.5-7" />
+    </>
+  ),
+  pulse: <path d="M3 12h4l2.5-6 5 12 2.5-6h4" />,
+  tools: <path d="M14.5 6.5a4 4 0 0 0-5.3 5.3L4 17l3 3 5.2-5.2a4 4 0 0 0 5.3-5.3l-2.5 2.5-2.5-.5-.5-2.5 2.5-2.5z" />,
+  account: (
+    <>
+      <circle cx="12" cy="8.5" r="3.5" />
+      <path d="M5 20c.8-3.6 3.6-5.5 7-5.5s6.2 1.9 7 5.5" />
+    </>
+  ),
   search: (
     <>
       <circle cx="11" cy="11" r="6.5" />

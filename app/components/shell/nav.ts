@@ -111,17 +111,34 @@ export function feedNav(feedId: string): NavEntry[] {
   ]
 }
 
+// In the prototype's order. Master fields and the Konto group are placeholders
+// (app/components/PlaceholderPage.tsx) until it's decided what they hold. CSS
+// is left out on purpose (GUIDELINES §1).
 export function shopNav(projectId: string): NavEntry[] {
+  const p = (path: string) => `/project/${projectId}/${path}`
   return [
     { kind: 'link', label: 'Feeds', href: `/project/${projectId}`, icon: 'feeds', exact: true },
-    { kind: 'link', label: 'General performance', href: `/project/${projectId}/performance`, icon: 'chart' },
+    { kind: 'link', label: 'Master fields', href: p('master-fields'), icon: 'mapping' },
+    { kind: 'link', label: 'General performance', href: p('performance'), icon: 'chart' },
     {
       kind: 'group',
       label: 'Værktøjer',
-      icon: 'setup',
+      icon: 'tools',
       items: [
-        { kind: 'link', label: 'Connections', href: `/project/${projectId}/connections`, icon: 'link' },
-        { kind: 'link', label: 'Activity log', href: `/project/${projectId}/activity`, icon: 'text' },
+        { kind: 'link', label: 'Connections', href: p('connections'), icon: 'link' },
+        { kind: 'link', label: 'Activity log', href: p('activity'), icon: 'text' },
+        { kind: 'link', label: 'API / MCP', href: p('api'), icon: 'key' },
+      ],
+    },
+    {
+      kind: 'group',
+      label: 'Konto',
+      icon: 'account',
+      items: [
+        { kind: 'link', label: 'Company settings', href: p('company'), icon: 'building' },
+        { kind: 'link', label: 'Billing', href: p('billing'), icon: 'card' },
+        { kind: 'link', label: 'Manage access', href: p('access'), icon: 'users' },
+        { kind: 'link', label: 'Notifications', href: p('notifications'), icon: 'bell' },
       ],
     },
   ]
@@ -130,7 +147,10 @@ export function shopNav(projectId: string): NavEntry[] {
 export function accountNav(): NavEntry[] {
   return [
     { kind: 'link', label: 'Agency dashboard', href: '/', icon: 'overview', exact: true },
+    { kind: 'link', label: 'Monitoring', href: '/agency/monitoring', icon: 'pulse' },
     { kind: 'link', label: 'Agency users', href: '/agency/users', icon: 'users' },
+    { kind: 'link', label: 'Connected companies', href: '/agency/companies', icon: 'building' },
+    { kind: 'link', label: 'Partner levels', href: '/agency/partner-levels', icon: 'award' },
   ]
 }
 
