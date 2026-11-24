@@ -27,7 +27,8 @@
 // process for minutes on one input. Three guards, all enforced HERE (on the
 // evaluation path, not just in the editor), so a pattern saved through the API
 // directly is held to the same rules:
-//   - patterns longer than MAX_PATTERN_LENGTH are refused;
+//   - patterns longer than MAX_PATTERN_LENGTH are refused (a sanity bound,
+//     not the real protection);
 //   - nested repetition (a quantified group whose body ends in a quantifier,
 //     e.g. `(a+)+`, `(\w*)*`, `(x{2,})+`) is refused — that is the classic
 //     exponential shape;
@@ -59,7 +60,10 @@ export type ExtractConfig = {
 // `patternIndex` is the 0-based index of the pattern that matched, or -1.
 export type ExtractResult = { value: string; patternIndex: number }
 
-export const MAX_PATTERN_LENGTH = 300
+// Length is not what keeps a pattern safe — the nested-repetition check and the
+// input cap are — so this is just a sanity bound. Long alternations (a list of
+// every colour name) are a real use case and easily pass a few hundred chars.
+export const MAX_PATTERN_LENGTH = 2000
 export const MAX_INPUT_LENGTH = 2000
 
 // ── Compiling (cached) ─────────────────────────────────────────────────────
@@ -113,6 +117,23 @@ export function patternError(pattern: string, ignoreCase = false): string | null
   if (!pattern) return null
   const c = compile(pattern, ignoreCase)
   return c.ok ? null : c.error
+}
+
+export type PatternProblem = { index: number; error: string }
+
+/**
+ * Every non-empty pattern in the list that the evaluator will skip, with why.
+ * The evaluator skips them silently (so one bad row never breaks the rest);
+ * this is what the editor, the coverage test and the save warning report.
+ */
+export function patternProblems(patterns: ExtractPattern[] | undefined): PatternProblem[] {
+  if (!Array.isArray(patterns)) return []
+  const out: PatternProblem[] = []
+  patterns.forEach((p, index) => {
+    const error = p?.pattern ? patternError(p.pattern, !!p.ignoreCase) : null
+    if (error) out.push({ index, error })
+  })
+  return out
 }
 
 // ── Lookup ─────────────────────────────────────────────────────────────────

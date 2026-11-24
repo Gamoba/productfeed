@@ -976,6 +976,8 @@ type ExtractCoverageResult = {
   perPattern: number[]
   topValues: { value: string; count: number }[]
   unmatched: { id: string; title: string; input: string }[]
+  // Added by /api/mapping/extract-test: patterns the run skipped (0-based).
+  patternErrors?: { index: number; error: string }[]
 }
 
 const nf = new Intl.NumberFormat('en-US')
@@ -1269,6 +1271,13 @@ function ExtractEditor({
           )}
           {testError && <span style={{ fontSize: '11px', color: 'var(--accent-red)' }}>{testError}</span>}
         </div>
+
+        {coverage && !stale && (coverage.patternErrors?.length ?? 0) > 0 && (
+          <p style={{ fontSize: '11px', color: 'var(--accent-red)' }}>
+            Skipped in this test:{' '}
+            {coverage.patternErrors!.map((e) => `pattern ${e.index + 1} (${e.error})`).join(' · ')}
+          </p>
+        )}
 
         {coverage && !stale && coverage.topValues.length > 0 && (
           <div className="flex flex-wrap gap-1.5">
@@ -4175,6 +4184,9 @@ export default function MappingClient({
   const [isPending, startTransition] = useTransition()
   const [status, setStatus] = useState<'idle' | 'saved' | 'error'>('idle')
   const [errorMsg, setErrorMsg] = useState('')
+  // Patterns the last save stored but the generator will skip. Kept until the
+  // next save (not timed out like "Saved") — it's something to go fix.
+  const [saveWarnings, setSaveWarnings] = useState<string[]>([])
 
   // ── Section / "added fields" state ──────────────────────────────────────
   // Advanced fields the user has explicitly surfaced via the "+ Tilføj felt"
@@ -4441,6 +4453,7 @@ export default function MappingClient({
         setErrorMsg(result.error)
         setStatus('error')
       } else {
+        setSaveWarnings(result.warnings ?? [])
         setStatus('saved')
         setRemovedCustomFields([])
         setTimeout(() => setStatus('idle'), 2500)
@@ -4548,6 +4561,33 @@ export default function MappingClient({
           </button>
         </div>
       </header>
+
+        {saveWarnings.length > 0 && (
+          <div
+            role="alert"
+            className="flex items-start gap-3 px-4 py-3"
+            style={{
+              border: '1px solid rgba(232,163,23,0.45)',
+              background: 'rgba(232,163,23,0.08)',
+              borderRadius: '10px',
+            }}
+          >
+            <span className="ff-badge ff-badge-warning shrink-0">Saved with warnings</span>
+            <div className="min-w-0 flex-1 space-y-0.5" style={{ fontSize: '12px', color: 'var(--ink-secondary)' }}>
+              {saveWarnings.map((w) => (
+                <p key={w} className="break-words">{w}</p>
+              ))}
+            </div>
+            <button
+              type="button"
+              onClick={() => setSaveWarnings([])}
+              className="ff-btn-ghost shrink-0"
+              aria-label="Dismiss warnings"
+            >
+              ×
+            </button>
+          </div>
+        )}
 
         {/* Required — always visible, never collapsed */}
         <SectionPanel

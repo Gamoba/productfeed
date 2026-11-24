@@ -9,7 +9,7 @@
 // mojibake in every feed.
 import { stripHtml, applyTransforms, LATIN1_ANCHORS } from '../lib/mappingTransforms'
 import { selectBranchValue, type OnlyIf } from '../lib/mappingRules'
-import { extractWithPatterns, patternError, type ExtractPattern } from '../lib/mappingExtract'
+import { extractWithPatterns, patternError, patternProblems, type ExtractPattern } from '../lib/mappingExtract'
 
 let fails = 0
 function eq(label: string, got: unknown, want: unknown) {
@@ -195,7 +195,24 @@ eq('patternError: ok pattern', patternError('-(\\d{2})(\\d{2})-'), null)
 eq('patternError: bounded repeat of a group is allowed', patternError('(\\d{2}){2}'), null)
 eq('patternError: nested quantifier flagged', typeof patternError('(\\w*)*'), 'string')
 eq('patternError: syntax error flagged', typeof patternError('(abc'), 'string')
-eq('patternError: too long flagged', typeof patternError('a'.repeat(301)), 'string')
+eq('patternError: 1,500 chars is allowed', patternError('a'.repeat(1500)), null)
+eq('patternError: too long flagged', typeof patternError('a'.repeat(2001)), 'string')
+{
+  // A long alternation — the real-world reason for the higher limit.
+  const colours = Array.from({ length: 60 }, (_, i) => `farve${i}`).join('|')
+  const long = `-(${colours})$`
+  eq('extract: pattern over 300 chars still runs', long.length > 300 && extractWithPatterns('x-farve42', [{ pattern: long, template: '$1' }]).value, 'farve42')
+}
+eq(
+  'patternProblems: reports refused rows by index, skips empty ones',
+  patternProblems([
+    { pattern: '', template: '' },
+    { pattern: '(a+)+', template: '' },
+    { pattern: 'ok', template: '' },
+    { pattern: 'a'.repeat(2001), template: '' },
+  ]).map((p) => p.index),
+  [1, 3]
+)
 eq(
   'extract + only-if: else branch still applies',
   selectBranchValue(

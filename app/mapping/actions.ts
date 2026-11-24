@@ -5,6 +5,7 @@ import { redirect } from 'next/navigation'
 import { adminDb, getOwnedFeed } from '@/lib/feeds'
 import { validateFeed } from '@/lib/feedValidator'
 import { generateFeed, loadFeedProducts } from '@/lib/feedGenerator'
+import { patternProblems, type ExtractConfig } from '@/lib/mappingExtract'
 
 export type MappingEntry = {
   google_field: string
@@ -12,10 +13,26 @@ export type MappingEntry = {
   config: Record<string, unknown>
 }
 
+// Extract patterns the generator will skip (too long, nested repetition,
+// invalid syntax). Saving still goes through — a half-finished list is a valid
+// state, the bad rows are just ignored — but the user is told, so a refused
+// pattern can't pass for one that simply matches nothing.
+function extractWarnings(entries: MappingEntry[]): string[] {
+  const out: string[] = []
+  for (const e of entries) {
+    if (e.mapping_type !== 'EXTRACT') continue
+    const cfg = e.config as ExtractConfig
+    for (const p of patternProblems(cfg.patterns)) {
+      out.push(`${e.google_field}: pattern ${p.index + 1} is skipped (${p.error})`)
+    }
+  }
+  return out
+}
+
 export async function saveMappings(
   feedId: string,
   entries: MappingEntry[]
-): Promise<{ error?: string }> {
+): Promise<{ error?: string; warnings?: string[] }> {
   const supabase = await createSupabaseServerClient()
   const {
     data: { user },
@@ -116,7 +133,8 @@ export async function saveMappings(
       console.error('Auto-generering/validering efter mapping save fejlede:', err)
     }
 
-    return {}
+    const warnings = extractWarnings(toUpsert)
+    return warnings.length > 0 ? { warnings } : {}
   } catch (err) {
     return { error: err instanceof Error ? err.message : 'Unknown error' }
   }
