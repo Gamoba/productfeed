@@ -2,6 +2,7 @@ import { NextResponse } from 'next/server'
 import { createSupabaseServerClient } from '@/lib/supabase-server'
 import { adminDb, getOwnedFeed } from '@/lib/feeds'
 import { errorResponse } from '@/lib/errors'
+import { logActivity } from '@/lib/activity'
 
 type ShopSettingsBody = {
   feed_id: string
@@ -60,6 +61,11 @@ export async function POST(req: Request) {
   if (!owned) return NextResponse.json({ error: 'Feed not found' }, { status: 404 })
 
   const db = adminDb()
+  const { data: prev } = await db
+    .from('shop_settings')
+    .select('selected_country, selected_locale')
+    .eq('feed_id', body.feed_id)
+    .maybeSingle()
   const { error } = await db.from('shop_settings').upsert(
     {
       feed_id: body.feed_id,
@@ -75,5 +81,11 @@ export async function POST(req: Request) {
   )
 
   if (error) return errorResponse(error, 'POST /api/settings')
+
+  const was = prev ? `${prev.selected_country ?? '?'} · ${prev.selected_locale ?? '?'}` : null
+  const now = `${body.selected_country ?? 'US'} · ${body.selected_locale ?? 'en'}`
+  if (was !== now) {
+    await logActivity(db, { user, feedId: body.feed_id, area: 'Settings', action: 'Marked og sprog ændret', before: was, after: now })
+  }
   return NextResponse.json({ ok: true })
 }

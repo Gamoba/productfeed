@@ -2,6 +2,7 @@ import { isCronAuthorized } from '@/lib/cronAuth'
 import { adminDb } from '@/lib/feeds'
 import { syncGoogleAdsMetrics } from '@/lib/googleAdsSync'
 import { clientMessage } from '@/lib/errors'
+import { logActivity } from '@/lib/activity'
 import {
   isAutoSyncDue,
   isAutoSyncFrequency,
@@ -91,13 +92,12 @@ export async function GET(req: Request) {
         .eq('feed_id', row.feed_id)
       results.push({ feedId: row.feed_id, status: 'ok' })
     } catch (err) {
+      const message = clientMessage(err, `cron/google-ads feed ${row.feed_id}`)
       await db
         .from('google_ads_feed_settings')
-        .update({
-          last_auto_sync_status: 'error',
-          last_auto_sync_error: clientMessage(err, `cron/google-ads feed ${row.feed_id}`),
-        })
+        .update({ last_auto_sync_status: 'error', last_auto_sync_error: message })
         .eq('feed_id', row.feed_id)
+      await logActivity(db, { user: null, feedId: row.feed_id, area: 'Performance', action: 'Hentning af Google Ads-tal fejlede', after: message })
       results.push({ feedId: row.feed_id, status: 'error' })
     }
   }

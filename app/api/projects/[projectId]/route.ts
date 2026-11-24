@@ -1,6 +1,7 @@
 import { NextResponse } from 'next/server'
 import { createSupabaseServerClient } from '@/lib/supabase-server'
 import { adminDb, getOwnedProject, purgeFeedProducts } from '@/lib/feeds'
+import { logActivity } from '@/lib/activity'
 import { errorResponse } from '@/lib/errors'
 
 // DELETE — remove a project. ON DELETE CASCADE on feeds.project_id (migration
@@ -76,5 +77,8 @@ export async function PATCH(
     .single()
 
   if (error) return errorResponse(error, 'PATCH /api/projects/[projectId]')
+  if (update.name !== undefined && update.name !== owned.name) {
+    await logActivity(db, { user, projectId, accountId: owned.account_id, area: 'Shop', action: 'Shop omdøbt', before: owned.name, after: update.name })
+  }
   return NextResponse.json({ project: data })
 }

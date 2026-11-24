@@ -5,6 +5,7 @@ import { redirect } from 'next/navigation'
 import { adminDb, getOwnedFeed } from '@/lib/feeds'
 import { validateFeed } from '@/lib/feedValidator'
 import { generateFeed, loadFeedProducts } from '@/lib/feedGenerator'
+import { describeMapping, logActivity } from '@/lib/activity'
 
 export type MappingEntry = {
   google_field: string
@@ -26,6 +27,16 @@ export async function saveMappings(
   if (!owned) return { error: 'Feed not found' }
 
   const db = adminDb()
+
+  // The fields as they were, so the activity log can say what changed.
+  const { data: prevRows } = await db
+    .from('feed_mappings')
+    .select('google_field, mapping_type, config')
+    .eq('feed_id', feedId)
+    .in('google_field', entries.map((e) => e.google_field))
+  const prev = new Map(
+    ((prevRows ?? []) as MappingEntry[]).map((r) => [r.google_field, r])
+  )
 
   const toUpsert = entries.filter((e) => e.mapping_type !== '')
   const toDelete = entries
@@ -57,6 +68,21 @@ export async function saveMappings(
           { onConflict: 'feed_id,google_field' }
         )
       if (error) throw new Error(error.message)
+    }
+
+    for (const e of entries) {
+      const p = prev.get(e.google_field)
+      const before = describeMapping(p?.mapping_type, p?.config)
+      const after = describeMapping(e.mapping_type || null, e.config)
+      if (before === after && JSON.stringify(p?.config ?? null) === JSON.stringify(e.mapping_type ? e.config : null)) continue
+      await logActivity(db, {
+        user,
+        feedId,
+        area: 'Mapping',
+        action: !after ? `Felt ${e.google_field} fjernet` : !before ? `Felt ${e.google_field} mappet` : `Felt ${e.google_field} ændret`,
+        before,
+        after,
+      })
     }
 
     // Two branches depending on whether the feed has been generated before:

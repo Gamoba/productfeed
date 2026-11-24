@@ -119,7 +119,10 @@ export function shopNav(projectId: string): NavEntry[] {
       kind: 'group',
       label: 'Værktøjer',
       icon: 'setup',
-      items: [{ kind: 'link', label: 'Connections', href: `/project/${projectId}/connections`, icon: 'link' }],
+      items: [
+        { kind: 'link', label: 'Connections', href: `/project/${projectId}/connections`, icon: 'link' },
+        { kind: 'link', label: 'Activity log', href: `/project/${projectId}/activity`, icon: 'text' },
+      ],
     },
   ]
 }

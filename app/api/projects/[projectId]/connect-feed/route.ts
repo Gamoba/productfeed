@@ -1,6 +1,7 @@
 import { NextResponse } from 'next/server'
 import { createSupabaseServerClient } from '@/lib/supabase-server'
 import { adminDb, getOwnedProject } from '@/lib/feeds'
+import { logActivity } from '@/lib/activity'
 import { fetchFeedUrlProducts, type FeedAuth } from '@/lib/feedUrlSource'
 import { decryptFeedAuth, encryptFeedAuth, NO_FEED_AUTH, type FeedAuthColumns } from '@/lib/feedAuth'
 import { errorResponse } from '@/lib/errors'
@@ -109,6 +110,24 @@ export async function POST(
       })
       .eq('id', projectId)
     if (updateErr) return errorResponse(updateErr, 'POST /api/projects/[projectId]/connect-feed update')
+
+    // Host only: a feed URL can carry an access key in its query string.
+    const host = (u: string | null) => {
+      try {
+        return u ? new URL(u).host : null
+      } catch {
+        return null
+      }
+    }
+    await logActivity(adminDb(), {
+      user,
+      projectId,
+      accountId: owned.account_id,
+      area: 'Connections',
+      action: owned.source_type === 'feed_url' ? 'Feed-URL skiftet' : 'Feed-URL forbundet',
+      before: owned.source_type === 'feed_url' ? host(owned.feed_url) : owned.shop_url,
+      after: host(feedUrl),
+    })
 
     return NextResponse.json({
       ok: true,

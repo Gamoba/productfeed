@@ -4,6 +4,7 @@ import { syncProducts } from '@/lib/sync'
 import { SyncAlreadyRunningError } from '@/lib/syncProgress'
 import { regenerateFeedCache } from '@/lib/feedCache'
 import { clientMessage } from '@/lib/errors'
+import { logActivity } from '@/lib/activity'
 import {
   isAutoSyncDue,
   isAutoSyncFrequency,
@@ -126,13 +127,16 @@ export async function GET(req: Request) {
     } catch (err) {
       // clientMessage logs the raw error and keeps only a user-safe message —
       // this one is shown on the settings page.
+      const message = clientMessage(err, `cron/sync feed ${feed.id}`)
       await db
         .from('feeds')
         .update({
           last_auto_sync_status: 'error',
-          last_auto_sync_error: clientMessage(err, `cron/sync feed ${feed.id}`),
+          last_auto_sync_error: message,
         })
         .eq('id', feed.id)
+      // Only failures: a successful run every hour would bury everything else.
+      await logActivity(db, { user: null, feedId: feed.id, area: 'Synkronisering', action: 'Automatisk synkronisering fejlede', after: message })
       results.push({ feedId: feed.id, status: 'error' })
     }
   }

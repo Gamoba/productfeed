@@ -1,6 +1,7 @@
 import { NextResponse } from 'next/server'
 import { createSupabaseServerClient } from '@/lib/supabase-server'
 import { adminDb, getOwnedProject } from '@/lib/feeds'
+import { logActivity } from '@/lib/activity'
 import { createShopifyClient } from '@/lib/shopify'
 import { createShopifyClientForProject } from '@/lib/projectShopify'
 import { encryptToken } from '@/lib/crypto'
@@ -133,6 +134,18 @@ export async function POST(
   if (updateErr) {
     return NextResponse.json({ error: updateErr.message }, { status: 500 })
   }
+
+  // The shop address only; the token is never logged.
+  const sameShop = owned.source_type !== 'feed_url' && owned.shop_url === shopUrl
+  await logActivity(db, {
+    user,
+    projectId,
+    accountId: owned.account_id,
+    area: 'Connections',
+    action: sameShop ? 'Shopify-nøgle skiftet' : 'Shopify forbundet',
+    before: sameShop ? null : owned.source_type === 'feed_url' ? 'Feed-URL' : owned.shop_url,
+    after: shopUrl,
+  })
 
   return NextResponse.json({
     ok: true,

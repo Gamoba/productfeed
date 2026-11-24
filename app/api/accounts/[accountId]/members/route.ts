@@ -3,7 +3,10 @@ import { adminDb } from '@/lib/feeds'
 import { inviteUser, listAccountUsers } from '@/lib/accountMembers'
 import { enforceRateLimit } from '@/lib/rateLimit'
 import { errorResponse } from '@/lib/errors'
-import { inviteRedirect, sessionUserId } from './_shared'
+import { inviteRedirect, sessionUser, sessionUserId } from './_shared'
+import { logActivity } from '@/lib/activity'
+import { ROLE_LABEL } from '@/app/components/shell/nav'
+import { isRole } from '@/lib/accountMembers'
 
 type Ctx = { params: Promise<{ accountId: string }> }
 
@@ -22,10 +25,18 @@ export async function GET(_req: Request, { params }: Ctx) {
 export async function POST(req: Request, { params }: Ctx) {
   try {
     const { accountId } = await params
-    const me = await sessionUserId()
-    await enforceRateLimit(me, 'account_invite')
+    const user = await sessionUser()
+    await enforceRateLimit(user.id, 'account_invite')
     const body = (await req.json().catch(() => ({}))) as { email: unknown; name?: unknown; role: unknown }
-    const result = await inviteUser(adminDb(), me, accountId, body, inviteRedirect(req))
+    const db = adminDb()
+    const result = await inviteUser(db, user.id, accountId, body, inviteRedirect(req))
+    await logActivity(db, {
+      user,
+      accountId,
+      area: 'Adgang',
+      action: result.kind === 'added' ? 'Bruger tilføjet' : 'Bruger inviteret',
+      after: `${result.email}${isRole(body.role) ? ` · ${ROLE_LABEL[body.role]}` : ''}`,
+    })
     return NextResponse.json(result)
   } catch (err) {
     return errorResponse(err, 'POST /api/accounts/[accountId]/members')

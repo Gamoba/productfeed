@@ -1,8 +1,10 @@
 import { NextResponse } from 'next/server'
 import { adminDb } from '@/lib/feeds'
-import { changeRole, removeMember } from '@/lib/accountMembers'
+import { changeRole, isRole, listAccountUsers, removeMember } from '@/lib/accountMembers'
+import { logActivity } from '@/lib/activity'
+import { ROLE_LABEL } from '@/app/components/shell/nav'
 import { errorResponse } from '@/lib/errors'
-import { sessionUserId } from '../_shared'
+import { sessionUser } from '../_shared'
 
 type Ctx = { params: Promise<{ accountId: string; userId: string }> }
 
@@ -10,9 +12,21 @@ type Ctx = { params: Promise<{ accountId: string; userId: string }> }
 export async function PATCH(req: Request, { params }: Ctx) {
   try {
     const { accountId, userId } = await params
-    const me = await sessionUserId()
+    const user = await sessionUser()
     const body = (await req.json().catch(() => ({}))) as { role?: unknown }
-    await changeRole(adminDb(), me, accountId, userId, body.role)
+    const db = adminDb()
+    const target = (await listAccountUsers(db, user.id, accountId)).members.find((m) => m.userId === userId)
+    await changeRole(db, user.id, accountId, userId, body.role)
+    if (target && isRole(body.role) && target.role !== body.role) {
+      await logActivity(db, {
+        user,
+        accountId,
+        area: 'Adgang',
+        action: `Rolle ændret for ${target.email}`,
+        before: ROLE_LABEL[target.role],
+        after: ROLE_LABEL[body.role],
+      })
+    }
     return NextResponse.json({ ok: true })
   } catch (err) {
     return errorResponse(err, 'PATCH /api/accounts/[accountId]/members/[userId]')
@@ -23,8 +37,11 @@ export async function PATCH(req: Request, { params }: Ctx) {
 export async function DELETE(_req: Request, { params }: Ctx) {
   try {
     const { accountId, userId } = await params
-    const me = await sessionUserId()
-    await removeMember(adminDb(), me, accountId, userId)
+    const user = await sessionUser()
+    const db = adminDb()
+    const target = (await listAccountUsers(db, user.id, accountId)).members.find((m) => m.userId === userId)
+    await removeMember(db, user.id, accountId, userId)
+    await logActivity(db, { user, accountId, area: 'Adgang', action: 'Bruger fjernet', before: target?.email ?? null })
     return NextResponse.json({ ok: true })
   } catch (err) {
     return errorResponse(err, 'DELETE /api/accounts/[accountId]/members/[userId]')

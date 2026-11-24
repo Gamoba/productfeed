@@ -2,7 +2,10 @@ import { createSupabaseServerClient } from '@/lib/supabase-server'
 import { syncProducts } from '@/lib/sync'
 import { getOwnedFeed } from '@/lib/feeds'
 import { enforceRateLimit } from '@/lib/rateLimit'
-import { errorResponse } from '@/lib/errors'
+import { clientMessage, errorResponse } from '@/lib/errors'
+import { logActivity } from '@/lib/activity'
+import { adminDb } from '@/lib/feeds'
+import { formatNumber } from '@/lib/formatDa'
 
 // A full sync of a large catalog (a ~28k-product feed URL takes 30–40 s) must
 // not hit the platform default limit. 300 s = Hobby-plan ceiling, as in cron/sync.
@@ -32,7 +35,26 @@ export async function POST(req: Request) {
   try {
     // Cost/abuse guard: cap full syncs per user (Shopify API load).
     await enforceRateLimit(user.id, 'shopify_sync')
-    const result = await syncProducts(feedId)
+    let result
+    try {
+      result = await syncProducts(feedId)
+    } catch (err) {
+      await logActivity(adminDb(), {
+        user,
+        feedId,
+        area: 'Synkronisering',
+        action: 'Synkronisering fejlede',
+        after: clientMessage(err, 'POST /api/shopify/sync'),
+      })
+      throw err
+    }
+    await logActivity(adminDb(), {
+      user,
+      feedId,
+      area: 'Synkronisering',
+      action: 'Varer synkroniseret',
+      after: `${formatNumber(result.synced)} varer`,
+    })
     return Response.json(result)
   } catch (err) {
     return errorResponse(err, 'POST /api/shopify/sync')

@@ -1,7 +1,8 @@
 import { NextResponse } from 'next/server'
 import { createSupabaseServerClient } from '@/lib/supabase-server'
 import { adminDb, getOwnedFeed } from '@/lib/feeds'
-import { saveBucket, deleteBucket, type Bucket } from '@/lib/googleAdsBuckets'
+import { saveBucket, deleteBucket, listBuckets, type Bucket } from '@/lib/googleAdsBuckets'
+import { logActivity } from '@/lib/activity'
 import { errorResponse } from '@/lib/errors'
 
 // Buckets are the values inside one custom label. Listing them is the label
@@ -30,7 +31,16 @@ export async function POST(req: Request, { params }: { params: Promise<{ feedId:
       return NextResponse.json({ error: 'bucket is required' }, { status: 400 })
     }
 
-    return NextResponse.json({ bucket: await saveBucket(adminDb(), feedId, body.bucket) })
+    const db = adminDb()
+    const saved = await saveBucket(db, feedId, body.bucket)
+    await logActivity(db, {
+      user: g.user,
+      feedId,
+      area: 'Labels',
+      action: body.bucket.id ? 'Bucket ændret' : 'Bucket oprettet',
+      after: saved.name === saved.value ? saved.name : `${saved.name} → ${saved.value}`,
+    })
+    return NextResponse.json({ bucket: saved })
   } catch (err) {
     return errorResponse(err, 'POST /api/google-ads/[feedId]/buckets')
   }
@@ -45,7 +55,10 @@ export async function DELETE(req: Request, { params }: { params: Promise<{ feedI
     const id = new URL(req.url).searchParams.get('id')
     if (!id) return NextResponse.json({ error: 'id is required' }, { status: 400 })
 
-    await deleteBucket(adminDb(), feedId, id)
+    const db = adminDb()
+    const bucket = (await listBuckets(db, feedId)).find((b) => b.id === id)
+    await deleteBucket(db, feedId, id)
+    await logActivity(db, { user: g.user, feedId, area: 'Labels', action: 'Bucket slettet', before: bucket?.name ?? null })
     return NextResponse.json({ ok: true })
   } catch (err) {
     return errorResponse(err, 'DELETE /api/google-ads/[feedId]/buckets')

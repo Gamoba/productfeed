@@ -9,6 +9,7 @@ import {
   type CustomLabel,
 } from '@/lib/googleAdsBuckets'
 import { errorResponse } from '@/lib/errors'
+import { logActivity } from '@/lib/activity'
 
 async function guard(feedId: string) {
   const supabase = await createSupabaseServerClient()
@@ -62,7 +63,16 @@ export async function POST(req: Request, { params }: { params: Promise<{ feedId:
     if (!body.label) {
       return NextResponse.json({ error: 'label is required' }, { status: 400 })
     }
-    return NextResponse.json({ label: await saveLabel(db, feedId, body.label) })
+    const saved = await saveLabel(db, feedId, body.label)
+    const slot = saved.slot !== null ? ` (custom_label_${saved.slot})` : ''
+    await logActivity(db, {
+      user: g.user,
+      feedId,
+      area: 'Labels',
+      action: body.label.id ? 'Label ændret' : 'Label oprettet',
+      after: `${saved.name}${slot}`,
+    })
+    return NextResponse.json({ label: saved })
   } catch (err) {
     return errorResponse(err, 'POST /api/google-ads/[feedId]/labels')
   }
@@ -78,7 +88,10 @@ export async function DELETE(req: Request, { params }: { params: Promise<{ feedI
     const id = new URL(req.url).searchParams.get('id')
     if (!id) return NextResponse.json({ error: 'id is required' }, { status: 400 })
 
-    await deleteLabel(adminDb(), feedId, id)
+    const db = adminDb()
+    const label = (await listLabels(db, feedId)).find((l) => l.id === id)
+    await deleteLabel(db, feedId, id)
+    await logActivity(db, { user: g.user, feedId, area: 'Labels', action: 'Label slettet', before: label?.name ?? null })
     return NextResponse.json({ ok: true })
   } catch (err) {
     return errorResponse(err, 'DELETE /api/google-ads/[feedId]/labels')

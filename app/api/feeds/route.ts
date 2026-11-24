@@ -3,6 +3,8 @@ import { createSupabaseServerClient } from '@/lib/supabase-server'
 import { adminDb, getOwnedProject } from '@/lib/feeds'
 import { getAccessibleProjectIds } from '@/lib/accounts'
 import { errorResponse } from '@/lib/errors'
+import { logActivity } from '@/lib/activity'
+import { channelOf } from '@/lib/channels'
 import type { ValidationIssue } from '@/lib/feedValidator'
 import { channelAvailability, isChannelId, type ChannelId } from '@/lib/channels'
 
@@ -207,5 +209,6 @@ export async function POST(req: Request) {
 
   if (error) return errorResponse(error, 'POST /api/feeds')
 
+  await logActivity(db, { user, feedId: data.id, area: 'Feed', action: 'Feed oprettet', after: `${channelOf(channel).label} · ${name}` })
   return NextResponse.json({ feed: data })
 }
