@@ -7,7 +7,7 @@ import { useShell } from './shell/useShell'
 import './shell/shell.css'
 
 // Pages that render without the shell.
-const NO_SHELL = ['/login', '/auth/invite']
+const NO_SHELL = ['/login', '/auth/invite', '/oauth/consent']
 
 export function AppShell({ children }: { children: React.ReactNode }) {
   const pathname = usePathname()

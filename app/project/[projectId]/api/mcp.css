@@ -1,0 +1,70 @@
+/* Shop › API / MCP (Design B + Kobolt). */
+
+/* Opacity only: an animated transform would trap position:fixed descendants. */
+.mc { display: flex; flex-direction: column; gap: 14px; animation: mc-fade .35s ease both; }
+@keyframes mc-fade { from { opacity: 0; } to { opacity: 1; } }
+
+.mc-head { display: flex; align-items: flex-end; justify-content: space-between; gap: 16px; flex-wrap: wrap; padding: 2px 2px 0; }
+.mc-head h1 { font-size: clamp(24px, 2.4vw, 30px); font-weight: 500; letter-spacing: -0.02em; line-height: 1.1; margin: 0; }
+.mc-lede { font-size: 13px; color: var(--on-canvas-muted); max-width: 78ch; margin: 6px 0 0; }
+.mc-muted { color: var(--muted); font-size: 12px; }
+.mc-bad { color: var(--warn); font-weight: 500; font-size: 12.5px; }
+.mc-empty { margin: 0; color: var(--muted); font-size: 12.5px; text-align: center; padding: 14px 0; }
+.mc-pad { padding: 16px 16px 0; }
+
+.mc-card-h { display: flex; align-items: flex-start; justify-content: space-between; gap: 12px; }
+.mc-card-h h3 { font-size: 14px; font-weight: 500; margin: 0; }
+.mc-card-h small { display: block; font-size: 12px; color: var(--muted); margin-top: 2px; max-width: 90ch; }
+
+.mc-btn-sm { padding: 5px 10px !important; font-size: 12px !important; }
+
+.mc-url { display: flex; align-items: center; gap: 12px; flex-wrap: wrap; padding: 12px 14px; border-radius: var(--r-md); background: var(--card-2); }
+.mc-url-text { flex: 1 1 240px; min-width: 0; font-size: 15px; font-weight: 500; overflow-wrap: anywhere; user-select: all; }
+.mc-steps { margin: 0; padding-left: 20px; font-size: 13px; line-height: 1.6; }
+.mc-steps b { font-weight: 500; }
+
+.mc-changes { list-style: none; margin: 0; padding: 0; display: flex; flex-direction: column; }
+.mc-change { padding: 12px 0; border-top: 1px solid var(--line); display: flex; flex-direction: column; gap: 8px; }
+.mc-change:first-child { border-top: 0; padding-top: 2px; }
+.mc-change-h { display: flex; justify-content: space-between; gap: 12px; flex-wrap: wrap; align-items: flex-start; }
+.mc-change-h b { display: block; font-weight: 500; font-size: 13px; }
+.mc-change-actions { display: flex; gap: 6px; }
+.mc-details { display: flex; flex-direction: column; gap: 4px; padding: 10px 12px; border-radius: var(--r-md); background: var(--card-2); font-size: 12.5px; }
+.mc-detail { display: grid; grid-template-columns: minmax(90px, 160px) 1fr auto 1fr; gap: 10px; align-items: start; }
+.mc-detail-label { font-weight: 500; }
+.mc-before { color: var(--muted); white-space: pre-line; overflow-wrap: anywhere; }
+.mc-after { white-space: pre-line; overflow-wrap: anywhere; }
+.mc-arrow { color: var(--muted); }
+
+.mc-two { display: grid; grid-template-columns: 1fr 1fr; gap: 12px; }
+.mc-two > .card { min-width: 0; }
+
+.mc-switch {
+  flex: none; width: 36px; height: 21px; border-radius: 999px; border: 0; padding: 2px; cursor: pointer;
+  background: var(--canvas-line); transition: background .15s ease; display: flex;
+}
+.mc-switch span { width: 17px; height: 17px; border-radius: 50%; background: #fff; box-shadow: var(--shadow); transition: transform .15s ease; }
+.mc-switch[aria-checked="true"] { background: var(--good); }
+.mc-switch[aria-checked="true"] span { transform: translateX(15px); }
+.mc-switch:disabled { opacity: .4; cursor: not-allowed; }
+.mc-switch:focus-visible { outline: 2px solid var(--accent-ink); outline-offset: 2px; }
+
+.mc-grants { list-style: none; margin: 0; padding: 0; display: flex; flex-direction: column; }
+.mc-grants li { display: flex; align-items: center; gap: 10px; padding: 8px 0; border-top: 1px solid var(--line); flex-wrap: wrap; }
+.mc-grants li:first-child { border-top: 0; }
+.mc-grants li .st { flex: 1; }
+
+.mc-table { width: 100%; border-collapse: collapse; font-size: 12.5px; }
+.mc-table th { text-align: left; font-size: 11px; font-weight: 500; color: var(--muted); letter-spacing: .02em; padding: 10px 12px; border-bottom: 1px solid var(--line); }
+.mc-table td { padding: 10px 12px; border-bottom: 1px solid var(--line); vertical-align: top; }
+.mc-table tr:last-child td { border-bottom: 0; }
+.mc-table td b { display: block; font-weight: 500; }
+.mc-table td .mc-muted { display: block; }
+
+@media (prefers-reduced-motion: reduce) { .mc { animation: none; } .mc-switch, .mc-switch span { transition: none; } }
+@media (max-width: 820px) {
+  .mc-two { grid-template-columns: 1fr; }
+  .mc-detail { grid-template-columns: 1fr; gap: 2px; }
+  .mc-arrow { display: none; }
+  .mc-table th:nth-child(2), .mc-table td:nth-child(2) { display: none; }
+}

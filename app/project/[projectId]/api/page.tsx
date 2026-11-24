@@ -1,10 +1,16 @@
+import { headers } from 'next/headers'
 import { redirect, notFound } from 'next/navigation'
 import { createSupabaseServerClient } from '@/lib/supabase-server'
-import { getOwnedProject } from '@/lib/feeds'
-import { PlaceholderPage } from '@/app/components/PlaceholderPage'
+import { adminDb, getOwnedProject } from '@/lib/feeds'
+import { getAccountRole } from '@/lib/accounts'
+import { listChanges } from '@/lib/mcp/changes'
+import { MCP_PATH } from '@/lib/mcp/auth'
+import { McpClient, type McpState } from './McpClient'
 
-// Shop › API / MCP. Placeholder from the prototype; what the page is for is
-// still being decided. Only checks access, reads nothing else.
+// Shop › API / MCP. Connecting Claude (or another MCP client) to FeedFlow,
+// approving the changes it asks for, and the agency's "apply without
+// approval" setting. The connection itself is per user and reaches every shop
+// in the agency; the change list here is this shop's.
 export default async function ApiMcpPage({ params }: { params: Promise<{ projectId: string }> }) {
   const { projectId } = await params
 
@@ -14,13 +20,37 @@ export default async function ApiMcpPage({ params }: { params: Promise<{ project
   } = await supabase.auth.getUser()
   if (!user) redirect('/login')
 
-  if (!(await getOwnedProject(user.id, projectId))) notFound()
+  const project = await getOwnedProject(user.id, projectId)
+  if (!project) notFound()
 
-  return (
-    <PlaceholderPage
-      title="API / MCP"
-      lede={"To måder at koble andre systemer på shoppen: API til jeres egne systemer og MCP til AI-assistenter."}
-      contents={["API: shop-id, aktive tokens (op til to, vises kun én gang) og et link til dokumentationen", "MCP: en adresse at indsætte i en AI-assistent og en kontakt, der slår MCP til for shoppen", "Hvad assistenten må: læse, foreslå ændringer, og gemme uden godkendelse (slået fra som standard)"]}
-    />
-  )
+  const db = adminDb()
+  const h = await headers()
+  const host = h.get('x-forwarded-host') ?? h.get('host') ?? 'localhost:3000'
+  const proto = h.get('x-forwarded-proto') ?? (host.startsWith('localhost') ? 'http' : 'https')
+
+  const [{ data: account }, role, pending, recent, grants] = await Promise.all([
+    // select('*') so the page renders before migration 057 (no mcp_auto_apply).
+    db.from('accounts').select('*').eq('id', project.account_id).maybeSingle(),
+    getAccountRole(db, user.id, project.account_id),
+    listChanges(db, { projectIds: [projectId], status: 'pending', limit: 100 }),
+    listChanges(db, { projectIds: [projectId], limit: 30 }),
+    supabase.auth.oauth.listGrants().catch(() => ({ data: null, error: true })),
+  ])
+  const acc = (account ?? {}) as { name?: string; mcp_auto_apply?: boolean }
+
+  const state: McpState = {
+    projectId,
+    endpoint: `${proto}://${host}${MCP_PATH}`,
+    agencyName: acc.name ?? 'jeres bureau',
+    autoApply: !!acc.mcp_auto_apply,
+    canChangeSetting: role === 'owner' || role === 'admin',
+    pending,
+    history: recent.filter((c) => c.status !== 'pending'),
+    // null = the OAuth server isn't switched on in Supabase yet.
+    grants: grants.error || !grants.data
+      ? null
+      : grants.data.map((g) => ({ clientId: g.client.id, name: g.client.name || 'App uden navn', grantedAt: g.granted_at })),
+  }
+
+  return <McpClient initial={state} />
 }

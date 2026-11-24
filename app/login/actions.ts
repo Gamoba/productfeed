@@ -32,7 +32,14 @@ export async function signIn(
     return { ...prevState, error: error.message }
   }
 
-  redirect('/')
+  redirect(safeNext(formData.get('next')))
+}
+
+// Only a path on this site: "/x" yes, "//evil.com" or "https://…" no, so the
+// login form can't be used to send people elsewhere after signing in.
+function safeNext(v: FormDataEntryValue | null): string {
+  if (typeof v !== 'string' || !v.startsWith('/') || v.startsWith('//') || v.startsWith('/\\')) return '/'
+  return v
 }
 
 // Self-service signup is CLOSED (security hardening M1). Accounts are created

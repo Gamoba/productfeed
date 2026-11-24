@@ -1,0 +1,10 @@
+/* OAuth consent (no shell). Design B + Kobolt, same frame as the invite page. */
+.oc { min-height: 100vh; display: grid; place-items: center; padding: 24px 16px; background: var(--canvas); }
+.oc-card { width: min(460px, 100%); padding: 28px; gap: 14px; }
+.oc-brand { font-size: 13px; font-weight: 500; color: var(--muted); }
+.oc h1 { font-size: 22px; font-weight: 500; letter-spacing: -0.02em; margin: 0; text-wrap: balance; }
+.oc-muted { margin: 0; font-size: 13px; color: var(--muted); line-height: 1.5; }
+.oc-muted strong { color: var(--card-fg); font-weight: 500; }
+.oc-list { margin: 0; padding: 12px 14px 12px 30px; background: var(--card-2); border-radius: var(--r-md); font-size: 12.5px; line-height: 1.5; display: flex; flex-direction: column; gap: 6px; }
+.oc-actions { display: flex; gap: 8px; flex-wrap: wrap; }
+.oc-small { margin: 0; font-size: 12px; color: var(--muted); }
