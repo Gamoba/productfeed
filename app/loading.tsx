@@ -1,65 +1,38 @@
-// Route-level skeleton for the dashboard (feed list). Mirrors the topbar
-// + 3 feed card skeletons (title + 5 stat rows + footer button).
-const SKELETON_BG = 'var(--color-background-secondary)'
+import './agency/agency.css'
 
-function Bar({ className, style }: { className?: string; style?: React.CSSProperties }) {
-  return (
-    <div
-      className={`animate-pulse ${className ?? ''}`}
-      style={{ background: SKELETON_BG, borderRadius: '4px', ...style }}
-    />
-  )
-}
-
-function FeedCardSkeleton() {
-  return (
-    <div className="ff-panel">
-      <div
-        className="ff-panel-header"
-        style={{ textTransform: 'none', letterSpacing: 0, fontSize: '12px', alignItems: 'flex-start' }}
-      >
-        <div className="min-w-0 space-y-1.5">
-          <Bar className="h-3.5" style={{ width: '160px' }} />
-          <Bar className="h-2.5" style={{ width: '210px' }} />
-        </div>
-        <div className="flex items-center gap-2 shrink-0">
-          <Bar className="h-4" style={{ width: '60px' }} />
-          <Bar className="h-4 w-4" style={{ borderRadius: '4px' }} />
-        </div>
-      </div>
-      <div className="px-3.5 py-3 space-y-2">
-        {Array.from({ length: 5 }).map((_, i) => (
-          <div key={i} className="flex items-center justify-between gap-2">
-            <Bar className="h-2.5" style={{ width: '120px' }} />
-            <Bar className="h-3" style={{ width: '60px' }} />
-          </div>
-        ))}
-      </div>
-      <div className="px-3.5 py-2.5 flex items-center gap-2">
-        <Bar className="h-7" style={{ width: '110px' }} />
-      </div>
-    </div>
-  )
+// Route-level skeleton for the Agency dashboard: header, stats and table rows.
+function Bar({ w, h = 10 }: { w: number | string; h?: number }) {
+  return <div className="animate-pulse" style={{ width: w, height: h, borderRadius: 6, background: 'var(--card-2)' }} />
 }
 
 export default function Loading() {
   return (
-    <div className="min-h-screen">
-      <header className="ff-topbar">
-        <div className="flex items-center gap-3">
-          <Bar className="h-4" style={{ width: '60px' }} />
-          <Bar className="h-3" style={{ width: '60px' }} />
+    <div className="ag">
+      <div className="ag-head">
+        <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
+          <Bar w={220} h={26} />
+          <Bar w={420} />
         </div>
-        <Bar className="h-7" style={{ width: '130px' }} />
-      </header>
-
-      <main className="px-4 py-4 max-w-6xl">
-        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-3">
-          <FeedCardSkeleton />
-          <FeedCardSkeleton />
-          <FeedCardSkeleton />
+      </div>
+      <section className="card flush">
+        <div className="ag-stats">
+          {[0, 1, 2].map((i) => (
+            <div key={i} style={{ gap: 8 }}>
+              <Bar w={90} />
+              <Bar w={60} h={28} />
+              <Bar w={120} />
+            </div>
+          ))}
         </div>
-      </main>
+        {[0, 1, 2].map((i) => (
+          <div key={i} style={{ display: 'flex', alignItems: 'center', gap: 12, padding: '12px 16px', borderTop: i ? '1px solid var(--line)' : 0 }}>
+            <Bar w={30} h={30} />
+            <Bar w={180} />
+            <div style={{ flex: 1 }} />
+            <Bar w={80} />
+          </div>
+        ))}
+      </section>
     </div>
   )
 }

@@ -1,0 +1,88 @@
+/* Agency dashboard (Design B + Kobolt). Reference: the prototype's #agency view. */
+
+/* Opacity only: an animated transform would trap position:fixed descendants. */
+.ag { display: flex; flex-direction: column; gap: 14px; animation: ag-fade .35s ease both; }
+@keyframes ag-fade { from { opacity: 0; } to { opacity: 1; } }
+
+.ag-head { display: flex; align-items: flex-end; justify-content: space-between; gap: 16px; flex-wrap: wrap; padding: 2px 2px 0; }
+.ag-head h1 { font-size: clamp(24px, 2.4vw, 30px); font-weight: 500; letter-spacing: -0.02em; line-height: 1.1; margin: 0; }
+.ag-lede { font-size: 13px; color: var(--on-canvas-muted); max-width: 78ch; margin: 6px 0 0; }
+.ag-muted { color: var(--muted); }
+
+/* Stats sit in the top of the same card as the table, as in the prototype. */
+.ag-stats { display: flex; padding: 16px; border-bottom: 1px solid var(--line); }
+.ag-stats > div { flex: 1; display: flex; flex-direction: column; gap: 2px; padding: 2px 16px; min-width: 0; }
+.ag-stats > div:first-child { padding-left: 0; }
+.ag-stats > div + div { border-left: 1px solid var(--line); }
+.ag-stats span { font-size: 12px; color: var(--muted); }
+.ag-stats strong { font-size: 32px; font-weight: 400; letter-spacing: -0.02em; line-height: 1.15; }
+.ag-stats strong.neg { color: var(--bad); font-weight: 400; }
+.ag-stats small { font-size: 12px; color: var(--muted); }
+
+.ag-tablewrap { overflow-x: auto; }
+.ag-table { width: 100%; border-collapse: collapse; font-size: 12.5px; }
+.ag-table th {
+  font-size: 11px; font-weight: 500; color: var(--muted); letter-spacing: .02em;
+  text-align: left; white-space: nowrap; padding: 10px 12px; border-bottom: 1px solid var(--line);
+}
+.ag-table th:first-child, .ag-table td:first-child { padding-left: 16px; }
+.ag-table th:last-child, .ag-table td:last-child { padding-right: 16px; }
+.ag-table td { padding: 10px 12px; border-bottom: 1px solid var(--line); vertical-align: middle; white-space: nowrap; }
+.ag-table tbody tr:last-child td { border-bottom: 0; }
+.ag-table .r { text-align: right; }
+.ag-row { cursor: pointer; transition: background-color 120ms ease; }
+.ag-row:hover, .ag-row:focus-visible { background: var(--card-2); }
+.ag-row:focus-visible { outline: 2px solid var(--accent-ink); outline-offset: -2px; }
+
+.ag-shop { display: flex; align-items: center; gap: 10px; min-width: 0; }
+.ag-shop > span:last-child { display: flex; flex-direction: column; min-width: 0; }
+.ag-shop b { font-weight: 500; font-size: 13px; }
+.ag-shop small { font-size: 11.5px; color: var(--muted); overflow: hidden; text-overflow: ellipsis; max-width: 340px; }
+.ag-av {
+  width: 30px; height: 30px; border-radius: 9px; flex: none; display: grid; place-items: center;
+  background: var(--hi); color: var(--hi-fg); font-size: 11px; font-weight: 600;
+}
+.ag-flags { display: inline-flex; align-items: center; gap: 4px; font-size: 15px; }
+.ag-flags small { font-size: 11.5px; color: var(--muted); }
+
+.ag-act { position: relative; }
+.ag-act > * { vertical-align: middle; }
+.ag-act .shell-pop { display: inline-block; margin-left: 6px; }
+.ag-more {
+  width: 28px; height: 28px; border-radius: 50%; border: 0; background: none;
+  font-size: 16px; line-height: 1; color: var(--muted); cursor: pointer;
+}
+.ag-more:hover, .ag-more[aria-expanded="true"] { background: var(--card); color: var(--card-fg); }
+
+.ag-empty { display: flex; flex-direction: column; align-items: center; gap: 12px; padding: 40px 16px; text-align: center; color: var(--muted); }
+.ag-empty p { margin: 0; font-size: 13px; }
+.ag-foot { margin: 0 2px; font-size: 12px; color: var(--on-canvas-muted); }
+
+/* dialogs */
+.ag-overlay {
+  position: fixed; inset: 0; z-index: 60; cursor: default; white-space: normal; text-align: left;
+  display: flex; align-items: flex-start; justify-content: center; padding: 80px 16px; background: rgba(10, 14, 8, .45);
+}
+.ag-dlg {
+  width: 100%; max-width: 440px; padding: 18px; background: var(--card); color: var(--card-fg);
+  border-radius: var(--r-lg); box-shadow: 0 20px 60px rgba(16, 19, 18, .18); animation: ag-fade .2s ease both;
+}
+.ag-dlg h2 { font-size: 18px; font-weight: 500; margin: 0 0 12px; }
+.ag-dlg-body { display: flex; flex-direction: column; gap: 12px; font-size: 13px; }
+.ag-dlg-body p { margin: 0; line-height: 1.5; }
+.ag-field { display: flex; flex-direction: column; gap: 6px; }
+.ag-field > span { font-size: 12px; font-weight: 500; color: var(--muted); }
+.ag-inp {
+  font: inherit; font-size: 13px; color: var(--card-fg); background: var(--card); resize: none;
+  border: 1px solid var(--line); border-radius: 10px; padding: 8px 10px;
+}
+.ag-inp:focus-visible { outline: 2px solid var(--accent-ink); outline-offset: 1px; }
+.ag-dlg-foot { display: flex; justify-content: flex-end; gap: 8px; margin-top: 4px; }
+.ag-danger, .ag-danger:hover:not(:disabled) { background: var(--bad) !important; border-color: var(--bad) !important; }
+
+@media (max-width: 720px) {
+  .ag-stats { flex-direction: column; gap: 10px; }
+  .ag-stats > div { padding: 0; }
+  .ag-stats > div + div { border-left: 0; border-top: 1px solid var(--line); padding-top: 10px; }
+}
+@media (prefers-reduced-motion: reduce) { .ag, .ag-dlg { animation: none; } }

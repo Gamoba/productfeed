@@ -69,10 +69,10 @@ function Crumbs({ shell, pathname }: { shell: Shell; pathname: string }) {
   )
 }
 
-// The account-level page's menu label ("Shops", "Agency users").
+// The account-level page's menu label ("Agency dashboard", "Agency users").
 function accountPageLabel(pathname: string): string {
   const link = accountNav().find((e): e is NavLink => e.kind === 'link' && isActive(pathname, e))
-  return link?.label ?? 'Shops'
+  return link?.label ?? 'Agency dashboard'
 }
 
 function Sep() {

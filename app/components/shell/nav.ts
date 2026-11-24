@@ -117,7 +117,7 @@ export function shopNav(projectId: string): NavEntry[] {
 
 export function accountNav(): NavEntry[] {
   return [
-    { kind: 'link', label: 'Shops', href: '/', icon: 'shops', exact: true },
+    { kind: 'link', label: 'Agency dashboard', href: '/', icon: 'overview', exact: true },
     { kind: 'link', label: 'Agency users', href: '/agency/users', icon: 'users' },
   ]
 }
