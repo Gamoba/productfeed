@@ -10,7 +10,7 @@ import { AppError } from '@/lib/errors'
 export class ShopifyAuthError extends AppError {
   constructor() {
     super(
-      'Shopify afviste adgangstokenet (HTTP 401). Appen er sandsynligvis fjernet, eller tokenet er roteret i Shopify Admin — indsæt et nyt token via "Change source" på projektsiden.',
+      'Shopify rejected the access token (HTTP 401). The app has probably been removed, or the token rotated in Shopify Admin. Paste a new token via "Change source" on the shop page.',
       502
     )
     this.name = 'ShopifyAuthError'
@@ -770,7 +770,7 @@ export function createShopifyClient({ shopUrl, accessToken }: ShopifyCredentials
       return { json: await res.json(), link: res.headers.get('link') ?? '' }
     }
 
-    throw new Error('Shopify REST: uventet tilstand')
+    throw new Error('Shopify REST: unexpected state')
   }
 
   async function fetchAllPages<T>(path: string, key: string, maxItems?: number, maxPages = 20): Promise<T[]> {
@@ -842,7 +842,7 @@ export function createShopifyClient({ shopUrl, accessToken }: ShopifyCredentials
       return json.data as T
     }
 
-    throw new Error('Shopify GraphQL: uventet tilstand')
+    throw new Error('Shopify GraphQL: unexpected state')
   }
 
   async function fetchProductMetafieldsBulk(

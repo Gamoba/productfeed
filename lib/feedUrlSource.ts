@@ -68,17 +68,17 @@ export async function assertPublicFeedUrl(raw: string): Promise<URL> {
   try {
     url = new URL(raw.trim())
   } catch {
-    throw new AppError('Feed-URL’en er ikke en gyldig URL')
+    throw new AppError('The feed URL is not a valid URL')
   }
   if (url.protocol !== 'https:' && url.protocol !== 'http:') {
-    throw new AppError('Feed-URL’en skal starte med https:// eller http://')
+    throw new AppError('The feed URL must start with https:// or http://')
   }
   if (url.username || url.password) {
-    throw new AppError('Feed-URL’en må ikke indeholde brugernavn eller adgangskode')
+    throw new AppError('The feed URL cannot contain a username or password')
   }
   const host = url.hostname.replace(/^\[|\]$/g, '')
   if (host === 'localhost' || host.endsWith('.localhost') || host.endsWith('.internal')) {
-    throw new AppError('Feed-URL’en skal pege på en offentlig adresse')
+    throw new AppError('The feed URL must point to a public address')
   }
   let addresses: string[]
   if (isIP(host)) {
@@ -87,11 +87,11 @@ export async function assertPublicFeedUrl(raw: string): Promise<URL> {
     try {
       addresses = (await lookup(host, { all: true })).map((a) => a.address)
     } catch {
-      throw new AppError(`Kunne ikke slå værten "${host}" op`)
+      throw new AppError(`Could not look up the host "${host}"`)
     }
   }
   if (addresses.length === 0 || addresses.some(isPrivateAddress)) {
-    throw new AppError('Feed-URL’en skal pege på en offentlig adresse')
+    throw new AppError('The feed URL must point to a public address')
   }
   return url
 }
@@ -127,12 +127,12 @@ export async function fetchFeedText(rawUrl: string, auth?: FeedAuth | null): Pro
           headers,
         })
       } catch (err) {
-        const reason = controller.signal.aborted ? 'timeout' : err instanceof Error ? err.message : 'netværksfejl'
-        throw new AppError(`Kunne ikke hente feedet (${reason})`)
+        const reason = controller.signal.aborted ? 'timeout' : err instanceof Error ? err.message : 'network error'
+        throw new AppError(`Could not fetch the feed (${reason})`)
       }
 
       if (res.status >= 300 && res.status < 400 && res.headers.get('location')) {
-        if (hop >= MAX_REDIRECTS) throw new AppError('Feed-URL’en redirecter for mange gange')
+        if (hop >= MAX_REDIRECTS) throw new AppError('The feed URL redirects too many times')
         url = await assertPublicFeedUrl(new URL(res.headers.get('location')!, url).toString())
         continue
       }
@@ -140,18 +140,18 @@ export async function fetchFeedText(rawUrl: string, auth?: FeedAuth | null): Pro
         const wantsBasic = /^\s*basic\b/i.test(res.headers.get('www-authenticate') ?? '')
         throw new AppError(
           auth
-            ? `Feedet afviste login (HTTP ${res.status}) — tjek brugernavn og adgangskode`
+            ? `The feed rejected the login (HTTP ${res.status}). Check the username and password`
             : wantsBasic
-              ? 'Feedet kræver login (HTTP Basic Auth) — udfyld brugernavn og adgangskode'
-              : `Feedet svarede med HTTP ${res.status} (adgang nægtet)`
+              ? 'The feed requires a login (HTTP Basic Auth). Enter a username and password'
+              : `The feed responded with HTTP ${res.status} (access denied)`
         )
       }
       if (!res.ok) {
-        throw new AppError(`Feedet svarede med HTTP ${res.status}`)
+        throw new AppError(`The feed responded with HTTP ${res.status}`)
       }
 
       const declared = Number(res.headers.get('content-length') ?? '0')
-      if (declared > MAX_BYTES) throw new AppError('Feedet er større end 200 MB')
+      if (declared > MAX_BYTES) throw new AppError('The feed is larger than 200 MB')
       if (!res.body) return ''
 
       const reader = res.body.getReader()
@@ -163,7 +163,7 @@ export async function fetchFeedText(rawUrl: string, auth?: FeedAuth | null): Pro
         total += value.byteLength
         if (total > MAX_BYTES) {
           await reader.cancel()
-          throw new AppError('Feedet er større end 200 MB')
+          throw new AppError('The feed is larger than 200 MB')
         }
         chunks.push(value)
       }
@@ -402,8 +402,8 @@ export async function fetchFeedUrlProducts(
   if (conversion.products.length === 0) {
     throw new AppError(
       items.length === 0
-        ? 'Fandt ingen produkter i feedet — forventede et Google Shopping-feed (RSS/XML med <item>-elementer)'
-        : 'Feedet indeholder elementer, men ingen af dem har et id'
+        ? 'No products found in the feed. Expected a Google Shopping feed (RSS/XML with <item> elements)'
+        : 'The feed contains items, but none of them has an id'
     )
   }
   return { ...conversion, itemCount: items.length }

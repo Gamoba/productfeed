@@ -86,39 +86,39 @@ export function ScopePanel({
           <div style={{ fontSize: '12px', color: 'var(--color-text-secondary)' }}>
             {summary ? (
               <>
-                <strong style={{ color: 'var(--color-text-primary)' }}>{summary.inScope.toLocaleString('da-DK')}</strong> varer i scope
+                <strong style={{ color: 'var(--color-text-primary)' }}>{summary.inScope.toLocaleString('en-GB')}</strong> products in scope
                 {summary.alreadyOptimized + summary.humanEdited + summary.needsReview > 0 && (
                   <span style={{ color: 'var(--color-text-tertiary)' }}>
-                    {' '}· {summary.alreadyOptimized.toLocaleString('da-DK')} optimeret af AI
-                    {summary.humanEdited > 0 ? `, ${summary.humanEdited.toLocaleString('da-DK')} rettet i hånden` : ''}
-                    {summary.needsReview > 0 ? `, ${summary.needsReview.toLocaleString('da-DK')} til godkendelse` : ''}
-                    {`, ${summary.notYetOptimized.toLocaleString('da-DK')} nye`}
+                    {' '}· {summary.alreadyOptimized.toLocaleString('en-GB')} optimised by AI
+                    {summary.humanEdited > 0 ? `, ${summary.humanEdited.toLocaleString('en-GB')} edited by hand` : ''}
+                    {summary.needsReview > 0 ? `, ${summary.needsReview.toLocaleString('en-GB')} awaiting review` : ''}
+                    {`, ${summary.notYetOptimized.toLocaleString('en-GB')} new`}
                   </span>
                 )}
-                {recalculating && <span style={{ color: 'var(--color-text-tertiary)' }}> · opdaterer…</span>}
+                {recalculating && <span style={{ color: 'var(--color-text-tertiary)' }}> · updating…</span>}
               </>
             ) : (
-              <span style={{ color: 'var(--color-text-tertiary)' }}>Beregner scope…</span>
+              <span style={{ color: 'var(--color-text-tertiary)' }}>Calculating scope…</span>
             )}
           </div>
           <div className="flex items-center gap-2 shrink-0">
             {error && <span style={{ fontSize: '11px', color: 'var(--color-badge-danger-text)' }}>{error}</span>}
             <button onClick={handleSave} disabled={isPending} className="ff-btn-primary">
-              {isPending ? 'Gemmer…' : success ? 'Gemt' : 'Gem scope'}
+              {isPending ? 'Saving…' : success ? 'Saved' : 'Save scope'}
             </button>
           </div>
         </div>
       </div>
 
       <p style={{ fontSize: '11px', color: 'var(--color-text-tertiary)' }}>
-        Dette filter er adskilt fra feedets Inkludér / ekskludér. Det afgør kun, hvilke varer en
-        optimering <em>kører</em> på. Gem det, og kør derefter fra Run.
+        This filter is separate from the feed’s Include / exclude. It only decides which products an
+        optimisation <em>runs</em> on. Save it, then run from Run.
       </p>
 
       <FilterSection
-        title="Inkludér varer"
-        description="Kun varer, der matcher reglerne, bliver optimeret. Ingen regler betyder alle varer i feedet."
-        badge="INKLUDÉR"
+        title="Include products"
+        description="Only products that match the rules are optimised. No rules means every product in the feed."
+        badge="INCLUDE"
         badgeCls="ff-badge ff-badge-success"
         config={include}
         onAddRule={() => addRule('include')}
@@ -127,9 +127,9 @@ export function ScopePanel({
         onSetOperator={(op) => setOperator('include', op)}
       />
       <FilterSection
-        title="Ekskludér varer"
-        description="Varer, der matcher reglerne, fjernes fra optimeringen."
-        badge="EKSKLUDÉR"
+        title="Exclude products"
+        description="Products that match the rules are removed from the optimisation."
+        badge="EXCLUDE"
         badgeCls="ff-badge ff-badge-danger"
         config={exclude}
         onAddRule={() => addRule('exclude')}

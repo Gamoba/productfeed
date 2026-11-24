@@ -17,7 +17,7 @@ export async function GET(req: Request) {
   // is required (no global env fallback).
   const projectId = new URL(req.url).searchParams.get('projectId')
   if (!projectId) {
-    return Response.json({ error: 'projectId er påkrævet' }, { status: 400 })
+    return Response.json({ error: 'projectId is required' }, { status: 400 })
   }
   const owned = await getOwnedProject(user.id, projectId)
   if (!owned) {

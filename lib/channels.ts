@@ -32,7 +32,7 @@ export const CHANNELS: Record<ChannelId, Channel> = {
     letter: 'G',
     color: 'var(--ch-google)',
     format: 'google_rss',
-    description: 'Merchant Center, Shopping-kampagner og Performance Max.',
+    description: 'Merchant Center, Shopping campaigns and Performance Max.',
   },
   meta_catalog: {
     id: 'meta_catalog',
@@ -40,7 +40,7 @@ export const CHANNELS: Record<ChannelId, Channel> = {
     letter: 'M',
     color: 'var(--ch-meta)',
     format: 'google_rss',
-    description: 'Katalog til annoncer på Facebook og Instagram.',
+    description: 'Catalogue for ads on Facebook and Instagram.',
   },
   daisycon: {
     id: 'daisycon',
@@ -48,7 +48,7 @@ export const CHANNELS: Record<ChannelId, Channel> = {
     letter: 'D',
     color: 'var(--ch-daisycon)',
     format: 'google_rss',
-    description: 'Affiliate-netværk og prissammenligning.',
+    description: 'Affiliate network and price comparison.',
   },
   microsoft_ads: {
     id: 'microsoft_ads',
@@ -56,7 +56,7 @@ export const CHANNELS: Record<ChannelId, Channel> = {
     letter: 'B',
     color: 'var(--ch-microsoft)',
     format: 'google_rss',
-    description: 'Microsoft Merchant Center og Shopping på Bing.',
+    description: 'Microsoft Merchant Center and Shopping on Bing.',
   },
 }
 
@@ -102,6 +102,6 @@ export function channelAvailability(channel: ChannelId, country: string | null |
   if (allowed) return { available: true }
   return {
     available: false,
-    reason: rule.reason || `${CHANNELS[channel].label} kan ikke bruges i ${c}.`,
+    reason: rule.reason || `${CHANNELS[channel].label} cannot be used in ${c}.`,
   }
 }

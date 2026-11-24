@@ -14,8 +14,8 @@ export default async function ConnectedCompaniesPage() {
   return (
     <PlaceholderPage
       title="Connected companies"
-      lede="Virksomheder, bureauet er koblet til. Når en virksomhed er koblet, får alle bureauets brugere adgang til den."
-      contents={["Tilknyttede virksomheder med adgang og dato", "Anmod om adgang til en ny virksomhed"]}
+      lede="Companies the agency is connected to. Once a company is connected, all the agency's users get access to it."
+      contents={["Connected companies with access and date", "Request access to a new company"]}
     />
   )
 }

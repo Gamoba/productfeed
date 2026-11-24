@@ -25,12 +25,12 @@ export type EncryptedToken = {
 function getKey(): Buffer {
   const b64 = process.env.TOKEN_ENCRYPTION_KEY
   if (!b64) {
-    throw new Error('TOKEN_ENCRYPTION_KEY mangler i miljøet')
+    throw new Error('TOKEN_ENCRYPTION_KEY is missing from the environment')
   }
   const key = Buffer.from(b64, 'base64')
   if (key.length !== 32) {
     throw new Error(
-      `TOKEN_ENCRYPTION_KEY skal være 32 bytes base64 (dekodede til ${key.length} bytes)`
+      `TOKEN_ENCRYPTION_KEY must be 32 bytes base64 (decoded to ${key.length} bytes)`
     )
   }
   return key

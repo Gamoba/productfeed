@@ -29,15 +29,15 @@ export function OptimizeClient({
         <div>
           <h1>AI Titles</h1>
           <p className="ts-lede">
-            Del varerne i grupper, lær AI’en stilen for hver gruppe, og godkend titlerne. Du godkender
-            altid, før noget går live.
+            Split your products into buckets, teach the AI the style for each bucket, and approve the
+            titles. You always approve before anything goes live.
           </p>
         </div>
-        <div className="ts-seg" role="tablist" aria-label="Visning">
+        <div className="ts-seg" role="tablist" aria-label="View">
           {(
             [
               ['buckets', 'Buckets'],
-              ['settings', 'Indstillinger'],
+              ['settings', 'Settings'],
             ] as const
           ).map(([v, label]) => (
             <button key={v} type="button" role="tab" aria-selected={tab === v} onClick={() => setTab(v)}>

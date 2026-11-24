@@ -47,7 +47,7 @@ const canManage = (r: AccountRole | null) => r === 'owner' || r === 'admin'
 
 async function requireRole(db: SupabaseClient, userId: string, accountId: string): Promise<AccountRole> {
   const role = await getAccountRole(db, userId, accountId)
-  if (!role) throw new AppError('Kontoen findes ikke', 404)
+  if (!role) throw new AppError('The account does not exist', 404)
   return role
 }
 
@@ -87,12 +87,12 @@ export async function inviteUser(
   redirectTo: string
 ): Promise<InviteResult> {
   const actorRole = await requireRole(db, actorId, accountId)
-  if (!canManage(actorRole)) throw new AppError('Kun ejere og admins kan invitere brugere', 403)
+  if (!canManage(actorRole)) throw new AppError('Only owners and admins can invite users', 403)
 
   const email = typeof input.email === 'string' ? input.email.trim().toLowerCase() : ''
-  if (!EMAIL_RE.test(email)) throw new AppError('Skriv en gyldig e-mailadresse')
-  if (!isRole(input.role)) throw new AppError('Ugyldig rolle')
-  if (input.role === 'owner' && actorRole !== 'owner') throw new AppError('Kun en ejer kan gøre andre til ejer', 403)
+  if (!EMAIL_RE.test(email)) throw new AppError('Enter a valid email address')
+  if (!isRole(input.role)) throw new AppError('Invalid role')
+  if (input.role === 'owner' && actorRole !== 'owner') throw new AppError('Only an owner can make others owner', 403)
   const name = typeof input.name === 'string' ? input.name.trim().slice(0, 120) : ''
 
   const { data: acc, error: accErr } = await db.from('accounts').select('seat_limit').eq('id', accountId).single()
@@ -105,7 +105,7 @@ export async function inviteUser(
       .eq('account_id', accountId)
     if (error) dbError('inviteUser count', error)
     if ((count ?? 0) >= seatLimit) {
-      throw new AppError(`Alle ${seatLimit} pladser er brugt. Fjern en bruger eller udvid planen.`)
+      throw new AppError(`All ${seatLimit} seats are used. Remove a user or upgrade the plan.`)
     }
   }
 
@@ -117,7 +117,7 @@ export async function inviteUser(
     const { error } = await db
       .from('account_members')
       .insert({ account_id: accountId, user_id: existingId as string, role: input.role })
-    if (error?.code === '23505') throw new AppError('Brugeren har allerede adgang')
+    if (error?.code === '23505') throw new AppError('The user already has access')
     if (error) dbError('inviteUser add existing', error)
     return { kind: 'added', email }
   }
@@ -131,7 +131,7 @@ export async function inviteUser(
   })
   if (linkErr || !link?.user || !link.properties?.action_link) {
     console.error('[inviteUser] generateLink:', linkErr)
-    throw new AppError('Invitationen kunne ikke oprettes. Prøv igen.')
+    throw new AppError('The invitation could not be created. Try again.')
   }
   const { error: memberErr } = await db
     .from('account_members')
@@ -149,7 +149,7 @@ export async function newInviteLink(
   redirectTo: string
 ): Promise<string> {
   const target = await loadTarget(db, actorId, accountId, targetId)
-  if (target.lastSignInAt) throw new AppError('Brugeren er allerede logget ind og har ikke brug for et link')
+  if (target.lastSignInAt) throw new AppError('The user has already signed in and does not need a link')
   // A magic link signs them in; /auth/invite then asks for a password.
   const { data, error } = await db.auth.admin.generateLink({
     type: 'magiclink',
@@ -158,7 +158,7 @@ export async function newInviteLink(
   })
   if (error || !data?.properties?.action_link) {
     console.error('[newInviteLink] generateLink:', error)
-    throw new AppError('Linket kunne ikke laves. Prøv igen.')
+    throw new AppError('The link could not be created. Try again.')
   }
   return data.properties.action_link
 }
@@ -170,11 +170,11 @@ export async function changeRole(
   targetId: string,
   role: unknown
 ): Promise<void> {
-  if (!isRole(role)) throw new AppError('Ugyldig rolle')
+  if (!isRole(role)) throw new AppError('Invalid role')
   const target = await loadTarget(db, actorId, accountId, targetId)
   if (target.role === role) return
   if ((role === 'owner' || target.role === 'owner') && target.actorRole !== 'owner') {
-    throw new AppError('Kun en ejer kan ændre ejerrollen', 403)
+    throw new AppError('Only an owner can change the owner role', 403)
   }
   if (target.role === 'owner') await assertNotLastOwner(db, accountId)
   const { error } = await db
@@ -193,7 +193,7 @@ export async function removeMember(
 ): Promise<void> {
   const target = await loadTarget(db, actorId, accountId, targetId)
   if (target.role === 'owner') {
-    if (target.actorRole !== 'owner') throw new AppError('Kun en ejer kan fjerne en ejer', 403)
+    if (target.actorRole !== 'owner') throw new AppError('Only an owner can remove an owner', 403)
     await assertNotLastOwner(db, accountId)
   }
   const { error } = await db.from('account_members').delete().eq('account_id', accountId).eq('user_id', targetId)
@@ -217,11 +217,11 @@ export async function removeMember(
 
 async function loadTarget(db: SupabaseClient, actorId: string, accountId: string, targetId: string) {
   const actorRole = await requireRole(db, actorId, accountId)
-  if (!canManage(actorRole)) throw new AppError('Kun ejere og admins kan ændre brugere', 403)
-  if (targetId === actorId) throw new AppError('Du kan ikke ændre din egen adgang her')
+  if (!canManage(actorRole)) throw new AppError('Only owners and admins can change users', 403)
+  if (targetId === actorId) throw new AppError('You cannot change your own access here')
   const { members } = await listAccountUsers(db, actorId, accountId)
   const t = members.find((m) => m.userId === targetId)
-  if (!t) throw new AppError('Brugeren findes ikke på kontoen', 404)
+  if (!t) throw new AppError('The user is not on the account', 404)
   return { ...t, actorRole }
 }
 
@@ -232,5 +232,5 @@ async function assertNotLastOwner(db: SupabaseClient, accountId: string) {
     .eq('account_id', accountId)
     .eq('role', 'owner')
   if (error) dbError('assertNotLastOwner', error)
-  if ((count ?? 0) <= 1) throw new AppError('Kontoen skal have mindst én ejer')
+  if ((count ?? 0) <= 1) throw new AppError('The account must have at least one owner')
 }

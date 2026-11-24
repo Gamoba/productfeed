@@ -6,9 +6,9 @@ import { clientMessage } from '@/lib/errors'
 import { AUTO_SYNC_LABELS, isAutoSyncFrequency, isAutoSyncTime, type AutoSyncFrequency } from '@/lib/syncSchedule'
 import { logActivity } from '@/lib/activity'
 
-const MODE_LABEL = { product: 'Pr. vare', variant: 'Pr. variant' } as const
+const MODE_LABEL = { product: 'Per product', variant: 'Per variant' } as const
 const schedule = (f: string | null | undefined, t: string | null | undefined) =>
-  f ? (f === 'off' ? AUTO_SYNC_LABELS.off : `${AUTO_SYNC_LABELS[f as AutoSyncFrequency] ?? f} kl. ${t ?? '?'}`) : null
+  f ? (f === 'off' ? AUTO_SYNC_LABELS.off : `${AUTO_SYNC_LABELS[f as AutoSyncFrequency] ?? f} at ${t ?? '?'}`) : null
 
 export async function saveFeedMode(
   feedId: string,
@@ -21,7 +21,7 @@ export async function saveFeedMode(
   if (!user) return { error: 'Unauthorized' }
 
   const owned = await getOwnedFeed(user.id, feedId)
-  if (!owned) return { error: 'Feed ikke fundet' }
+  if (!owned) return { error: 'Feed not found' }
 
   const db = adminDb()
   const { data: prev } = await db.from('feed_settings').select('feed_mode').eq('feed_id', feedId).maybeSingle()
@@ -35,7 +35,7 @@ export async function saveFeedMode(
   if (error) return { error: error.message }
   const before = (prev?.feed_mode as 'product' | 'variant' | undefined) ?? 'product'
   if (before !== mode) {
-    await logActivity(db, { user, feedId, area: 'Settings', action: 'Niveau ændret', before: MODE_LABEL[before], after: MODE_LABEL[mode] })
+    await logActivity(db, { user, feedId, area: 'Settings', action: 'Level changed', before: MODE_LABEL[before], after: MODE_LABEL[mode] })
   }
   return {}
 }
@@ -51,11 +51,11 @@ export async function saveAutoSyncSchedule(
   } = await supabase.auth.getUser()
   if (!user) return { error: 'Unauthorized' }
 
-  if (!isAutoSyncFrequency(frequency)) return { error: 'Ugyldig frekvens' }
-  if (!isAutoSyncTime(time)) return { error: 'Ugyldigt tidspunkt (HH:MM)' }
+  if (!isAutoSyncFrequency(frequency)) return { error: 'Invalid frequency' }
+  if (!isAutoSyncTime(time)) return { error: 'Invalid time (HH:MM)' }
 
   const owned = await getOwnedFeed(user.id, feedId)
-  if (!owned) return { error: 'Feed ikke fundet' }
+  if (!owned) return { error: 'Feed not found' }
 
   const db = adminDb()
   const { error } = await db
@@ -69,7 +69,7 @@ export async function saveAutoSyncSchedule(
     user,
     feedId,
     area: 'Settings',
-    action: 'Tidsplan for feedet ændret',
+    action: 'Feed schedule changed',
     before: schedule(o.auto_sync_frequency, o.auto_sync_time),
     after: schedule(frequency, time),
   })
@@ -91,11 +91,11 @@ export async function saveGoogleAdsSchedule(
   } = await supabase.auth.getUser()
   if (!user) return { error: 'Unauthorized' }
 
-  if (!isAutoSyncFrequency(frequency)) return { error: 'Ugyldig frekvens' }
-  if (!isAutoSyncTime(time)) return { error: 'Ugyldigt tidspunkt (HH:MM)' }
+  if (!isAutoSyncFrequency(frequency)) return { error: 'Invalid frequency' }
+  if (!isAutoSyncTime(time)) return { error: 'Invalid time (HH:MM)' }
 
   const owned = await getOwnedFeed(user.id, feedId)
-  if (!owned) return { error: 'Feed ikke fundet' }
+  if (!owned) return { error: 'Feed not found' }
 
   const db = adminDb()
   const { data: prev } = await db
@@ -110,12 +110,12 @@ export async function saveGoogleAdsSchedule(
     .select('feed_id')
 
   if (error) return { error: clientMessage(error, 'saveGoogleAdsSchedule') }
-  if (!data?.length) return { error: 'Vælg en Google Ads-konto først' }
+  if (!data?.length) return { error: 'Choose a Google Ads account first' }
   await logActivity(db, {
     user,
     feedId,
     area: 'Settings',
-    action: 'Tidsplan for performance ændret',
+    action: 'Performance schedule changed',
     before: schedule(prev?.auto_sync_frequency, prev?.auto_sync_time),
     after: schedule(frequency, time),
   })

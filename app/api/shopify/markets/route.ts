@@ -15,7 +15,7 @@ export async function GET(req: Request) {
   // Markets come from the project's Shopify connection — projectId is required.
   const projectId = new URL(req.url).searchParams.get('projectId')
   if (!projectId) {
-    return NextResponse.json({ error: 'projectId er påkrævet' }, { status: 400 })
+    return NextResponse.json({ error: 'projectId is required' }, { status: 400 })
   }
   const owned = await getOwnedProject(user.id, projectId)
   if (!owned) return NextResponse.json({ error: 'Project not found' }, { status: 404 })

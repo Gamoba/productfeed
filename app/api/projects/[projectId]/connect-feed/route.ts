@@ -44,15 +44,15 @@ export async function POST(
     keep_auth?: boolean
   }
   const feedUrl = (body.feed_url ?? '').trim()
-  if (!feedUrl) return NextResponse.json({ error: 'feed_url er påkrævet' }, { status: 400 })
+  if (!feedUrl) return NextResponse.json({ error: 'feed_url is required' }, { status: 400 })
 
   const username = (body.auth_username ?? '').trim()
   const password = body.auth_password ?? ''
   if (!username && password) {
-    return NextResponse.json({ error: 'Udfyld brugernavn til adgangskoden' }, { status: 400 })
+    return NextResponse.json({ error: 'Enter a username for the password' }, { status: 400 })
   }
   if (username.includes(':')) {
-    return NextResponse.json({ error: 'Brugernavnet må ikke indeholde ":"' }, { status: 400 })
+    return NextResponse.json({ error: 'The username cannot contain ":"' }, { status: 400 })
   }
 
   try {
@@ -124,7 +124,7 @@ export async function POST(
       projectId,
       accountId: owned.account_id,
       area: 'Connections',
-      action: owned.source_type === 'feed_url' ? 'Feed-URL skiftet' : 'Feed-URL forbundet',
+      action: owned.source_type === 'feed_url' ? 'Feed URL changed' : 'Feed URL connected',
       before: owned.source_type === 'feed_url' ? host(owned.feed_url) : owned.shop_url,
       after: host(feedUrl),
     })

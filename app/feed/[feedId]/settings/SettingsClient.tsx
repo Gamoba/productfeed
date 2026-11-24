@@ -133,7 +133,7 @@ export function SettingsClient({
       const r = outcome.result
       setStatus({
         kind: 'ok',
-        text: r ? `Synkroniseret: ${r.synced} varer på ${(r.durationMs / 1000).toFixed(1)} s` : 'Synkroniseret',
+        text: r ? `Synced: ${r.synced} products in ${(r.durationMs / 1000).toFixed(1)} s` : 'Synced',
       })
       router.refresh()
     },
@@ -162,7 +162,7 @@ export function SettingsClient({
           })
         }
       })
-      .catch((err: unknown) => setMarketsError(err instanceof Error ? err.message : 'Kunne ikke hente markeder'))
+      .catch((err: unknown) => setMarketsError(err instanceof Error ? err.message : 'Could not fetch markets'))
   }
 
   function selectMarket(m: ShopifyMarket) {
@@ -237,19 +237,19 @@ export function SettingsClient({
           }),
         })
         const json = await res.json()
-        if (!res.ok) throw new Error(json.error ?? 'Kunne ikke gemme Google Ads-kontoen')
-        if (json.syncError) note = ` Tallene kunne ikke hentes: ${json.syncError}`
+        if (!res.ok) throw new Error(json.error ?? 'Could not save the Google Ads account')
+        if (json.syncError) note = ` The figures could not be fetched: ${json.syncError}`
       }
       if (perfSchedDirty) {
         const r = await saveGoogleAdsSchedule(feedId, perfFreq, perfTime)
         if (r.error) throw new Error(r.error)
       }
       setSaved({ feedFreq, feedTime, perfFreq, perfTime, feedMode })
-      setStatus({ kind: note ? 'error' : 'ok', text: `Gemt.${note}` })
+      setStatus({ kind: note ? 'error' : 'ok', text: `Saved.${note}` })
       router.refresh()
       return true
     } catch (err) {
-      setStatus({ kind: 'error', text: err instanceof Error ? err.message : 'Kunne ikke gemme' })
+      setStatus({ kind: 'error', text: err instanceof Error ? err.message : 'Could not save' })
       return false
     } finally {
       setSaving(false)
@@ -280,16 +280,16 @@ export function SettingsClient({
         <div>
           <h1>Settings</h1>
           <p className="se-lede">
-            Gælder kun dette feed: kilde, tidsplan, den annoncekonto feedet er koblet til, og de mål tallene regnes ud fra.
+            Applies to this feed only: source, schedule, the ad account the feed is connected to, and the goals the figures are based on.
           </p>
         </div>
         <div className="se-actions">
           {status && <span className={`se-status${status.kind === 'error' ? ' neg' : ''}`}>{status.text}</span>}
           <button type="button" className="wl-btn-secondary" onClick={saveAndSync} disabled={busy}>
-            {sync.running ? `Synkroniserer… ${sync.status?.progress ?? 0} %` : shopDirty ? 'Gem og synkronisér' : 'Synkronisér nu'}
+            {sync.running ? `Syncing… ${sync.status?.progress ?? 0}%` : shopDirty ? 'Save and sync' : 'Sync now'}
           </button>
           <button type="button" className="wl-btn-primary" onClick={save} disabled={busy || !dirty}>
-            {saving ? 'Gemmer…' : 'Gem'}
+            {saving ? 'Saving…' : 'Save'}
           </button>
         </div>
       </header>
@@ -305,52 +305,52 @@ export function SettingsClient({
         <section className="card se-card">
           <div className="se-card-h">
             <div>
-              <h3>Kilde</h3>
-              <small>Hvor varerne kommer fra, og hvilket marked og sprog feedet henter</small>
+              <h3>Source</h3>
+              <small>Where the products come from, and which market and language the feed fetches</small>
             </div>
             {source.type === 'shopify' && projectId && (
               <button type="button" className="link se-linkbtn" onClick={openSourceEditor} aria-expanded={editingSource}>
-                {editingSource ? 'Luk' : 'Rediger'}
+                {editingSource ? 'Close' : 'Edit'}
               </button>
             )}
           </div>
           <dl className="se-kv">
             <div>
-              <dt>{source.type === 'feed_url' ? 'Feed-URL' : 'Shop'}</dt>
+              <dt>{source.type === 'feed_url' ? 'Feed URL' : 'Shop'}</dt>
               <dd title={source.address ?? undefined}>{source.address ?? '—'}</dd>
             </div>
             {source.type === 'shopify' && (
               <div>
-                <dt>Marked</dt>
-                <dd>{marketLabel || <span className="neg">Ikke valgt</span>}</dd>
+                <dt>Market</dt>
+                <dd>{marketLabel || <span className="neg">Not selected</span>}</dd>
               </div>
             )}
             <div>
-              <dt>Sprog</dt>
+              <dt>Language</dt>
               <dd>{shop ? languageName(shop.selected_locale) || shop.selected_locale : '—'}</dd>
             </div>
             <div>
-              <dt>Valuta</dt>
+              <dt>Currency</dt>
               <dd>{shop?.currency ?? '—'}</dd>
             </div>
             <div>
-              <dt>Sidst synkroniseret</dt>
-              <dd>{source.lastSyncedAt ? formatWhen(source.lastSyncedAt) : <span className="neg">Aldrig</span>}</dd>
+              <dt>Last synced</dt>
+              <dd>{source.lastSyncedAt ? formatWhen(source.lastSyncedAt) : <span className="neg">Never</span>}</dd>
             </div>
           </dl>
 
           {editingSource && (
             <div className="se-edit">
-              {!markets && !marketsError && <p className="se-muted">Henter markeder fra Shopify…</p>}
-              {marketsError && <p className="note warn">Kunne ikke hente markeder: {marketsError}</p>}
+              {!markets && !marketsError && <p className="se-muted">Fetching markets from Shopify…</p>}
+              {marketsError && <p className="note warn">Could not fetch markets: {marketsError}</p>}
               {markets && fromFeedUrl && (
-                <p className="note">Varerne kommer fra en feed-URL. Sprog og valuta følger det feed, så der er intet marked at vælge.</p>
+                <p className="note">The products come from a feed URL. Language and currency follow that feed, so there is no market to choose.</p>
               )}
               {markets && !fromFeedUrl && markets.length === 0 && (
-                <p className="note">Ingen markeder fundet. Shoppen har måske ikke Shopify Markets slået til.</p>
+                <p className="note">No markets found. The shop may not have Shopify Markets turned on.</p>
               )}
               {markets && markets.length > 0 && (
-                <div className="se-markets" role="radiogroup" aria-label="Marked">
+                <div className="se-markets" role="radiogroup" aria-label="Market">
                   {markets.map((m) => {
                     const on = m.id === shop?.selected_market_id
                     return (
@@ -362,8 +362,8 @@ export function SettingsClient({
                           </b>
                           <small>
                             {m.currency}
-                            {m.type === 'PRIMARY' ? ' · primært marked' : ''}
-                            {m.status !== 'ACTIVE' ? ' · kladde' : ''}
+                            {m.type === 'PRIMARY' ? ' · primary market' : ''}
+                            {m.status !== 'ACTIVE' ? ' · draft' : ''}
                           </small>
                         </span>
                       </label>
@@ -373,7 +373,7 @@ export function SettingsClient({
               )}
               {locales.length > 0 && shop && (
                 <div className="se-row se-row-tight">
-                  <span>Sprog</span>
+                  <span>Language</span>
                   <select
                     className="se-sel"
                     value={shop.selected_locale}
@@ -381,7 +381,7 @@ export function SettingsClient({
                   >
                     {locales.map((l) => (
                       <option key={l.locale} value={l.locale}>
-                        {languageName(l.locale) || l.name} ({l.locale}){l.primary ? ', standard' : ''}
+                        {languageName(l.locale) || l.name} ({l.locale}){l.primary ? ', default' : ''}
                       </option>
                     ))}
                   </select>
@@ -389,7 +389,7 @@ export function SettingsClient({
               )}
               {shopDirty && (
                 <p className="note warn">
-                  Skift af marked eller sprog virker først efter en ny synkronisering. Titler og beskrivelser hentes på det valgte sprog.
+                  A change of market or language takes effect after the next sync. Titles and descriptions are fetched in the chosen language.
                 </p>
               )}
             </div>
@@ -400,14 +400,14 @@ export function SettingsClient({
         <section className="card se-card">
           <div className="se-card-h">
             <div>
-              <h3>Tidsplan</h3>
-              <small>Hvornår feedet bygges, og hvornår tallene fra Google Ads hentes. Dansk tid.</small>
+              <h3>Schedule</h3>
+              <small>When the feed is built and when the figures are fetched from Google Ads. Danish time.</small>
             </div>
           </div>
           <div className="se-rows">
             <ScheduleRow
-              label="Generér feed"
-              hint="Henter varer og bygger feedet"
+              label="Generate feed"
+              hint="Fetches products and builds the feed"
               freq={feedFreq}
               time={feedTime}
               onFreq={setFeedFreq}
@@ -415,8 +415,8 @@ export function SettingsClient({
               last={feedSchedule}
             />
             <ScheduleRow
-              label="Hent performance"
-              hint={ads.customerId ? 'Henter forbrug og konverteringer pr. vare' : 'Vælg en Google Ads-konto først'}
+              label="Fetch performance"
+              hint={ads.customerId ? 'Fetches spend and conversions per product' : 'Choose a Google Ads account first'}
               freq={perfFreq}
               time={perfTime}
               onFreq={setPerfFreq}
@@ -426,17 +426,17 @@ export function SettingsClient({
             />
             <div className="se-row">
               <span className="se-row-l">
-                Niveau
-                <small>Bruges også af Labels</small>
+                Level
+                <small>Also used by Labels</small>
               </span>
               <select
                 className="se-sel"
                 value={feedMode}
                 onChange={(e) => setFeedMode(e.target.value as 'product' | 'variant')}
-                aria-label="Niveau"
+                aria-label="Level"
               >
-                <option value="product">Pr. vare (varianter samlet)</option>
-                <option value="variant">Pr. variant</option>
+                <option value="product">Per product (variants combined)</option>
+                <option value="variant">Per variant</option>
               </select>
             </div>
           </div>
@@ -446,26 +446,26 @@ export function SettingsClient({
         <section className="card se-card">
           <div className="se-card-h">
             <div>
-              <h3>Google Ads-konto</h3>
-              <small>Kobles pr. feed, fordi nogle har én konto pr. sprog og andre én konto til flere</small>
+              <h3>Google Ads account</h3>
+              <small>Connected per feed, because some have one account per language and others one account for several</small>
             </div>
             {ads.connectionError ? (
-              <span className="pill warn">Forbindelsen fejler</span>
+              <span className="pill warn">Connection failing</span>
             ) : ads.customerId ? (
-              <span className="st">Koblet</span>
+              <span className="st">Connected</span>
             ) : (
-              <span className="st st-off">Ikke koblet</span>
+              <span className="st st-off">Not connected</span>
             )}
           </div>
 
           {!ads.hasConnection ? (
             <div className="se-empty">
               <p>
-                Feedet har ingen Google Ads-forbindelse. Når den er godkendt, vælger du kontoen her. Vi læser kun data og ændrer
-                aldrig noget i kontoen.
+                The feed has no Google Ads connection. Once it is approved, you choose the account here. We only read data and never
+                change anything in the account.
               </p>
               <a href={`/api/google-ads/connect?feedId=${feedId}`} className="wl-btn-primary">
-                Kobl Google Ads
+                Connect Google Ads
               </a>
             </div>
           ) : (
@@ -474,9 +474,9 @@ export function SettingsClient({
               <div className="se-rows">
                 <div className="se-row">
                   <span className="se-row-l">
-                    Konto
-                    {accountsState === 'loading' && <small>Henter konti…</small>}
-                    {accountsState === 'error' && <small className="neg">Kunne ikke hente konti</small>}
+                    Account
+                    {accountsState === 'loading' && <small>Fetching accounts…</small>}
+                    {accountsState === 'error' && <small className="neg">Could not fetch accounts</small>}
                   </span>
                   <select
                     className="se-sel se-sel-wide"
@@ -484,9 +484,9 @@ export function SettingsClient({
                     onFocus={loadAccounts}
                     onMouseDown={loadAccounts}
                     onChange={(e) => setCustomerId(e.target.value)}
-                    aria-label="Google Ads-konto"
+                    aria-label="Google Ads account"
                   >
-                    {!customerId && <option value="">Vælg konto…</option>}
+                    {!customerId && <option value="">Choose account…</option>}
                     {/* The saved account until the list arrives, so the field never reads empty. */}
                     {ads.customerId && !accounts?.some((a) => a.customerId === ads.customerId) && (
                       <option value={ads.customerId}>{ads.customerName || fmtId(ads.customerId)}</option>
@@ -502,23 +502,23 @@ export function SettingsClient({
                 <div className="se-row">
                   <span className="se-row-l">
                     Feed label
-                    <small>Tom betyder hele kontoen</small>
+                    <small>Empty means the whole account</small>
                   </span>
                   <input
                     className="se-sel se-sel-wide"
                     value={feedLabel}
                     onChange={(e) => setFeedLabel(e.target.value)}
-                    placeholder="fx DE"
+                    placeholder="e.g. DE"
                     aria-label="Feed label"
                   />
                 </div>
               </div>
               <p className="se-foot">
-                Filtret bestemmer, hvilke tal der hentes ind på feedet. Brug det, når én konto dækker flere lande.
-                {ads.lastSyncedAt && <> Sidst hentet {formatWhen(ads.lastSyncedAt)}.</>}
-                {ads.lastSyncError && <span className="neg"> Sidste hentning fejlede: {ads.lastSyncError}</span>}{' '}
+                The filter decides which figures are fetched for the feed. Use it when one account covers several countries.
+                {ads.lastSyncedAt && <> Last fetched {formatWhen(ads.lastSyncedAt)}.</>}
+                {ads.lastSyncError && <span className="neg"> The last fetch failed: {ads.lastSyncError}</span>}{' '}
                 <a href={`/api/google-ads/connect?feedId=${feedId}`} className="link">
-                  Kobl igen
+                  Reconnect
                 </a>
               </p>
             </>
@@ -529,29 +529,29 @@ export function SettingsClient({
         <section className="card se-card">
           <div className="se-card-h">
             <div>
-              <h3>Konverteringsmål</h3>
-              <small>De mål, omsætning og profit regnes ud fra i Labels og Performance</small>
+              <h3>Conversion goals</h3>
+              <small>The goals that revenue and profit are calculated from in Labels and Performance</small>
             </div>
           </div>
           {!ads.customerId ? (
-            <p className="se-muted">Vælg en Google Ads-konto først. Målene vælges blandt kontoens konverteringshandlinger.</p>
+            <p className="se-muted">Choose a Google Ads account first. The goals are chosen from the account’s conversion actions.</p>
           ) : actions.length === 0 ? (
             <p className="se-muted">
-              Der er ingen konverteringshandlinger endnu. De dukker op, når tallene er hentet første gang.
+              There are no conversion actions yet. They appear once the figures have been fetched for the first time.
             </p>
           ) : (
             <div className="se-rows">
-              <GoalRow label="Omsætning" hint="Påkrævet til ROAS og Wasted spend" value={roas} onChange={setRoas} actions={actions} />
-              <GoalRow label="Profit" hint="Bruttoprofit, valgfri" value={poas} onChange={setPoas} actions={actions} optional />
+              <GoalRow label="Revenue" hint="Required for ROAS and Wasted spend" value={roas} onChange={setRoas} actions={actions} />
+              <GoalRow label="Profit" hint="Gross profit, optional" value={poas} onChange={setPoas} actions={actions} optional />
             </div>
           )}
           {ads.customerId && actions.length > 0 && (
             <p className="se-foot">
-              Flere handlinger lagt sammen vælges på{' '}
+              Several actions added together are chosen on{' '}
               <a href={`/feed/${feedId}/google-ads`} className="link">
                 Performance
               </a>
-              , hvor du kan se, hvor meget hver handling rapporterer.
+              , where you can see how much each action reports.
             </p>
           )}
         </section>
@@ -592,10 +592,10 @@ function ScheduleRow({
               {' · '}
               {last.lastStatus === 'error' ? (
                 <span className="neg" title={last.lastError ?? undefined}>
-                  fejlede {formatWhen(last.lastRunAt)}
+                  failed {formatWhen(last.lastRunAt)}
                 </span>
               ) : (
-                <>sidst {formatWhen(last.lastRunAt)}</>
+                <>last {formatWhen(last.lastRunAt)}</>
               )}
             </>
           )}
@@ -607,7 +607,7 @@ function ScheduleRow({
           value={freq}
           disabled={disabled}
           onChange={(e) => onFreq(e.target.value as AutoSyncFrequency)}
-          aria-label={`${label}: hvor tit`}
+          aria-label={`${label}: how often`}
         >
           {AUTO_SYNC_FREQUENCIES.map((f) => (
             <option key={f} value={f}>
@@ -622,7 +622,7 @@ function ScheduleRow({
             value={time}
             disabled={disabled}
             onChange={(e) => e.target.value && onTime(e.target.value)}
-            aria-label={freq === 'daily' ? `${label}: klokkeslæt` : `${label}: fra klokken`}
+            aria-label={freq === 'daily' ? `${label}: time` : `${label}: starting at`}
           />
         )}
       </span>
@@ -659,7 +659,7 @@ function GoalRow({
         onChange={(e) => onChange(e.target.value ? e.target.value.split(SEP) : [])}
         aria-label={label}
       >
-        <option value="">{optional ? 'Ingen' : 'Vælg handling…'}</option>
+        <option value="">{optional ? 'None' : 'Choose action…'}</option>
         {/* A summed set chosen on Performance stays selectable as it is. */}
         {(value.length > 1 || (value.length === 1 && !known.has(value[0]))) && (
           <option value={joined}>{value.join(' + ')}</option>
@@ -667,7 +667,7 @@ function GoalRow({
         {actions.map((a) => (
           <option key={a.name} value={a.name}>
             {a.name}
-            {a.inWindow ? '' : ' (ingen data de sidste 90 dage)'}
+            {a.inWindow ? '' : ' (no data in the last 90 days)'}
           </option>
         ))}
       </select>

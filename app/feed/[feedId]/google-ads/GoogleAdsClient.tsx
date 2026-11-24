@@ -221,7 +221,7 @@ type SortKey =
   | 'dRoasAbs'
 
 const describeActions = (list: string[]): string =>
-  list.length === 0 ? 'ikke valgt' : list.map((a) => `«${a}»`).join(' + ')
+  list.length === 0 ? 'not selected' : list.map((a) => `«${a}»`).join(' + ')
 
 function compare(a: number | null, b: number | null, dir: 1 | -1): number {
   if (a === null && b === null) return 0
@@ -453,7 +453,7 @@ export function GoogleAdsClient({
       const res = await fetch(`/api/google-ads/${feedId}/sync`, { method: 'POST' })
       const json = await res.json()
       if (!res.ok) {
-        setSyncError(json.error ?? 'Tallene kunne ikke hentes')
+        setSyncError(json.error ?? 'The figures could not be fetched')
         return
       }
       const warnings: string[] = json.result?.warnings ?? []
@@ -464,7 +464,7 @@ export function GoogleAdsClient({
       setVariantStock({})
       router.refresh()
     } catch {
-      setSyncError('Kunne ikke få kontakt til serveren')
+      setSyncError('Could not reach the server')
     } finally {
       setSyncing(false)
     }
@@ -477,7 +477,7 @@ export function GoogleAdsClient({
           <div>
             <h1>Performance</h1>
             <p className="pf-lede">
-              Hvad hver vare har kostet og tjent i Google Ads, med margin og break-even ved siden af.
+              What each product has cost and earned in Google Ads, with margin and break-even alongside.
               {connected && settings && (
                 <>
                   {' '}
@@ -491,7 +491,7 @@ export function GoogleAdsClient({
 
           {connected && (
             <div className="pf-actions">
-              <div className="pf-seg" role="group" aria-label="Periode">
+              <div className="pf-seg" role="group" aria-label="Period">
                 {windows.map((w) => (
                   <button key={w} type="button" aria-pressed={w === days} onClick={() => router.push(urlWith({ days: w }))}>
                     {w}d
@@ -499,10 +499,10 @@ export function GoogleAdsClient({
                 ))}
               </div>
               <button onClick={() => setShowSetup((s) => !s)} className="wl-btn-secondary shrink-0">
-                Opsætning
+                Setup
               </button>
               <button onClick={refresh} disabled={syncing} className="wl-btn-primary shrink-0">
-                {syncing ? 'Henter…' : 'Hent tal'}
+                {syncing ? 'Fetching…' : 'Fetch figures'}
               </button>
             </div>
           )}
@@ -522,7 +522,7 @@ export function GoogleAdsClient({
             <div className="flex items-start gap-2.5">
               <span className="wl-dot shrink-0" style={{ background: 'var(--accent-green)', marginTop: '5px' }} />
               <p style={{ fontSize: '13px', color: 'var(--ink-secondary)' }}>
-                Google Ads er godkendt. Vælg nu kontoen.
+                Google Ads is approved. Now choose the account.
               </p>
             </div>
           </div>
@@ -553,7 +553,7 @@ export function GoogleAdsClient({
               />
               <div>
                 <p style={{ fontSize: '13px', fontWeight: 500, color: 'var(--ink)' }}>
-                  Opsætningen er ikke færdig
+                  Setup is not finished
                 </p>
                 {setupIssues.map((i) => (
                   <p key={i} style={{ fontSize: '12px', color: 'var(--ink-secondary)' }}>
@@ -589,14 +589,14 @@ export function GoogleAdsClient({
           <section className="wl-card" style={{ padding: '16px 18px' }}>
             <div className="flex flex-wrap items-end gap-4">
               <MetricPicker
-                label="Omsætning (ROAS)"
+                label="Revenue (ROAS)"
                 selected={activeActions.roas}
                 actions={availableActions}
                 currency={currency}
                 onChange={(v) => router.push(urlWith({ roas: v }))}
               />
               <MetricPicker
-                label="Bruttoprofit (POAS)"
+                label="Gross profit (POAS)"
                 selected={activeActions.poas}
                 actions={availableActions}
                 currency={currency}
@@ -608,7 +608,7 @@ export function GoogleAdsClient({
                   disabled={savingDefaults}
                   className="wl-btn-secondary"
                 >
-                  {savingDefaults ? 'Gemmer…' : 'Gem som standard'}
+                  {savingDefaults ? 'Saving…' : 'Save as default'}
                 </button>
               )}
             </div>
@@ -621,8 +621,8 @@ export function GoogleAdsClient({
                 maxWidth: '62ch',
               }}
             >
-              Samme ordre tælles ofte af flere handlinger på én gang. Beløbet ved hver handling er,
-              hvad den har rapporteret i perioden.
+              The same order is often counted by several actions at once. The amount next to each
+              action is what it reported in the period.
             </p>
           </section>
         )}
@@ -632,14 +632,14 @@ export function GoogleAdsClient({
             {/* Cost rising is not good news, so its arrow is inverted. Everything
                 else on this row is a figure you want larger. */}
             <Stat
-              label="Forbrug"
+              label="Spend"
               value={formatMoney(totals.cost, currency)}
               change={delta(totals.cost, comparison?.totals.cost ?? null)}
               invertChange
               suppressChange={comparison?.partial}
             />
             <Stat
-              label="Omsætning"
+              label="Revenue"
               value={formatMoney(totals.roas_value, currency)}
               change={delta(totals.roas_value, comparison?.totals.roasValue ?? null)}
               suppressChange={comparison?.partial}
@@ -652,7 +652,7 @@ export function GoogleAdsClient({
               suppressChange={comparison?.partial}
             />
             <Stat
-              label="Bruttoprofit"
+              label="Gross profit"
               variant="hi"
               value={formatMoney(totals.poas_value, currency)}
               change={delta(totals.poas_value, comparison?.totals.poasValue ?? null)}
@@ -665,14 +665,14 @@ export function GoogleAdsClient({
               tone={totals.poas === null ? undefined : totals.poas >= 1 ? 'good' : 'bad'}
               hint={
                 totals.poas !== null && totals.poas < 1
-                  ? 'Under 1 betyder, at annoncerne koster mere end den bruttoprofit, de giver'
+                  ? 'Below 1 means the ads cost more than the gross profit they bring in'
                   : undefined
               }
               change={delta(totals.poas, comparison?.totals.poas ?? null)}
               suppressChange={comparison?.partial}
             />
             <Stat
-              label="Klik"
+              label="Clicks"
               value={formatInt(totals.clicks)}
               change={delta(totals.clicks, comparison?.totals.clicks ?? null)}
               suppressChange={comparison?.partial}
@@ -692,11 +692,11 @@ export function GoogleAdsClient({
                 style={{ background: 'var(--accent-amber)', marginTop: '5px' }}
               />
               <p style={{ fontSize: '12px', color: 'var(--ink-secondary)', lineHeight: 1.5 }}>
-                Ændringstallene er skjult: sammenligningsperioden {comparison.from} →{' '}
-                {comparison.to} dækker kun {comparison.coveredDays}{' '}
-                {comparison.coveredDays === 1 ? 'dag' : 'dage'} i arkivet, så alle tal ville se
-                ud til at være vokset. Vælg en kortere periode, eller øg synkroniseringsperioden
-                under Settings, og hent tallene igen.
+                Changes are hidden: the comparison period {comparison.from} →{' '}
+                {comparison.to} covers only {comparison.coveredDays}{' '}
+                {comparison.coveredDays === 1 ? 'day' : 'days'} in the archive, so every figure would
+                appear to have grown. Choose a shorter period, or extend the sync period under
+                Settings and fetch the figures again.
               </p>
             </div>
           </div>
@@ -706,15 +706,15 @@ export function GoogleAdsClient({
         {connected && rows.length === 0 && (
           <div className="wl-card py-16 flex flex-col items-center gap-3">
             <p style={{ fontSize: '15px', color: 'var(--ink-secondary)' }}>
-              Ingen tal i perioden.
+              No figures in the period.
             </p>
             <p style={{ fontSize: '13px', color: 'var(--ink-muted)' }}>
               {settings?.lastSyncedAt
-                ? 'Kontoen havde ingen Shopping-visninger i perioden.'
-                : 'Feedet er koblet, men der er ikke hentet tal endnu.'}
+                ? 'The account had no Shopping impressions in the period.'
+                : 'The feed is connected, but no figures have been fetched yet.'}
             </p>
             <button onClick={refresh} disabled={syncing} className="wl-btn-secondary mt-1">
-              {syncing ? 'Henter…' : 'Hent tal nu'}
+              {syncing ? 'Fetching…' : 'Fetch figures now'}
             </button>
           </div>
         )}
@@ -727,8 +727,8 @@ export function GoogleAdsClient({
             >
               <span style={{ fontSize: '12px', color: 'var(--ink-muted)' }}>
                 {query.trim()
-                  ? `${formatInt(visible.length)} af ${formatInt(sorted.length)} varer`
-                  : `${formatInt(sorted.length)} varer`}
+                  ? `${formatInt(visible.length)} of ${formatInt(sorted.length)} ${sorted.length === 1 ? 'product' : 'products'}`
+                  : `${formatInt(sorted.length)} ${sorted.length === 1 ? 'product' : 'products'}`}
               </span>
               <div className="flex items-center gap-4 flex-wrap">
                 {vatApplies && (
@@ -740,7 +740,7 @@ export function GoogleAdsClient({
                     // with VAT in the name — and the other one is the setting
                     // that actually moves break-even. Ticking this and watching
                     // break-even sit still read as a broken feature.
-                    title={`Ændrer kun, hvordan Margin-kolonnen VISES, intet andet. Margin beregnes normalt på priser ekskl. ${vat.rate?.toLocaleString('da-DK')} % moms, samme grundlag som Shopifys kostpris (Cost per item); her vises den på bruttopriser, så den kan afstemmes med Shopify. Break-even påvirkes ikke — den bruger altid nettomarginen.`}
+                    title={`Only changes how the Margin column is DISPLAYED, nothing else. Margin is normally calculated on prices excl. ${vat.rate?.toLocaleString('en-GB')}% VAT, the same basis as Shopify's Cost per item; here it is shown on gross prices so it can be reconciled with Shopify. Break-even is not affected — it always uses the net margin.`}
                   >
                     <input
                       type="checkbox"
@@ -748,7 +748,7 @@ export function GoogleAdsClient({
                       onChange={(e) => setGrossBasis(e.target.checked)}
                       style={{ accentColor: 'var(--accent-ink)' }}
                     />
-                    Margin på bruttopriser
+                    Margin on gross prices
                   </label>
                 )}
                 {returnsContext && (
@@ -768,7 +768,7 @@ export function GoogleAdsClient({
                       onChange={(e) => setShowReturns(e.target.checked)}
                       style={{ accentColor: 'var(--accent-ink)' }}
                     />
-                    Returer
+                    Returns
                   </label>
                 )}
                 {comparison && !comparison.partial && (
@@ -781,7 +781,7 @@ export function GoogleAdsClient({
                       gap: '6px',
                       whiteSpace: 'nowrap',
                     }}
-                    title={`Tilføjer ændringskolonner mod ${comparison.from} → ${comparison.to}, den lige så lange periode umiddelbart før denne.`}
+                    title={`Adds change columns against ${comparison.from} → ${comparison.to}, the period of equal length immediately before this one.`}
                   >
                     <input
                       type="checkbox"
@@ -789,25 +789,25 @@ export function GoogleAdsClient({
                       onChange={(e) => setShowCompare(e.target.checked)}
                       style={{ accentColor: 'var(--accent-ink)' }}
                     />
-                    Sammenlign
+                    Compare
                   </label>
                 )}
-                <SearchBox value={query} onChange={setQuery} placeholder="Søg varer…" />
+                <SearchBox value={query} onChange={setQuery} placeholder="Search products…" />
               </div>
             </div>
             <div style={{ overflowX: 'auto' }}>
               <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: '13px' }}>
                 <thead>
                   <tr style={{ borderBottom: '1px solid var(--hairline)' }}>
-                    <Th style={{ textAlign: 'left', paddingLeft: '18px' }}>Vare</Th>
+                    <Th style={{ textAlign: 'left', paddingLeft: '18px' }}>Product</Th>
                     <Th sortable active={sortKey === 'impressions'} dir={sortDir} onClick={() => setSort('impressions')}>
-                      Visninger
+                      Impressions
                     </Th>
                     <Th sortable active={sortKey === 'clicks'} dir={sortDir} onClick={() => setSort('clicks')}>
-                      Klik
+                      Clicks
                     </Th>
                     <Th sortable active={sortKey === 'cost'} dir={sortDir} onClick={() => setSort('cost')}>
-                      Forbrug
+                      Spend
                     </Th>
                     {showCompare && (
                       <Th
@@ -816,14 +816,14 @@ export function GoogleAdsClient({
                         dir={sortDir}
                         onClick={() => setSort('dCostPct')}
                       >
-                        Δ Forbrug
+                        Δ Spend
                       </Th>
                     )}
                     <Th sortable active={sortKey === 'margin'} dir={sortDir} onClick={() => setSort('margin')}>
                       Margin
                     </Th>
                     <Th sortable active={sortKey === 'roas_value'} dir={sortDir} onClick={() => setSort('roas_value')}>
-                      Omsætning
+                      Revenue
                       <CountPill n={activeActions.roas.length} />
                     </Th>
                     {showCompare && (
@@ -833,7 +833,7 @@ export function GoogleAdsClient({
                         dir={sortDir}
                         onClick={() => setSort('dRevenuePct')}
                       >
-                        Δ Omsætning
+                        Δ Revenue
                       </Th>
                     )}
                     <Th sortable active={sortKey === 'roas'} dir={sortDir} onClick={() => setSort('roas')}>
@@ -851,7 +851,7 @@ export function GoogleAdsClient({
                     )}
                     {showReturns && (
                       <Th sortable active={sortKey === 'netRoas'} dir={sortDir} onClick={() => setSort('netRoas')}>
-                        Netto ROAS
+                        Net ROAS
                       </Th>
                     )}
                     {/* Sits beside whichever ROAS is the operative one, because
@@ -870,7 +870,7 @@ export function GoogleAdsClient({
                           reading a number is looking. */}
                       {uplift === null && (
                         <span
-                          title="Ikke bekræftet: ingen har angivet, om Googles konverteringsværdi er inkl. moms, så her antages det, at den ikke er — hvilket gør break-even for lav, hvis den er. Angiv det i noterne under tabellen."
+                          title="Not confirmed: nobody has stated whether Google's conversion value includes VAT, so it is assumed here that it does not — which makes break-even too low if it does. Set it in the notes below the table."
                           style={{ color: 'var(--accent-amber)', marginLeft: '4px' }}
                         >
                           *
@@ -886,7 +886,7 @@ export function GoogleAdsClient({
                     </Th>
                     {showReturns && (
                       <Th sortable active={sortKey === 'netPoas'} dir={sortDir} onClick={() => setSort('netPoas')}>
-                        Netto POAS
+                        Net POAS
                       </Th>
                     )}
                     {showReturns && (
@@ -896,10 +896,10 @@ export function GoogleAdsClient({
                         dir={sortDir}
                         onClick={() => setSort('refundedInWindow')}
                       >
-                        Refunderet
+                        Refunded
                       </Th>
                     )}
-                    <Th style={{ paddingRight: '18px' }}>Profit − forbrug</Th>
+                    <Th style={{ paddingRight: '18px' }}>Profit − spend</Th>
                   </tr>
                 </thead>
                 <tbody>
@@ -931,16 +931,16 @@ export function GoogleAdsClient({
                               </span>
                               <div className="min-w-0">
                                 <div className="truncate" style={{ color: 'var(--ink)' }}>
-                                  {r.title ?? r.productRef ?? 'Ukendt vare'}
+                                  {r.title ?? r.productRef ?? 'Unknown product'}
                                 </div>
                                 <div style={{ fontSize: '11px', color: 'var(--ink-muted)' }}>
                                   {r.unmatched ? (
                                     <span style={{ color: 'var(--accent-amber)' }}>
-                                      ikke fundet i kataloget
+                                      not found in the catalogue
                                     </span>
                                   ) : (
                                     <>
-                                      {`${r.variantCount} ${r.variantCount === 1 ? 'variant' : 'varianter'}`}
+                                      {`${r.variantCount} ${r.variantCount === 1 ? 'variant' : 'variants'}`}
                                       <StockNote stock={r.stock} stale={stockStale} />
                                     </>
                                   )}
@@ -1039,7 +1039,7 @@ export function GoogleAdsClient({
                             >
                               {loadingVariants === r.productRef ? (
                                 <p style={{ fontSize: '12px', color: 'var(--ink-muted)', padding: '10px 0' }}>
-                                  Henter varianter…
+                                  Loading variants…
                                 </p>
                               ) : (
                                 <VariantTable
@@ -1069,7 +1069,7 @@ export function GoogleAdsClient({
                   textAlign: 'center',
                 }}
               >
-                Ingen vare matcher «{query.trim()}» i perioden.
+                No product matches «{query.trim()}» in the period.
               </p>
             )}
           </section>
@@ -1079,40 +1079,39 @@ export function GoogleAdsClient({
         {connected && rows.length > 0 && (
           <div className="space-y-1.5" style={{ fontSize: '12px', color: 'var(--ink-muted)' }}>
             <p>
-              Omsætning = {describeActions(activeActions.roas)} · Bruttoprofit ={' '}
+              Revenue = {describeActions(activeActions.roas)} · Gross profit ={' '}
               {describeActions(activeActions.poas)}
             </p>
             <p>
-              Kun forbrug, som Google kan henføre til en vare, er med. Performance Max-forbrug
-              på placeringer uden for Shopping tælles ikke med, så tallene her er lavere end
-              kontoens samlede forbrug.
+              Only spend that Google can attribute to a product is included. Performance Max spend
+              on placements outside Shopping is not counted, so the figures here are lower than
+              the account&apos;s total spend.
             </p>
             <p>
-              Margin er listepris minus Shopifys kostpris (Cost per item) — bruttomargin før
-              fragt, gebyrer og returer. Kendt for {formatInt(marginCoverage.withMargin)} af{' '}
-              {formatInt(marginCoverage.products)} varer; resten viser &laquo;—&raquo;, fordi der
-              ikke er angivet en kostpris, ikke fordi marginen er nul. En stjerne betyder, at
-              kostprisen kun dækker nogle af varens varianter.
+              Margin is list price minus Shopify&apos;s Cost per item — gross margin before
+              shipping, fees and returns. Known for {formatInt(marginCoverage.withMargin)} of{' '}
+              {formatInt(marginCoverage.products)} products; the rest show &laquo;—&raquo; because no
+              cost per item has been entered, not because the margin is zero. An asterisk means
+              the cost per item covers only some of the product&apos;s variants.
             </p>
             <p>
-              Break-even er den ROAS, hvor bruttoprofitten dækker annonceforbruget
+              Break-even is the ROAS at which gross profit covers ad spend
               {uplift !== null && uplift !== 1
-                ? ` — ${formatRatio(uplift, 2)} ÷ margin, med momstillægget regnet med, så den rapporterede konverteringsværdi og nettomarginen er på samme grundlag`
+                ? ` — ${formatRatio(uplift, 2)} ÷ margin, with the VAT uplift included so the reported conversion value and the net margin are on the same basis`
                 : ' — 1 ÷ margin'}
-              . Grøn betyder, at varen klarer den{showReturns ? ' efter returer' : ''}, rød
-              betyder, at den ikke gør. Den bruger altid nettomarginen, så den flytter sig ikke,
-              når Margin-kolonnen skiftes til bruttogrundlag. Den er en bund og ikke et mål:
-              fragt, betalingsgebyrer og faste omkostninger trækkes fra bagefter, så en vare, der
-              ligger lige over break-even, tjener endnu ikke penge.
+              . Green means the product clears it{showReturns ? ' after returns' : ''}, red
+              means it does not. It always uses the net margin, so it does not move when the
+              Margin column is switched to the gross basis. It is a floor, not a target:
+              shipping, payment fees and fixed costs come off afterwards, so a product sitting
+              just above break-even is not yet making money.
             </p>
             {comparison && (
               <p>
-                Ændringstallene sammenligner {from} → {to} med {comparison.from} →{' '}
-                {comparison.to} — den lige så lange periode umiddelbart før, uden hul og uden
-                overlap. En streg betyder, at varen ikke havde data i den tidligere periode, hvilket
-                er en start og ikke en ændring; de varer sorteres sidst i stedet for som den største
-                stigning. Δ ROAS er en absolut ændring, så &laquo;+0,80&raquo; betyder, at
-                forholdstallet steg med 0,80.
+                Changes compare {from} → {to} with {comparison.from} →{' '}
+                {comparison.to} — the period of equal length immediately before, with no gap and no
+                overlap. A dash means the product had no data in the earlier period, which is a
+                start, not a change; those products sort last instead of as the biggest increase.
+                Δ ROAS is an absolute change, so &laquo;+0.80&raquo; means the ratio rose by 0.80.
               </p>
             )}
             {stockContext && <StockBasisNote ctx={stockContext} stale={stockStale} />}
@@ -1122,12 +1121,12 @@ export function GoogleAdsClient({
             )}
             {unmatchedCost > 0 && (
               <p style={{ color: 'var(--accent-amber)' }}>
-                {formatMoney(unmatchedCost, currency)} kunne ikke matches med en vare i dette
+                {formatMoney(unmatchedCost, currency)} could not be matched to a product in this
                 feed.
               </p>
             )}
             {settings?.lastSyncedAt && (
-              <p>Sidst hentet {new Date(settings.lastSyncedAt).toLocaleString('da-DK')}</p>
+              <p>Last fetched {new Date(settings.lastSyncedAt).toLocaleString('en-GB')}</p>
             )}
           </div>
         )}
@@ -1187,11 +1186,11 @@ function Stat({
  */
 function Change({ d, invert = false }: { d: Delta; invert?: boolean }) {
   if (d.abs === 0) {
-    return <span style={{ fontSize: '11px', color: 'var(--ink-muted)' }}>ingen ændring</span>
+    return <span style={{ fontSize: '11px', color: 'var(--ink-muted)' }}>no change</span>
   }
   const up = d.abs > 0
   const good = invert ? !up : up
-  const abs = d.abs.toLocaleString('da-DK', { maximumFractionDigits: 2 })
+  const abs = d.abs.toLocaleString('en-GB', { maximumFractionDigits: 2 })
   return (
     <span
       style={{
@@ -1200,14 +1199,14 @@ function Change({ d, invert = false }: { d: Delta; invert?: boolean }) {
         fontVariantNumeric: 'tabular-nums',
         whiteSpace: 'nowrap',
       }}
-      title={`${up ? '+' : ''}${abs} mod perioden før`}
+      title={`${up ? '+' : ''}${abs} vs. previous period`}
     >
       {up ? '▲' : '▼'}{' '}
       {d.pct === null
-        ? 'ny'
-        : `${d.pct > 0 ? '+' : ''}${(d.pct * 100).toLocaleString('da-DK', {
+        ? 'new'
+        : `${d.pct > 0 ? '+' : ''}${(d.pct * 100).toLocaleString('en-GB', {
             maximumFractionDigits: 0,
-          })} %`}
+          })}%`}
     </span>
   )
 }
@@ -1243,7 +1242,7 @@ function Trend({
   return (
     <section className="wl-card" style={{ padding: '16px 18px' }}>
       <div className="flex items-baseline justify-between gap-3 flex-wrap">
-        <div className="wl-eyebrow">Dagligt forbrug og omsætning</div>
+        <div className="wl-eyebrow">Daily spend and revenue</div>
         <div className="flex items-center gap-3" style={{ fontSize: '11px', color: 'var(--ink-muted)' }}>
           <span className="flex items-center gap-1.5">
             <span
@@ -1255,7 +1254,7 @@ function Trend({
                 display: 'inline-block',
               }}
             />
-            Forbrug
+            Spend
           </span>
           <span className="flex items-center gap-1.5">
             <span
@@ -1267,9 +1266,9 @@ function Trend({
                 display: 'inline-block',
               }}
             />
-            Omsætning
+            Revenue
           </span>
-          <span>seneste {days} dage</span>
+          <span>last {days} days</span>
         </div>
       </div>
 
@@ -1296,7 +1295,7 @@ function Trend({
             title={
               dense
                 ? undefined
-                : `${p.date}\nForbrug ${formatMoney(p.cost, currency)}\nOmsætning ${formatMoney(
+                : `${p.date}\nSpend ${formatMoney(p.cost, currency)}\nRevenue ${formatMoney(
                     p.revenue,
                     currency
                   )}\nROAS ${formatRatio(p.roas)}`
@@ -1332,7 +1331,7 @@ function Trend({
         {/* Days with no activity are absent rather than zero, so the count is
             worth stating: a 30-day window showing 22 bars is a finding. */}
         <span>
-          {points.length} {points.length === 1 ? 'dag' : 'dage'} med data
+          {points.length} {points.length === 1 ? 'day' : 'days'} with data
         </span>
         <span>{points[points.length - 1]?.date}</span>
       </div>
@@ -1376,10 +1375,10 @@ function MetricPicker({
 
   const summary =
     current.length === 0
-      ? 'Ikke valgt'
+      ? 'Not selected'
       : current.length === 1
         ? current[0]
-        : `${current.length} handlinger lagt sammen`
+        : `${current.length} actions combined`
 
   return (
     <div className="space-y-1.5" style={{ minWidth: '260px', flex: '1 1 260px' }}>
@@ -1464,8 +1463,8 @@ function MetricPicker({
                       </span>
                       <span style={{ fontSize: '11px', color: 'var(--ink-muted)' }}>
                         {a.inWindow
-                          ? `${formatMoney(a.value, currency)} · ${formatInt(a.items)} varer`
-                          : 'Ingen data i perioden'}
+                          ? `${formatMoney(a.value, currency)} · ${formatInt(a.items)} ${a.items === 1 ? 'product' : 'products'}`
+                          : 'No data in the period'}
                       </span>
                     </span>
                   </label>
@@ -1486,7 +1485,7 @@ function MetricPicker({
                     cursor: 'pointer',
                   }}
                 >
-                  Ryd valg
+                  Clear selection
                 </button>
               )}
             </div>
@@ -1561,7 +1560,7 @@ function VatNote({
     const json = await res.json().catch(() => ({}))
     setSaving(false)
     if (!res.ok) {
-      setError((json as { error?: string }).error ?? 'Kunne ikke gemme')
+      setError((json as { error?: string }).error ?? 'Could not save')
       return
     }
     setEditing(false)
@@ -1572,15 +1571,15 @@ function VatNote({
     return (
       <div className="space-y-2" style={{ paddingTop: '2px' }}>
         <TriChoice
-          label="Er Shopifys priser inkl. moms?"
+          label="Do Shopify's prices include VAT?"
           value={includes}
           onChange={setIncludes}
         />
         <TriChoice
-          label="Er Googles konverteringsværdi inkl. moms?"
+          label="Does Google's conversion value include VAT?"
           value={convIncludes}
           onChange={setConvIncludes}
-          hint="Det er den, der flytter break-even."
+          hint="This is the one that moves break-even."
         />
         <div className="flex items-center gap-2 flex-wrap">
           {needsRate && (
@@ -1590,7 +1589,7 @@ function VatNote({
                 step="any"
                 value={rate}
                 onChange={(e) => setRate(e.target.value)}
-                aria-label="Momssats i procent"
+                aria-label="VAT rate in per cent"
                 style={{
                   padding: '4px 8px',
                   borderRadius: '8px',
@@ -1608,13 +1607,13 @@ function VatNote({
             onClick={save}
             disabled={saving || unanswered}
             className="wl-btn-primary"
-            title={unanswered ? 'Besvar begge spørgsmål først' : undefined}
+            title={unanswered ? 'Answer both questions first' : undefined}
             style={unanswered ? { opacity: 0.5, cursor: 'not-allowed' } : undefined}
           >
-            {saving ? 'Gemmer…' : 'Gem'}
+            {saving ? 'Saving…' : 'Save'}
           </button>
           <button onClick={() => setEditing(false)} className="wl-btn-secondary">
-            Annuller
+            Cancel
           </button>
           {error && <span style={{ color: 'var(--accent-red)' }}>{error}</span>}
         </div>
@@ -1628,27 +1627,27 @@ function VatNote({
       {vat.pricesIncludeVat === null ? (
         // Unanswered. The margin on screen is the overstated one, and says so.
         <p style={{ color: 'var(--accent-amber)' }}>
-          Margin beregnes på priserne, præcis som Shopify gemmer dem. Hvis de er inkl. moms, og din
-          kostpris ikke er — den normale opsætning for en dansk shop — er den viste margin for høj,
-          og mest der, hvor den er tyndest.{' '}
+          Margin is calculated on prices exactly as Shopify stores them. If they include VAT and your
+          cost per item does not — the normal setup for a Danish shop — the margin shown is too high,
+          most of all where it is thinnest.{' '}
           <button onClick={() => setEditing(true)} style={linkButton}>
-            Angiv momsgrundlaget
+            Set the VAT basis
           </button>
         </p>
       ) : !vat.pricesIncludeVat ? (
         <p>
-          Shopifys priser er ekskl. moms, så marginen skal ikke justeres.{' '}
+          Shopify&apos;s prices are excl. VAT, so the margin needs no adjustment.{' '}
           <button onClick={() => setEditing(true)} style={linkButton}>
-            Ret
+            Edit
           </button>
         </p>
       ) : (
         <p>
           {grossBasis
-            ? `Margin vises på bruttopriser inkl. moms — til afstemning med Shopify. Den overvurderer rentabiliteten, fordi kostprisen er ekskl. moms.`
-            : `Margin beregnes på priser ekskl. ${vat.rate?.toLocaleString('da-DK')} % moms, samme grundlag som Shopifys kostpris.`}{' '}
+            ? `Margin is shown on gross prices incl. VAT — for reconciling with Shopify. It overstates profitability, because cost per item is excl. VAT.`
+            : `Margin is calculated on prices excl. ${vat.rate?.toLocaleString('en-GB')}% VAT, the same basis as Shopify's cost per item.`}{' '}
           <button onClick={() => setEditing(true)} style={linkButton}>
-            Ret
+            Edit
           </button>
         </p>
       )}
@@ -1656,28 +1655,28 @@ function VatNote({
       {/* ── Does Google's conversion value carry VAT ── */}
       {uplift === null ? (
         <p style={{ color: 'var(--accent-amber)' }}>
-          Break-even behandler Googles konverteringsværdi som ekskl. moms, fordi grundlaget ikke er
-          angivet. Shopifys standardsporing sender ordrens samlede beløb inkl. moms — hvis det er din
-          opsætning, er hver break-even her for LAV med momssatsen, og varer bliver markeret som
-          over en grænse, de ligger under.{' '}
+          Break-even treats Google&apos;s conversion value as excl. VAT, because the basis has not been
+          set. Shopify&apos;s standard tracking sends the order total incl. VAT — if that is your
+          setup, every break-even here is too LOW by the VAT rate, and products are marked as
+          above a threshold they are actually below.{' '}
           <button onClick={() => setEditing(true)} style={linkButton}>
-            Angiv grundlaget for konverteringsværdien
+            Set the basis for the conversion value
           </button>
         </p>
       ) : uplift > 1 ? (
         <p>
-          Googles konverteringsværdi er inkl. {vat.rate?.toLocaleString('da-DK')} % moms, så
-          break-even hæves tilsvarende, så den er på samme grundlag som nettomarginen.{' '}
+          Google&apos;s conversion value includes {vat.rate?.toLocaleString('en-GB')}% VAT, so
+          break-even is raised accordingly to put it on the same basis as the net margin.{' '}
           <button onClick={() => setEditing(true)} style={linkButton}>
-            Ret
+            Edit
           </button>
         </p>
       ) : (
         <p>
-          Googles konverteringsværdi er ekskl. moms, samme grundlag som marginen, så break-even er
-          1 ÷ margin uden justering.{' '}
+          Google&apos;s conversion value is excl. VAT, the same basis as the margin, so break-even is
+          1 ÷ margin with no adjustment.{' '}
           <button onClick={() => setEditing(true)} style={linkButton}>
-            Ret
+            Edit
           </button>
         </p>
       )}
@@ -1729,12 +1728,12 @@ function TriChoice({
               border: value === opt ? 'none' : '1px solid var(--hairline)',
             }}
           >
-            {opt ? 'Ja' : 'Nej'}
+            {opt ? 'Yes' : 'No'}
           </button>
         ))}
       </div>
       {value === null ? (
-        <span style={{ color: 'var(--accent-amber)' }}>ikke besvaret</span>
+        <span style={{ color: 'var(--accent-amber)' }}>not answered</span>
       ) : (
         hint && <span style={{ color: 'var(--ink-muted)' }}>{hint}</span>
       )}
@@ -1755,29 +1754,29 @@ function ReturnsNote({ ctx, currency }: { ctx: ReturnsContext; currency: string 
   return (
     <>
       <p>
-        Netto ROAS og netto POAS er bruttotallene reduceret med varens målte returrate —
-        refunderet værdi ÷ solgt værdi for ordrer afgivet{' '}
+        Net ROAS and net POAS are the gross figures reduced by the product&apos;s measured return rate —
+        refunded value ÷ sold value for orders placed{' '}
         {ctx.cohortFrom && ctx.cohortTo ? (
           <>
-            mellem {ctx.cohortFrom} og {ctx.cohortTo}
+            between {ctx.cohortFrom} and {ctx.cohortTo}
           </>
         ) : (
-          'i den modnede periode'
+          'in the matured period'
         )}
-        {ctx.country ? ` i ${ctx.country}` : ''}. Perioden stopper med vilje 30 dage før i dag:
-        en retur tager uger om at komme, så hvis de seneste ordrer talte med, ville alle varer se
-        ud til at have få returer. Google får intet af dette at vide — Googles egne tal er
-        uændrede.
+        {ctx.country ? ` in ${ctx.country}` : ''}. The period deliberately stops 30 days before today:
+        a return takes weeks to arrive, so if the latest orders counted, every product would appear
+        to have few returns. None of this is sent to Google — Google&apos;s own figures are
+        unchanged.
       </p>
       <p>
-        &laquo;Refunderet&raquo; er noget andet: det er penge, der faktisk er gået ud i den
-        viste periode, uanset hvor gammel ordren er. Det stemmer ikke med netto-kolonnerne, og
-        det skal det heller ikke.{' '}
+        &laquo;Refunded&raquo; is something else: it is money that actually went out in the
+        period shown, however old the order. It does not match the net columns, and it is not
+        meant to.{' '}
         {ctx.refundedInWindow > 0 && (
           <>
-            {formatMoney(ctx.returnedInWindow, currency)} af det skyldtes returer
+            {formatMoney(ctx.returnedInWindow, currency)} of it was due to returns
             {ctx.otherRefundedInWindow > 0 && (
-              <>, og {formatMoney(ctx.otherRefundedInWindow, currency)} var annulleringer eller
+              <>, and {formatMoney(ctx.otherRefundedInWindow, currency)} was cancellations or
               goodwill</>
             )}
             .
@@ -1785,26 +1784,26 @@ function ReturnsNote({ ctx, currency }: { ctx: ReturnsContext; currency: string 
         )}
       </p>
       <p>
-        En vare viser &laquo;—&raquo;, indtil den har solgt mindst 20 stk. i den modnede
-        periode — én retur ud af tre er ikke en returrate på 33 %, men en ukendt returrate.
+        A product shows &laquo;—&raquo; until it has sold at least 20 units in the matured
+        period — one return out of three is not a 33% return rate, it is an unknown return rate.
         {ctx.overallRate !== null && (
           <>
             {' '}
-            For hele markedet er returraten {formatPercent(ctx.overallRate, 1)} på{' '}
-            {formatInt(ctx.overallSample)} stk. Det er kontekst for en vare med for få salg af
-            sine egne — ikke en erstatning for dem.
+            For the whole market the return rate is {formatPercent(ctx.overallRate, 1)} on{' '}
+            {formatInt(ctx.overallSample)} units. That is context for a product with too few sales of
+            its own — not a substitute for them.
           </>
         )}
       </p>
       {(ctx.archiveHasGap || (ctx.archiveDepthDays ?? 0) < 90) && (
         <p style={{ color: 'var(--accent-amber)' }}>
           {ctx.archiveLastRunAt === null
-            ? 'Der er endnu ikke hentet nogen ordrehistorik, så der kan ikke findes nogen returrate. '
-            : `Ordrehistorikken går ${formatInt(ctx.archiveDepthDays ?? 0)} dage tilbage. `}
-          Uden scopet read_all_orders giver Shopify kun adgang til de seneste 60 dage, så
-          historikken opbygges ved at synkronisere jævnligt — og et hul, der er længere end det,
-          er permanent.
-          {ctx.archiveHasGap && ctx.archiveLastRunAt !== null && ' Synkroniseringen har ikke kørt i længere tid end det vindue.'}
+            ? 'No order history has been fetched yet, so no return rate can be found. '
+            : `The order history goes back ${formatInt(ctx.archiveDepthDays ?? 0)} ${(ctx.archiveDepthDays ?? 0) === 1 ? 'day' : 'days'}. `}
+          Without the read_all_orders scope, Shopify only gives access to the last 60 days, so
+          the history is built up by syncing regularly — and a gap longer than that is
+          permanent.
+          {ctx.archiveHasGap && ctx.archiveLastRunAt !== null && ' The sync has not run for longer than that window.'}
         </p>
       )}
     </>
@@ -1826,8 +1825,8 @@ function NetRatio({
         style={{ color: 'var(--ink-muted)' }}
         title={
           sample > 0
-            ? `Kun ${formatInt(sample)} stk. solgt i den modnede periode — for få til en returrate`
-            : 'Ingen salg i den modnede periode for denne vare endnu'
+            ? `Only ${formatInt(sample)} ${sample === 1 ? 'unit' : 'units'} sold in the matured period — too few for a return rate`
+            : 'No sales in the matured period for this product yet'
         }
       >
         —
@@ -1877,8 +1876,8 @@ function SearchBox({
       {value && (
         <button
           onClick={() => onChange('')}
-          title="Ryd"
-          aria-label="Ryd søgning"
+          title="Clear"
+          aria-label="Clear search"
           style={{
             background: 'none',
             border: 'none',
@@ -1907,32 +1906,32 @@ function StockBasisNote({ ctx, stale }: { ctx: StockContext; stale: boolean }) {
   if (!ctx.syncedAt) {
     return (
       <p style={{ color: 'var(--accent-amber)' }}>
-        Lageret er aldrig blevet læst fra Shopify for dette feed, så ingen vare viser en
-        lagernote. Kør en produktsynkronisering for at hente det.
+        Stock has never been read from Shopify for this feed, so no product shows a stock
+        note. Run a product sync to fetch it.
       </p>
     )
   }
 
   return (
     <p style={stale ? { color: 'var(--accent-amber)' } : undefined}>
-      Lagertallene er fra {new Date(ctx.syncedAt).toLocaleString('da-DK')}
+      Stock figures are from {new Date(ctx.syncedAt).toLocaleString('en-GB')}
       {ctx.ageDays !== null && ctx.ageDays > 0
-        ? ` — ${formatInt(ctx.ageDays)} ${ctx.ageDays === 1 ? 'dag' : 'dage'} siden`
+        ? ` — ${formatInt(ctx.ageDays)} ${ctx.ageDays === 1 ? 'day' : 'days'} ago`
         : ''}
-      {stale && ', så længe siden, at de kan have ændret sig'}. Dages lager er antal på lager
-      divideret med salget over de seneste {ctx.velocityDays} dage og vises først, når en vare
-      har solgt nok til, at tallet betyder noget — varer under den grænse, og varer, hvor Shopify
-      ikke sporer lager, viser ingenting i stedet for nul.
+      {stale && ', long enough ago that they may have changed'}. Days of stock is units in stock
+      divided by sales over the last {ctx.velocityDays} days, and is shown only once a product
+      has sold enough for the figure to mean something — products below that threshold, and products
+      where Shopify does not track stock, show nothing instead of zero.
       {ctx.multipleLocations && ctx.locationCount !== null && (
         <>
           {' '}
-          Shoppen har lager på {ctx.locationCount} lokationer, og antallet er summen for dem
-          alle, så det er ikke nødvendigvis alt sammen tilgængeligt for dette feeds marked.
+          The shop holds stock at {ctx.locationCount} locations, and the quantity is the sum across
+          all of them, so not all of it is necessarily available to this feed&apos;s market.
         </>
       )}
       {ctx.locationCount === null && (
-        <> Shoppens lokationer er ikke registreret endnu, så det vides ikke, om antallet
-        dækker mere end én.</>
+        <> The shop&apos;s locations have not been detected yet, so it is not known whether the
+        quantity covers more than one.</>
       )}
     </p>
   )
@@ -1960,16 +1959,16 @@ function StockNote({ stock, stale }: { stock: StockView | undefined; stale: bool
   const parts: string[] = []
 
   if (stock.outOfStock) {
-    parts.push('udsolgt')
+    parts.push('out of stock')
   } else if (stock.coverage !== null && stock.coverage < 1) {
     const gone = stock.variantsTotal - stock.variantsSellable
-    parts.push(`${gone} af ${stock.variantsTotal} udsolgt`)
+    parts.push(`${gone} of ${stock.variantsTotal} out of stock`)
     // Only when some of it can still be bought: "out of stock, 0 days of
     // stock" says the same thing twice and the second half is noise.
   }
 
   if (!stock.outOfStock && stock.daysOfStock !== null && stock.daysOfStock < LOW_STOCK_DAYS) {
-    parts.push(`${Math.floor(stock.daysOfStock)} dages lager`)
+    parts.push(`${Math.floor(stock.daysOfStock)} ${Math.floor(stock.daysOfStock) === 1 ? 'day' : 'days'} of stock`)
   }
 
   if (!parts.length) return null
@@ -1983,7 +1982,7 @@ function StockNote({ stock, stale }: { stock: StockView | undefined; stale: bool
       style={{ color: 'var(--accent-amber)' }}
       title={
         stale
-          ? `Lageret blev sidst læst fra Shopify for mere end ${STALE_STOCK_DAYS} dage siden, så det kan have ændret sig.`
+          ? `Stock was last read from Shopify more than ${STALE_STOCK_DAYS} days ago, so it may have changed.`
           : undefined
       }
     >
@@ -2005,7 +2004,7 @@ function Margin({ value, coverage }: { value: number | null; coverage: number })
   const partial = coverage > 0 && coverage < 1
   return (
     <span
-      title={partial ? `Kostpris kendt for ${Math.round(coverage * 100)} % af varianterne` : undefined}
+      title={partial ? `Cost per item known for ${Math.round(coverage * 100)}% of the variants` : undefined}
       style={{ color: value < 0 ? 'var(--accent-red)' : 'var(--ink)' }}
     >
       {formatPercent(value, 0)}
@@ -2050,8 +2049,8 @@ function BreakEven({
         style={{ color: unreachable ? 'var(--accent-red)' : 'var(--ink-muted)' }}
         title={
           unreachable
-            ? 'Varen har ingen bruttomargin, så ingen ROAS giver break-even'
-            : 'Ingen kostpris angivet, så break-even kan ikke beregnes'
+            ? 'The product has no gross margin, so no ROAS reaches break-even'
+            : 'No cost per item entered, so break-even cannot be calculated'
         }
       >
         {unreachable ? '∞' : '—'}
@@ -2064,10 +2063,10 @@ function BreakEven({
     <span
       title={
         clears === null
-          ? 'Ingen ROAS at sammenligne med endnu'
+          ? 'No ROAS to compare against yet'
           : clears
-            ? 'Over break-even'
-            : 'Under break-even — annoncerne koster mere end den bruttoprofit, de giver'
+            ? 'Above break-even'
+            : 'Below break-even — the ads cost more than the gross profit they bring in'
       }
       style={{
         color:
@@ -2089,7 +2088,7 @@ function CountPill({ n }: { n: number }) {
   return (
     <span
       className="wl-pill"
-      title={`${n} konverteringshandlinger lagt sammen`}
+      title={`${n} conversion actions combined`}
       style={{
         marginLeft: '6px',
         background: 'var(--bg-surface)',
@@ -2185,19 +2184,19 @@ function Cell({
   const good = invert ? !up : up
   const text =
     absolute || d.pct === null
-      ? `${up ? '+' : ''}${d.abs.toLocaleString('da-DK', {
+      ? `${up ? '+' : ''}${d.abs.toLocaleString('en-GB', {
           minimumFractionDigits: digits,
           maximumFractionDigits: digits,
         })}`
-      : `${up ? '+' : ''}${(d.pct * 100).toLocaleString('da-DK', { maximumFractionDigits: 0 })} %`
+      : `${up ? '+' : ''}${(d.pct * 100).toLocaleString('en-GB', { maximumFractionDigits: 0 })}%`
 
   return (
     <span
       style={{ color: good ? 'var(--accent-green)' : 'var(--accent-red)' }}
       title={
         d.pct === null
-          ? 'Intet sammenligneligt tal i perioden før — det er en start, ikke en procentvis ændring.'
-          : `${up ? '+' : ''}${d.abs.toLocaleString('da-DK', { maximumFractionDigits: 2 })} i absolutte tal`
+          ? 'No comparable figure in the previous period — it is a start, not a percentage change.'
+          : `${up ? '+' : ''}${d.abs.toLocaleString('en-GB', { maximumFractionDigits: 2 })} in absolute terms`
       }
     >
       {text}
@@ -2249,7 +2248,7 @@ function VariantTable({
   if (!rows.length && !missingUnavailable.length) {
     return (
       <p style={{ fontSize: '12px', color: 'var(--ink-muted)', padding: '10px 0' }}>
-        Ingen variantdata i perioden.
+        No variant data in the period.
       </p>
     )
   }
@@ -2318,14 +2317,14 @@ function VariantTable({
           lineHeight: 1.5,
         }}
       >
-        Udsolgt og uden trafik i perioden:{' '}
+        Out of stock and without traffic in the period:{' '}
         {missingUnavailable
-          .map((s) => s.title ?? s.sku ?? 'unavngiven variant')
+          .map((s) => s.title ?? s.sku ?? 'unnamed variant')
           .join(' · ')}
         {stale && '*'}
         <span style={{ color: 'var(--ink-muted)' }}>
-          {' — '}Google holder op med at vise et produkt, når det ikke længere kan købes, så
-          de forsvinder som regel fra rapporten i stedet for at stå med nul.
+          {' — '}Google stops showing a product once it can no longer be bought, so these
+          usually drop out of the report rather than showing zero.
         </span>
       </p>
     )}
@@ -2344,9 +2343,9 @@ function VariantStockTag({ stock, stale }: { stock: VariantStockView | undefined
   if (!stock) return null
 
   const label = !stock.sellable
-    ? 'udsolgt'
+    ? 'out of stock'
     : stock.daysOfStock !== null && stock.daysOfStock < LOW_STOCK_DAYS
-      ? `${Math.floor(stock.daysOfStock)} dages lager`
+      ? `${Math.floor(stock.daysOfStock)} ${Math.floor(stock.daysOfStock) === 1 ? 'day' : 'days'} of stock`
       : null
 
   if (!label) return null
@@ -2356,9 +2355,9 @@ function VariantStockTag({ stock, stale }: { stock: VariantStockView | undefined
       style={{ color: 'var(--accent-amber)', marginLeft: '8px' }}
       title={
         stale
-          ? `Lageret blev sidst læst fra Shopify for mere end ${STALE_STOCK_DAYS} dage siden, så det kan have ændret sig.`
+          ? `Stock was last read from Shopify more than ${STALE_STOCK_DAYS} days ago, so it may have changed.`
           : stock.quantity !== null
-            ? `${formatInt(stock.quantity)} på lager`
+            ? `${formatInt(stock.quantity)} in stock`
             : undefined
       }
     >

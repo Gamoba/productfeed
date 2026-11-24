@@ -14,8 +14,8 @@ export default async function MonitoringPage() {
   return (
     <PlaceholderPage
       title="Monitoring"
-      lede="Feed-kvalitet og kritiske fejl på tværs af alle kunder."
-      contents={["Feed-kvalitet pr. kunde med antal feeds og en kvalitetsscore", "Kritiske fejl på tværs af kunderne"]}
+      lede="Feed quality and critical errors across all customers."
+      contents={["Feed quality per customer with number of feeds and a quality score", "Critical errors across customers"]}
     />
   )
 }

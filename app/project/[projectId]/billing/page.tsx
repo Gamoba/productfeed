@@ -20,8 +20,8 @@ export default async function BillingPage({ params }: { params: Promise<{ projec
   return (
     <PlaceholderPage
       title="Billing"
-      lede={`Betaling og fakturaer for ${project.name}. Hver kunde har sin egen billing.`}
-      contents={["Tilvalg til planen", "Betalingsmetode", "Fakturaoplysninger", "Fakturaer med dato, periode og status"]}
+      lede={`Payment and invoices for ${project.name}. Each customer has its own billing.`}
+      contents={["Plan add-ons", "Payment method", "Invoice details", "Invoices with date, period and status"]}
     />
   )
 }

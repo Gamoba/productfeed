@@ -37,7 +37,7 @@ export type Transform = {
 
 export const TRANSFORM_LABELS: Record<TransformType, string> = {
   STRIP_HTML: 'Strip HTML',
-  FIND_REPLACE: 'Find & Replace',
+  FIND_REPLACE: 'Find & replace',
   TRUNCATE: 'Truncate',
   PREFIX_SUFFIX: 'Prefix / Suffix',
 }

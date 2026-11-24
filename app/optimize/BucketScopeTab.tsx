@@ -23,10 +23,10 @@ type OverlapData = { conflicts: BucketConflict[]; inThisBucket: number; unassign
 
 // Same words as the Results tab (BucketResultsPanel).
 const STATUS_LABEL: Record<string, string> = {
-  ai_generated: 'Optimeret',
-  human_edited: 'Rettet i hånden',
-  needs_review: 'Til godkendelse',
-  not_optimized: 'Ikke optimeret',
+  ai_generated: 'Optimised',
+  human_edited: 'Edited by hand',
+  needs_review: 'Awaiting review',
+  not_optimized: 'Not optimised',
 }
 
 // Membership for a candidate set = all candidates except the conflicts the user
@@ -359,20 +359,20 @@ export function BucketScopeTab({
             Scope
           </div>
           <h2 style={{ fontSize: '20px', fontWeight: 500, color: 'var(--ink)', letterSpacing: '-0.01em', lineHeight: 1.2, marginTop: '3px' }}>
-            Vælg varer til bucketen
+            Choose products for the bucket
           </h2>
           <p style={{ fontSize: '12px', color: 'var(--ink-secondary)', lineHeight: 1.5, marginTop: '6px', maxWidth: '52ch' }}>
-            Vælg hvilke varer bucketen dækker. Antallet og bucketens varer
-            opdateres automatisk, når du ændrer reglerne. Du skal ikke gemme.
+            Choose which products the bucket covers. The count and the bucket’s products
+            update automatically when you change the rules. You don’t need to save.
           </p>
           <div className="flex items-center gap-2" style={{ marginTop: '10px' }}>
-            <span style={{ fontSize: '13px', fontWeight: 500, color: 'var(--ink-secondary)' }}>Matchende varer:</span>
+            <span style={{ fontSize: '13px', fontWeight: 500, color: 'var(--ink-secondary)' }}>Matching products:</span>
             {recomputing || displayCount === null ? (
               // Box styled INLINE (not via a CSS class) so it's visible even if the
               // class were ever absent from the build; it only borrows the keyframe.
               <span
                 aria-hidden
-                title="Tæller igen…"
+                title="Recounting…"
                 style={{
                   display: 'inline-block',
                   width: '13px',
@@ -384,15 +384,15 @@ export function BucketScopeTab({
                 }}
               />
             ) : (
-              <span style={{ fontSize: '16px', fontWeight: 500, color: 'var(--ink)', letterSpacing: '-0.01em' }}>{displayCount.toLocaleString('da-DK')}</span>
+              <span style={{ fontSize: '16px', fontWeight: 500, color: 'var(--ink)', letterSpacing: '-0.01em' }}>{displayCount.toLocaleString('en-GB')}</span>
             )}
           </div>
         </div>
         <div className="shrink-0 text-right">
           {saveState === 'saving' ? (
-            <div style={{ fontSize: '11px', color: 'var(--ink-muted)' }}>Gemmer…</div>
+            <div style={{ fontSize: '11px', color: 'var(--ink-muted)' }}>Saving…</div>
           ) : saveState === 'saved' ? (
-            <div style={{ fontSize: '11px', color: 'var(--accent-green)' }}>Gemt ✓</div>
+            <div style={{ fontSize: '11px', color: 'var(--accent-green)' }}>Saved ✓</div>
           ) : null}
         </div>
       </div>
@@ -404,9 +404,9 @@ export function BucketScopeTab({
       <div className="flex flex-col lg:flex-row gap-4 items-start">
         <div className="w-full lg:flex-1 min-w-0 space-y-4">
       <FilterSection
-        title="Inkludér varer"
-        description="Kun varer, der matcher reglerne, kommer med. Ingen regler betyder alle varer i feedet."
-        badge="INKLUDÉR"
+        title="Include products"
+        description="Only products that match the rules are included. No rules means every product in the feed."
+        badge="INCLUDE"
         badgeCls="ff-badge ff-badge-success"
         config={include}
         onAddRule={() => addRule('include')}
@@ -416,9 +416,9 @@ export function BucketScopeTab({
         metafieldOptions={metafields}
       />
       <FilterSection
-        title="Ekskludér varer"
-        description="Varer, der matcher reglerne, fjernes igen."
-        badge="EKSKLUDÉR"
+        title="Exclude products"
+        description="Products that match the rules are removed again."
+        badge="EXCLUDE"
         badgeCls="ff-badge ff-badge-danger"
         config={exclude}
         onAddRule={() => addRule('exclude')}
@@ -431,12 +431,12 @@ export function BucketScopeTab({
       {/* Manual additions — added on top of the filter; survive filter changes. */}
       <div className="ff-panel">
         <div className="ff-panel-header" style={{ textTransform: 'none', letterSpacing: 0, fontSize: '12px', padding: '10px 14px' }}>
-          Tilføj varer manuelt
+          Add products manually
         </div>
         <div className="p-3.5 space-y-2.5">
           <p style={{ fontSize: '11px', color: 'var(--ink-muted)' }}>
-            Tilføj bestemte varer oven i reglerne. Manuelt tilføjede varer bliver i bucketen, selv om du ændrer
-            reglerne. {manual.length.toLocaleString('da-DK')} tilføjet manuelt.
+            Add specific products on top of the rules. Manually added products stay in the bucket even if you change
+            the rules. {manual.length.toLocaleString('en-GB')} added manually.
           </p>
 
           {pendingConflict && (
@@ -445,15 +445,15 @@ export function BucketScopeTab({
               style={{ fontSize: '11px', padding: '8px 10px', borderRadius: '6px', background: 'var(--warn-bg)', border: '1px solid var(--accent-amber)' }}
             >
               <div style={{ color: 'var(--accent-amber)' }}>
-                “{pendingConflict.title}” ligger allerede i bucketen “{pendingConflict.bucketName}”. Flytter du den hertil,
-                fjernes den derfra (en vare kan kun ligge i én bucket).
+                “{pendingConflict.title}” is already in the bucket “{pendingConflict.bucketName}”. If you move it here,
+                it is removed from there (a product can only be in one bucket).
               </div>
               <div className="flex items-center gap-2">
                 <button onClick={() => commitAdd(pendingConflict.ref)} className="ff-btn-primary">
-                  Flyt hertil
+                  Move here
                 </button>
                 <button onClick={() => setPendingConflict(null)} className="ff-btn-ghost" style={{ fontSize: '11px', padding: '0 8px' }}>
-                  Annullér
+                  Cancel
                 </button>
               </div>
             </div>
@@ -467,11 +467,11 @@ export function BucketScopeTab({
               if (e.target.value.trim()) setSearching(true)
               else setResults([])
             }}
-            placeholder="Søg efter varer på titel eller producent…"
+            placeholder="Search products by title or vendor…"
             className="ff-input w-full"
           />
 
-          {searching && <p style={{ fontSize: '11px', color: 'var(--ink-muted)' }}>Søger…</p>}
+          {searching && <p style={{ fontSize: '11px', color: 'var(--ink-muted)' }}>Searching…</p>}
 
           {results.length > 0 && (
             <div className="space-y-1" style={{ maxHeight: '260px', overflowY: 'auto' }}>
@@ -495,7 +495,7 @@ export function BucketScopeTab({
                       disabled={added || addBusy === p.product_ref}
                       className="ff-btn-secondary shrink-0"
                     >
-                      {added ? 'Tilføjet' : addBusy === p.product_ref ? 'Tilføjer…' : 'Tilføj'}
+                      {added ? 'Added' : addBusy === p.product_ref ? 'Adding…' : 'Add'}
                     </button>
                   </div>
                 )
@@ -505,7 +505,7 @@ export function BucketScopeTab({
 
           {manual.length > 0 && (
             <div>
-              <label className="ff-label">Tilføjet manuelt ({manual.length.toLocaleString('da-DK')})</label>
+              <label className="ff-label">Added manually ({manual.length.toLocaleString('en-GB')})</label>
               <div className="space-y-1">
                 {manual.map((m) => (
                   <div
@@ -514,7 +514,7 @@ export function BucketScopeTab({
                     style={{ fontSize: '11px', padding: '4px 8px', border: '1px solid var(--hairline)', borderRadius: '5px' }}
                   >
                     <span className="flex-1 min-w-0 truncate" style={{ color: 'var(--ink)' }} title={m.product_ref}>{m.title}</span>
-                    <button type="button" onClick={() => removeManual(m.product_ref)} className="ff-btn-ghost shrink-0 w-5 h-5" aria-label="Fjern manuelt tilføjet vare">×</button>
+                    <button type="button" onClick={() => removeManual(m.product_ref)} className="ff-btn-ghost shrink-0 w-5 h-5" aria-label="Remove manually added product">×</button>
                   </div>
                 ))}
               </div>
@@ -530,21 +530,21 @@ export function BucketScopeTab({
           </div>
           <div className="p-3.5 space-y-3">
             <div style={{ fontSize: '12px', color: 'var(--ink-secondary)' }}>
-              <strong style={{ color: 'var(--ink)' }}>{candidates.length.toLocaleString('da-DK')}</strong> varer matcher.{' '}
-              {overlap.inThisBucket.toLocaleString('da-DK')} er allerede i bucketen · {overlap.unassigned.toLocaleString('da-DK')} uden bucket ·{' '}
+              <strong style={{ color: 'var(--ink)' }}>{candidates.length.toLocaleString('en-GB')}</strong> products match.{' '}
+              {overlap.inThisBucket.toLocaleString('en-GB')} already in the bucket · {overlap.unassigned.toLocaleString('en-GB')} without a bucket ·{' '}
               <strong style={{ color: overlap.conflicts.length ? 'var(--accent-amber)' : 'inherit' }}>
-                {overlap.conflicts.length.toLocaleString('da-DK')}
+                {overlap.conflicts.length.toLocaleString('en-GB')}
               </strong>{' '}
-              i andre buckets.
+              in other buckets.
               {manual.length > 0 && (
                 <>
                   {' '}
                   <span style={{ color: 'var(--ink-muted)' }}>
-                    + {manual.length.toLocaleString('da-DK')} manuelt →{' '}
+                    + {manual.length.toLocaleString('en-GB')} manually →{' '}
                     <strong style={{ color: 'var(--ink)' }}>
-                      {new Set([...candidates, ...manualRefs]).size.toLocaleString('da-DK')}
+                      {new Set([...candidates, ...manualRefs]).size.toLocaleString('en-GB')}
                     </strong>{' '}
-                    i alt.
+                    in total.
                   </span>
                 </>
               )}
@@ -553,8 +553,8 @@ export function BucketScopeTab({
             {overlap.conflicts.length > 0 && (
               <div className="space-y-1.5">
                 <div style={{ fontSize: '11px', color: 'var(--ink-secondary)' }}>
-                  Disse varer ligger allerede i en anden bucket. Sæt flueben for at flytte dem til DENNE bucket
-                  (en vare kan kun ligge i én bucket). Uden flueben bliver de, hvor de er:
+                  These products are already in another bucket. Tick them to move them to THIS bucket
+                  (a product can only be in one bucket). Unticked, they stay where they are:
                 </div>
                 <button
                   type="button"
@@ -562,14 +562,14 @@ export function BucketScopeTab({
                   className="ff-btn-ghost"
                   style={{ fontSize: '10px', fontWeight: 500, color: 'var(--accent-ink)', padding: '2px 6px', alignSelf: 'flex-start' }}
                 >
-                  {allPulledIn ? 'Fravælg alle' : 'Vælg alle'}
+                  {allPulledIn ? 'Deselect all' : 'Select all'}
                 </button>
                 <div className="space-y-1" style={{ maxHeight: '280px', overflowY: 'auto' }}>
                   {overlap.conflicts.map((c) => (
                     <label key={c.product_ref} className="flex items-center gap-2" style={{ fontSize: '11px' }}>
                       <input type="checkbox" checked={pullIn.has(c.product_ref)} onChange={() => togglePull(c.product_ref)} />
                       <span style={{ color: 'var(--ink-secondary)' }} title={c.product_ref}>{c.title}</span>
-                      <span style={{ color: 'var(--ink-muted)' }}>i “{c.bucketName}”</span>
+                      <span style={{ color: 'var(--ink-muted)' }}>in “{c.bucketName}”</span>
                       {c.status && (
                         <span className={`ff-badge ${c.status === 'human_edited' ? 'ff-badge-warning' : 'ff-badge-neutral'}`}>
                           {STATUS_LABEL[c.status] ?? c.status}
@@ -582,8 +582,8 @@ export function BucketScopeTab({
             )}
 
             <div style={{ fontSize: '11px', color: 'var(--ink-muted)' }}>
-              Bucketen har <strong style={{ color: 'var(--ink)' }}>{finalRefs.length.toLocaleString('da-DK')}</strong>{' '}
-              {finalRefs.length === 1 ? 'vare' : 'varer'}. Gemt automatisk.
+              The bucket has <strong style={{ color: 'var(--ink)' }}>{finalRefs.length.toLocaleString('en-GB')}</strong>{' '}
+              {finalRefs.length === 1 ? 'product' : 'products'}. Saved automatically.
             </div>
           </div>
         </div>

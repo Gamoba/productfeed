@@ -30,14 +30,14 @@ export function SettingsPanel({
 
     const limit = parseInt(charLimit, 10)
     if (!Number.isFinite(limit) || limit < 1) {
-      setError('Tegngrænse skal være et positivt heltal')
+      setError('Character limit must be a positive whole number')
       return
     }
     let temp: number | null = null
     if (temperature.trim() !== '') {
       temp = parseFloat(temperature)
       if (!Number.isFinite(temp) || temp < 0 || temp > 1) {
-        setError('Temperatur skal være mellem 0 og 1')
+        setError('Temperature must be between 0 and 1')
         return
       }
     }
@@ -64,7 +64,7 @@ export function SettingsPanel({
           <span style={{ fontSize: '11px', color: 'var(--color-badge-danger-text)' }}>{error}</span>
         )}
         <button onClick={handleSave} disabled={isPending} className="ff-btn-primary">
-          {isPending ? 'Gemmer…' : success ? 'Gemt' : 'Gem indstillinger'}
+          {isPending ? 'Saving…' : success ? 'Saved' : 'Save settings'}
         </button>
       </div>
 
@@ -74,26 +74,26 @@ export function SettingsPanel({
           className="ff-panel-header"
           style={{ textTransform: 'none', letterSpacing: 0, fontSize: '12px', padding: '10px 14px' }}
         >
-          Eksempler på titler
+          Title examples
         </div>
         <div className="p-3.5 space-y-2">
           <p style={{ fontSize: '11px', color: 'var(--color-text-tertiary)' }}>
-            5–10 håndskrevne “perfekte” titler for kataloget, én pr. linje. De styrer opbygning og
-            tone i alle genererede titler og betyder mest for kvaliteten.
-            Skriv dem på feedets markedssprog.
+            5–10 hand-written “perfect” titles for the catalogue, one per line. They set the structure and
+            tone of every generated title and matter most for quality.
+            Write them in the feed’s market language.
           </p>
           <textarea
             value={fewShot}
             onChange={(e) => setFewShot(e.target.value)}
             rows={10}
             spellCheck={false}
-            placeholder={'- Brand Varetype Vigtige egenskaber Variant\n- Villa Antinori Chianti Classico 1970 Rotwein\n- …'}
+            placeholder={'- Brand Product type Key attributes Variant\n- Villa Antinori Chianti Classico 1970 Rotwein\n- …'}
             className="ff-input w-full"
             style={{ fontFamily: 'var(--font-mono)', fontSize: '12px', lineHeight: 1.6, resize: 'vertical' }}
           />
           <p style={{ fontSize: '10px', color: 'var(--color-text-tertiary)' }}>
-            {exampleCount.toLocaleString('da-DK')} {exampleCount === 1 ? 'eksempel' : 'eksempler'}
-            {exampleCount > 0 && exampleCount < 5 ? '. Gå efter mindst 5' : ''}
+            {exampleCount.toLocaleString('en-GB')} {exampleCount === 1 ? 'example' : 'examples'}
+            {exampleCount > 0 && exampleCount < 5 ? '. Aim for at least 5' : ''}
           </p>
         </div>
       </div>
@@ -104,11 +104,11 @@ export function SettingsPanel({
           className="ff-panel-header"
           style={{ textTransform: 'none', letterSpacing: 0, fontSize: '12px', padding: '10px 14px' }}
         >
-          Grænser og model
+          Limits and model
         </div>
         <div className="p-3.5 space-y-3">
           <div>
-            <label className="ff-label">Tegngrænse</label>
+            <label className="ff-label">Character limit</label>
             <input
               type="number"
               min={1}
@@ -117,13 +117,13 @@ export function SettingsPanel({
               className="ff-input w-32"
             />
             <p className="mt-1" style={{ fontSize: '10px', color: 'var(--color-text-tertiary)' }}>
-              Google Merchant Center tillader højst 150. Længere titler sendes til manuel godkendelse.
+              Google Merchant Center allows at most 150. Longer titles are sent for manual review.
             </p>
           </div>
 
           <div className="flex gap-4">
             <div>
-              <label className="ff-label">Model (valgfri)</label>
+              <label className="ff-label">Model (optional)</label>
               <input
                 type="text"
                 value={model}
@@ -133,7 +133,7 @@ export function SettingsPanel({
               />
             </div>
             <div>
-              <label className="ff-label">Temperatur (valgfri)</label>
+              <label className="ff-label">Temperature (optional)</label>
               <input
                 type="number"
                 min={0}
@@ -147,8 +147,8 @@ export function SettingsPanel({
             </div>
           </div>
           <p style={{ fontSize: '10px', color: 'var(--color-text-tertiary)' }}>
-            Lad felterne stå tomme for standardværdierne (claude-haiku-4-5, temperatur 0,3). Temperatur
-            virker kun på modeller, der understøtter den.
+            Leave the fields empty for the defaults (claude-haiku-4-5, temperature 0.3). Temperature
+            only works on models that support it.
           </p>
         </div>
       </div>

@@ -112,7 +112,7 @@ export default async function FeedSettingsPage({
       perfSchedule={perfSchedule}
       ads={{
         hasConnection: !!connection,
-        connectionError: connection?.status === 'error' ? (connection.last_error ?? 'Forbindelsen fejler') : null,
+        connectionError: connection?.status === 'error' ? (connection.last_error ?? 'Connection failing') : null,
         customerId: ads?.customer_id ?? null,
         customerName: ads?.customer_name ?? null,
         currencyCode: ads?.currency_code ?? null,

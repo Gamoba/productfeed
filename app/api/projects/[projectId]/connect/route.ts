@@ -56,8 +56,8 @@ export async function POST(
   const shopUrl = normalizeShopUrl(body.shop_url ?? '')
   const accessToken = (body.access_token ?? '').trim()
 
-  if (!shopUrl) return NextResponse.json({ error: 'shop_url er påkrævet' }, { status: 400 })
-  if (!accessToken) return NextResponse.json({ error: 'access_token er påkrævet' }, { status: 400 })
+  if (!shopUrl) return NextResponse.json({ error: 'shop_url is required' }, { status: 400 })
+  if (!accessToken) return NextResponse.json({ error: 'access_token is required' }, { status: 400 })
 
   // ── Probe before persisting ────────────────────────────────────────────────
   const shopify = createShopifyClient({ shopUrl, accessToken })
@@ -68,7 +68,7 @@ export async function POST(
   } catch (err) {
     return NextResponse.json(
       {
-        error: `Kunne ikke nå Shopify — tjek shop-URL'en. (${err instanceof Error ? err.message : 'netværksfejl'})`,
+        error: `Could not reach Shopify. Check the shop URL. (${err instanceof Error ? err.message : 'network error'})`,
       },
       { status: 400 }
     )
@@ -87,10 +87,10 @@ export async function POST(
     const detail =
       parsed.errors?.[0]?.message ??
       (probe.httpStatus === 401 || probe.httpStatus === 403
-        ? 'access token afvist'
+        ? 'access token rejected'
         : `HTTP ${probe.httpStatus}`)
     return NextResponse.json(
-      { error: `Forbindelsen kunne ikke verificeres — ${detail}. Intet blev gemt.` },
+      { error: `The connection could not be verified: ${detail}. Nothing was saved.` },
       { status: 400 }
     )
   }
@@ -142,8 +142,8 @@ export async function POST(
     projectId,
     accountId: owned.account_id,
     area: 'Connections',
-    action: sameShop ? 'Shopify-nøgle skiftet' : 'Shopify forbundet',
-    before: sameShop ? null : owned.source_type === 'feed_url' ? 'Feed-URL' : owned.shop_url,
+    action: sameShop ? 'Shopify token changed' : 'Shopify connected',
+    before: sameShop ? null : owned.source_type === 'feed_url' ? 'Feed URL' : owned.shop_url,
     after: shopUrl,
   })
 

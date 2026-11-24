@@ -168,7 +168,7 @@ const CAPS_ALLOWLIST = new Set([
 
 export function createOptimizerClient(): Anthropic {
   const apiKey = process.env.ANTHROPIC_API_KEY
-  if (!apiKey) throw new Error('ANTHROPIC_API_KEY mangler')
+  if (!apiKey) throw new Error('ANTHROPIC_API_KEY is missing')
   // maxRetries covers transient 429/5xx; matches the resilience of the Shopify
   // client's manual retry loop without re-implementing it.
   return new Anthropic({ apiKey, maxRetries: 4 })

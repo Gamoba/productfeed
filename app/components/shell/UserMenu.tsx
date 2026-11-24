@@ -25,7 +25,7 @@ export function UserMenu({ shell, variant }: { shell: Shell; variant: 'card' | '
 
   return (
     <Popover
-      label="Brugermenu"
+      label="User menu"
       align={variant === 'card' ? 'left' : 'right'}
       placement={variant === 'card' ? 'above' : 'below'}
       triggerClassName={variant === 'card' ? 'shell-usercard' : 'shell-iconbtn'}
@@ -60,7 +60,7 @@ export function UserMenu({ shell, variant }: { shell: Shell; variant: 'card' | '
             }}
           >
             <Icon name="logout" size={14} />
-            Log ud
+            Sign out
           </button>
         </>
       )}

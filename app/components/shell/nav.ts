@@ -57,10 +57,10 @@ const FEED_PAGES = {
   overview: { path: '', label: 'Overview', icon: 'overview' },
   products: { path: 'products', label: 'Products', icon: 'box' },
   mapping: { path: 'mapping', label: 'Mapping', icon: 'mapping' },
-  filters: { path: 'filters', label: 'Inkludér / ekskludér', icon: 'filter' },
+  filters: { path: 'filters', label: 'Include / exclude', icon: 'filter' },
   titles: { path: 'optimize', label: 'AI Titles', icon: 'titles' },
   labels: { path: 'google-ads/labels', label: 'Labels', icon: 'tag' },
-  preview: { path: 'preview', label: 'Preview & eksport', icon: 'eye' },
+  preview: { path: 'preview', label: 'Preview & export', icon: 'eye' },
   performance: { path: 'google-ads', label: 'Performance', icon: 'chart' },
   campaigns: { path: 'google-ads/campaigns', label: 'Campaigns', icon: 'megaphone' },
   waste: { path: 'google-ads/waste', label: 'Wasted spend', icon: 'drop' },
@@ -87,7 +87,7 @@ export function feedNav(feedId: string): NavEntry[] {
     feedLink(feedId, 'products'),
     {
       kind: 'group',
-      label: 'Opsætning',
+      label: 'Setup',
       icon: 'setup',
       items: [
         feedLink(feedId, 'mapping'),
@@ -99,7 +99,7 @@ export function feedNav(feedId: string): NavEntry[] {
     },
     {
       kind: 'group',
-      label: 'Annoncer',
+      label: 'Ads',
       icon: 'chart',
       items: [
         feedLink(feedId, 'performance'),
@@ -122,7 +122,7 @@ export function shopNav(projectId: string): NavEntry[] {
     { kind: 'link', label: 'General performance', href: p('performance'), icon: 'chart' },
     {
       kind: 'group',
-      label: 'Værktøjer',
+      label: 'Tools',
       icon: 'tools',
       items: [
         { kind: 'link', label: 'Connections', href: p('connections'), icon: 'link' },
@@ -132,7 +132,7 @@ export function shopNav(projectId: string): NavEntry[] {
     },
     {
       kind: 'group',
-      label: 'Konto',
+      label: 'Account',
       icon: 'account',
       items: [
         { kind: 'link', label: 'Company settings', href: p('company'), icon: 'building' },
@@ -192,7 +192,7 @@ export function initials(name: string): string {
 }
 
 export const ROLE_LABEL: Record<'owner' | 'admin' | 'member', string> = {
-  owner: 'Ejer',
+  owner: 'Owner',
   admin: 'Admin',
-  member: 'Medlem',
+  member: 'Member',
 }

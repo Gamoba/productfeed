@@ -8,11 +8,11 @@ export const AUTO_SYNC_FREQUENCIES = ['off', 'hourly', '6h', '12h', 'daily'] as 
 export type AutoSyncFrequency = (typeof AUTO_SYNC_FREQUENCIES)[number]
 
 export const AUTO_SYNC_LABELS: Record<AutoSyncFrequency, string> = {
-  off: 'Slået fra',
-  hourly: 'Hver time',
-  '6h': 'Hver 6. time',
-  '12h': 'Hver 12. time',
-  daily: 'Hver dag',
+  off: 'Off',
+  hourly: 'Every hour',
+  '6h': 'Every 6 hours',
+  '12h': 'Every 12 hours',
+  daily: 'Every day',
 }
 
 export const DEFAULT_AUTO_SYNC_FREQUENCY: AutoSyncFrequency = 'daily'

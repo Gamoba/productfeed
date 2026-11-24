@@ -40,7 +40,7 @@ export async function GET(
       // highest-value action in a real account is often a view_item tracker.
       actions.sort((a, b) => {
         const rank = (c: string) => (c === 'PURCHASE' ? 0 : 1)
-        return rank(a.category) - rank(b.category) || a.name.localeCompare(b.name, 'da-DK')
+        return rank(a.category) - rank(b.category) || a.name.localeCompare(b.name, 'en-GB')
       })
       return NextResponse.json({ actions })
     }

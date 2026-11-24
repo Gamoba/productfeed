@@ -236,7 +236,7 @@ export async function setExampleStatus(
     const rows = (approved ?? []) as { id: string; position: number | null }[]
     if (rows.some((r) => r.id === exampleId)) return // already approved — no-op
     if (rows.length >= MAX_APPROVED) {
-      throw new Error(`Maks ${MAX_APPROVED} godkendte eksempler — slet et for at frigøre en plads`)
+      throw new Error(`At most ${MAX_APPROVED} approved examples. Delete one to free up a slot`)
     }
     const position = nextApprovedPosition(rows.map((r) => r.position ?? 0))
     const { error } = await db()
@@ -524,7 +524,7 @@ export async function generateBucketCandidates(
 
   if (!product) {
     throw new Error(
-      'Ingen egnede produkter tilbage at generere kandidater fra (medlemmer der ikke allerede er brugt og har en titel + mindst én attribut).'
+      'No suitable products left to generate suggestions from (products in the bucket that are not already used and have a title plus at least one attribute).'
     )
   }
 
@@ -552,9 +552,9 @@ export async function generateBucketCandidates(
     messages,
   })
   const block = msg.content[0]
-  if (!block || block.type !== 'text') throw new Error('Tomt svar fra modellen')
+  if (!block || block.type !== 'text') throw new Error('Empty response from the model')
   const parsed = parseCandidatesArray(block.text)
-  if (!parsed) throw new Error('Kunne ikke parse modellens JSON-svar')
+  if (!parsed) throw new Error('Could not parse the model’s JSON response')
 
   // All candidates are for the one product. Run grounding validation and persist
   // as candidate rows, keeping at most one per DISTINCT approach (the round's
@@ -596,7 +596,7 @@ export async function generateBucketCandidates(
     validations.push(validation)
   }
 
-  if (rows.length === 0) throw new Error('Modellen returnerede ingen brugbare kandidater')
+  if (rows.length === 0) throw new Error('The model returned no usable suggestions')
 
   const { data: inserted, error } = await db()
     .from('bucket_examples')

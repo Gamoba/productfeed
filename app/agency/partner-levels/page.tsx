@@ -14,9 +14,9 @@ export default async function PartnerLevelsPage() {
   return (
     <PlaceholderPage
       title="Partner levels"
-      lede="Jo flere live-kunder bureauet har, jo højere kommission. Niveauerne følger kundeantallet automatisk."
-      contents={["Partnerniveauerne (fx Bronze, Sølv) med kommission og krav til antal live-kunder", "Hvor bureauet står nu, og hvor mange kunder der mangler til næste niveau"]}
-      note="Partnerniveauer bygger på en partneraftale, der ikke er på plads endnu."
+      lede="The more live customers the agency has, the higher the commission. Levels follow the customer count automatically."
+      contents={["The partner levels (e.g. Bronze, Silver) with commission and required number of live customers", "Where the agency stands now, and how many customers are needed for the next level"]}
+      note="Partner levels depend on a partner agreement that is not in place yet."
     />
   )
 }

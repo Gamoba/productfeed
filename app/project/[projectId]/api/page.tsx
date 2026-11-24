@@ -19,8 +19,8 @@ export default async function ApiMcpPage({ params }: { params: Promise<{ project
   return (
     <PlaceholderPage
       title="API / MCP"
-      lede={"To måder at koble andre systemer på shoppen: API til jeres egne systemer og MCP til AI-assistenter."}
-      contents={["API: shop-id, aktive tokens (op til to, vises kun én gang) og et link til dokumentationen", "MCP: en adresse at indsætte i en AI-assistent og en kontakt, der slår MCP til for shoppen", "Hvad assistenten må: læse, foreslå ændringer, og gemme uden godkendelse (slået fra som standard)"]}
+      lede={"Two ways to connect other systems to the shop: API for your own systems and MCP for AI assistants."}
+      contents={["API: shop ID, active tokens (up to two, shown only once) and a link to the documentation", "MCP: an address to paste into an AI assistant and a switch that turns on MCP for the shop", "What the assistant may do: read, suggest changes, and save without approval (off by default)"]}
     />
   )
 }

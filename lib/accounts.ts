@@ -79,7 +79,7 @@ export async function createPersonalAccount(
     .select('id')
     .single<{ id: string }>()
   if (error) dbError('createPersonalAccount', error)
-  if (!data) throw new Error('Kontoen kunne ikke oprettes')
+  if (!data) throw new Error('The account could not be created')
   const { error: memberErr } = await db
     .from('account_members')
     .insert({ account_id: data.id, user_id: user.id, role: 'owner' })

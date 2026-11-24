@@ -37,7 +37,7 @@ export async function POST(req: Request, { params }: { params: Promise<{ feedId:
       user: g.user,
       feedId,
       area: 'Labels',
-      action: body.bucket.id ? 'Bucket ændret' : 'Bucket oprettet',
+      action: body.bucket.id ? 'Bucket changed' : 'Bucket created',
       after: saved.name === saved.value ? saved.name : `${saved.name} → ${saved.value}`,
     })
     return NextResponse.json({ bucket: saved })
@@ -58,7 +58,7 @@ export async function DELETE(req: Request, { params }: { params: Promise<{ feedI
     const db = adminDb()
     const bucket = (await listBuckets(db, feedId)).find((b) => b.id === id)
     await deleteBucket(db, feedId, id)
-    await logActivity(db, { user: g.user, feedId, area: 'Labels', action: 'Bucket slettet', before: bucket?.name ?? null })
+    await logActivity(db, { user: g.user, feedId, area: 'Labels', action: 'Bucket deleted', before: bucket?.name ?? null })
     return NextResponse.json({ ok: true })
   } catch (err) {
     return errorResponse(err, 'DELETE /api/google-ads/[feedId]/buckets')

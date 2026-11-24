@@ -103,7 +103,7 @@ export async function validateFeed(feedId: string, input: FeedInput = {}): Promi
       issues.push({
         field,
         type: 'error',
-        message: 'Obligatorisk felt er ikke mappet',
+        message: 'Required field is not mapped',
         affectedCount: 0,
       })
     }
@@ -141,7 +141,7 @@ export async function validateFeed(feedId: string, input: FeedInput = {}): Promi
       issues.push({
         field,
         type: 'error',
-        message: `Empty value on ${blanks.length} of ${total} products (${Math.round(pct)} %) — above the 50 % threshold`,
+        message: `Empty value on ${blanks.length} of ${total} products (${Math.round(pct)}%) — above the 50% threshold`,
         affectedCount: blanks.length,
       })
     } else {

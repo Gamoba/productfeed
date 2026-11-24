@@ -136,7 +136,7 @@ export async function GET(req: Request) {
         })
         .eq('id', feed.id)
       // Only failures: a successful run every hour would bury everything else.
-      await logActivity(db, { user: null, feedId: feed.id, area: 'Synkronisering', action: 'Automatisk synkronisering fejlede', after: message })
+      await logActivity(db, { user: null, feedId: feed.id, area: 'Sync', action: 'Automatic sync failed', after: message })
       results.push({ feedId: feed.id, status: 'error' })
     }
   }

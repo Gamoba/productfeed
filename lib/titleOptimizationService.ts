@@ -196,7 +196,7 @@ export async function saveManualTitle(
 ): Promise<void> {
   const db = adminDb()
   const trimmed = title.trim()
-  if (!trimmed) throw new Error('Titel må ikke være tom')
+  if (!trimmed) throw new Error('Title cannot be empty')
 
   const { data: existing } = await db
     .from('product_title_optimizations')
@@ -279,7 +279,7 @@ export async function rejectOptimization(feedId: string, productRef: string): Pr
     .eq('product_ref', productRef)
     .maybeSingle()
   const original = data?.original_title as string | undefined
-  if (!original) throw new Error('Produktet har ingen optimerings-række at forkaste')
+  if (!original) throw new Error('The product has no optimisation row to reject')
   await saveManualTitle(feedId, productRef, original)
 }
 
@@ -415,7 +415,7 @@ export async function getBucketProductDetail(feedId: string, productRef: string)
       .eq('product_ref', productRef)
       .maybeSingle(),
   ])
-  if (!prod) throw new Error('Produkt ikke fundet')
+  if (!prod) throw new Error('Product not found')
   const op = toOptimizerProduct(prod as SupabaseProduct)
 
   // Metafield labels: prefer the definition NAME (e.g. "Årgang") over the raw,

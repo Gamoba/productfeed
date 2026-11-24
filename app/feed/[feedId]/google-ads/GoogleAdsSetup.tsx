@@ -49,13 +49,13 @@ export function GoogleAdsSetup({ feedId, hasConnection, current, onDone }: Props
         if (cancelled) return
         if (ok) setAccounts(j.accounts ?? [])
         else {
-          setError(j.error ?? 'Kunne ikke hente konti')
+          setError(j.error ?? 'Could not load accounts')
           setFailed(true)
         }
       })
       .catch(() => {
         if (cancelled) return
-        setError('Kunne ikke få kontakt til serveren')
+        setError('Could not reach the server')
         setFailed(true)
       })
     return () => {
@@ -84,14 +84,14 @@ export function GoogleAdsSetup({ feedId, hasConnection, current, onDone }: Props
       })
       const json = await res.json()
       if (!res.ok) {
-        setError(json.error ?? 'Kunne ikke gemme')
+        setError(json.error ?? 'Could not save')
         return
       }
-      if (json.syncError) setError(`Gemt, men tallene kunne ikke hentes: ${json.syncError}`)
+      if (json.syncError) setError(`Saved, but the figures could not be fetched: ${json.syncError}`)
       onDone()
       router.refresh()
     } catch {
-      setError('Kunne ikke få kontakt til serveren')
+      setError('Could not reach the server')
     } finally {
       setSaving(false)
     }
@@ -103,20 +103,20 @@ export function GoogleAdsSetup({ feedId, hasConnection, current, onDone }: Props
       <div className="wl-card" style={{ padding: '40px' }}>
         <div className="max-w-xl space-y-4">
           <h2 style={{ fontSize: '20px', fontWeight: 500, color: 'var(--ink)' }}>
-            Kobl Google Ads
+            Connect Google Ads
           </h2>
           <p style={{ fontSize: '15px', lineHeight: 1.6, color: 'var(--ink-secondary)' }}>
-            Giv adgang, og vælg annoncekontoen. Derefter henter vi forbrug, klik og
-            konverteringsværdi pr. vare og opdaterer dem dagligt.
+            Grant access and choose the ad account. We then fetch spend, clicks and
+            conversion value per item and update them daily.
           </p>
           <p style={{ fontSize: '13px', color: 'var(--ink-muted)' }}>
-            Vi læser kun data. Der bliver aldrig ændret noget i Google Ads-kontoen.
+            We only read data. Nothing in the Google Ads account is ever changed.
           </p>
           <a
             href={`/api/google-ads/connect?feedId=${feedId}`}
             className="wl-btn-primary inline-block"
           >
-            Kobl Google Ads →
+            Connect Google Ads →
           </a>
         </div>
       </div>
@@ -129,10 +129,10 @@ export function GoogleAdsSetup({ feedId, hasConnection, current, onDone }: Props
       <div className="max-w-2xl space-y-5">
         <div className="space-y-1">
           <h2 style={{ fontSize: '20px', fontWeight: 500, color: 'var(--ink)' }}>
-            Vælg annoncekonto
+            Choose ad account
           </h2>
           <p style={{ fontSize: '13px', color: 'var(--ink-muted)' }}>
-            Forbindelsen er godkendt. Der er ét valg tilbage.
+            The connection is approved. One choice left.
           </p>
         </div>
 
@@ -146,14 +146,14 @@ export function GoogleAdsSetup({ feedId, hasConnection, current, onDone }: Props
           </div>
         )}
 
-        <Field label="Annoncekonto" hint={loadingAccounts ? 'Henter konti…' : undefined}>
+        <Field label="Ad account" hint={loadingAccounts ? 'Loading accounts…' : undefined}>
           <select
             value={customerId}
             onChange={(e) => setCustomerId(e.target.value)}
             disabled={!accounts}
             style={selectStyle}
           >
-            <option value="">Vælg konto…</option>
+            <option value="">Choose account…</option>
             {(accounts ?? []).map((a) => (
               <option key={a.customerId} value={a.customerId}>
                 {a.name || fmtId(a.customerId)} · {fmtId(a.customerId)} · {a.currencyCode}
@@ -164,30 +164,30 @@ export function GoogleAdsSetup({ feedId, hasConnection, current, onDone }: Props
         </Field>
 
         <Field
-          label="Feed label (valgfri)"
-          hint="Kun hvis kontoen dækker flere markeder"
+          label="Feed label (optional)"
+          hint="Only if the account covers several markets"
         >
           <input
             value={feedLabel}
             onChange={(e) => setFeedLabel(e.target.value)}
-            placeholder="fx DK — tomt betyder hele kontoen"
+            placeholder="e.g. DK — empty means the whole account"
             style={selectStyle}
           />
         </Field>
 
         <div className="flex items-center gap-3 pt-1">
           <button onClick={save} disabled={!customerId || saving} className="wl-btn-primary">
-            {saving ? 'Henter tal…' : 'Gem og hent tal'}
+            {saving ? 'Fetching figures…' : 'Save and fetch figures'}
           </button>
           <a href={`/api/google-ads/connect?feedId=${feedId}`} className="wl-btn-secondary">
-            Kobl igen
+            Reconnect
           </a>
         </div>
 
         <p style={{ fontSize: '12px', color: 'var(--ink-muted)', lineHeight: 1.5 }}>
-          Vi henter 90 dage og gemmer alle konverteringshandlinger. Bagefter vælger du øverst
-          på siden, hvilken handling der tæller som omsætning, og hvilken der er bruttoprofit —
-          der kan du se, hvor meget hver af dem rapporterer.
+          We fetch 90 days and store every conversion action. Afterwards, at the top of the
+          page, you choose which action counts as revenue and which is gross profit — there
+          you can see how much each of them reports.
         </p>
       </div>
     </div>

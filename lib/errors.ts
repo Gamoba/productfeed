@@ -12,7 +12,7 @@
 // boundary used by API routes; `dbError` wraps a Supabase error result so the
 // raw message is logged but not propagated.
 
-const GENERIC_MESSAGE = 'Der opstod en uventet serverfejl. Prøv igen senere.'
+const GENERIC_MESSAGE = 'An unexpected server error occurred. Try again later.'
 
 // Marks an error whose message is safe and intended for the end user.
 export class AppError extends Error {
@@ -48,5 +48,5 @@ export function errorResponse(err: unknown, context: string): Response {
 // every `if (error)` site that currently does `throw new Error(error.message)`.
 export function dbError(context: string, error: { message: string; code?: string; hint?: string | null }): never {
   console.error(`[db] ${context}:`, error)
-  throw new Error('Databasehandlingen mislykkedes')
+  throw new Error('The database operation failed')
 }

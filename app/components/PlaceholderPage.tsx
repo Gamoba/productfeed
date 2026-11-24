@@ -24,16 +24,16 @@ export function PlaceholderPage({
           <h1>{title}</h1>
           <p className="ph-lede">{lede}</p>
         </div>
-        <span className="pill">Pladsholder</span>
+        <span className="pill">Placeholder</span>
       </header>
 
       <section className="card ph-card">
         <div>
-          <h3>Siden er ikke bygget endnu</h3>
-          <small>Den står i menuen, fordi den er med i prototypen. Hvad den skal indeholde, er ikke besluttet.</small>
+          <h3>This page is not built yet</h3>
+          <small>It is in the menu because it is part of the prototype. What it will contain has not been decided.</small>
         </div>
         <div className="ph-list">
-          <span className="ph-label">I prototypen</span>
+          <span className="ph-label">In the prototype</span>
           <ul>
             {contents.map((c) => (
               <li key={c}>{c}</li>

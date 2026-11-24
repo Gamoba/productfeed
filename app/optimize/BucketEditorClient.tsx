@@ -22,9 +22,9 @@ type Step = 'scope' | 'examples' | 'run'
 const ORDER: Step[] = ['scope', 'examples', 'run']
 
 const LEDE: Record<Step, string> = {
-  scope: 'Vælg hvilke varer der hører til gruppen. Reglerne virker som på Inkludér / ekskludér.',
-  examples: 'Skriv instruktioner, vælg de felter AI’en må bruge, og giv den eksempler på titler, du kan lide.',
-  run: 'Kør optimeringen, og godkend titlerne. Intet går live, før du har godkendt det.',
+  scope: 'Choose which products belong to the bucket. The rules work as on Include / exclude.',
+  examples: 'Write instructions, choose the fields the AI may use, and give it examples of titles you like.',
+  run: 'Run the optimisation and approve the titles. Nothing goes live until you have approved it.',
 }
 
 export function BucketEditorClient({
@@ -71,12 +71,12 @@ export function BucketEditorClient({
       <div className="ts-head">
         <div>
           <p className="ts-crumb">
-            <Link href={`/feed/${feedId}/optimize`}>AI Titles</Link> › gruppe
+            <Link href={`/feed/${feedId}/optimize`}>AI Titles</Link> › bucket
           </p>
           <h1>{bucketName}</h1>
           <p className="ts-lede">
             {memberCount !== null &&
-              `${formatNumber(memberCount)} ${memberCount === 1 ? 'vare' : 'varer'} i gruppen. `}
+              `${formatNumber(memberCount)} ${memberCount === 1 ? 'product' : 'products'} in the bucket. `}
             {LEDE[step]}
           </p>
         </div>
@@ -86,7 +86,7 @@ export function BucketEditorClient({
 
       {noMembers && step !== 'scope' && (
         <p className="note">
-          Gruppen har ingen varer endnu. Vælg dem under Scope, så AI’en har noget at arbejde med.
+          The bucket has no products yet. Choose them under Scope so the AI has something to work with.
         </p>
       )}
 
@@ -113,15 +113,15 @@ export function BucketEditorClient({
       {/* Step footer, sticky so Back/Next stay in reach on long steps. */}
       <div className="ts-foot">
         <span>
-          Trin {at + 2} af 4 · {labelOf(step)}
+          Step {at + 2} of 4 · {labelOf(step)}
         </span>
         {prev ? (
           <button type="button" onClick={() => setStep(prev)} className="wl-btn-secondary">
-            Tilbage til {labelOf(prev)}
+            Back to {labelOf(prev)}
           </button>
         ) : (
           <Link href={`/feed/${feedId}/optimize`} className="wl-btn-secondary">
-            Tilbage til Buckets
+            Back to Buckets
           </Link>
         )}
         {step === 'run' ? (
@@ -131,11 +131,11 @@ export function BucketEditorClient({
             disabled={!runControl || runControl.disabled}
             className="wl-btn-primary"
           >
-            {runControl?.running ? 'Kører…' : 'Kør optimering'}
+            {runControl?.running ? 'Running…' : 'Run optimisation'}
           </button>
         ) : next ? (
           <button type="button" onClick={() => setStep(next)} className="wl-btn-primary">
-            Videre til {labelOf(next)}
+            Continue to {labelOf(next)}
           </button>
         ) : null}
       </div>

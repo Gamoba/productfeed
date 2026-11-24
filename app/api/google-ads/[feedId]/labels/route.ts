@@ -69,7 +69,7 @@ export async function POST(req: Request, { params }: { params: Promise<{ feedId:
       user: g.user,
       feedId,
       area: 'Labels',
-      action: body.label.id ? 'Label ændret' : 'Label oprettet',
+      action: body.label.id ? 'Label changed' : 'Label created',
       after: `${saved.name}${slot}`,
     })
     return NextResponse.json({ label: saved })
@@ -91,7 +91,7 @@ export async function DELETE(req: Request, { params }: { params: Promise<{ feedI
     const db = adminDb()
     const label = (await listLabels(db, feedId)).find((l) => l.id === id)
     await deleteLabel(db, feedId, id)
-    await logActivity(db, { user: g.user, feedId, area: 'Labels', action: 'Label slettet', before: label?.name ?? null })
+    await logActivity(db, { user: g.user, feedId, area: 'Labels', action: 'Label deleted', before: label?.name ?? null })
     return NextResponse.json({ ok: true })
   } catch (err) {
     return errorResponse(err, 'DELETE /api/google-ads/[feedId]/labels')

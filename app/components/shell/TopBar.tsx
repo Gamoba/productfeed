@@ -38,7 +38,7 @@ function Crumbs({ shell, pathname }: { shell: Shell; pathname: string }) {
 
   if (level.kind === 'feed') {
     return (
-      <nav className="shell-crumbs" aria-label="Brødkrummer">
+      <nav className="shell-crumbs" aria-label="Breadcrumbs">
         {project && <Link href={`/project/${project.id}`}>{project.name}</Link>}
         <Sep />
         <FeedSwitcher shell={shell} pathname={pathname} />
@@ -50,7 +50,7 @@ function Crumbs({ shell, pathname }: { shell: Shell; pathname: string }) {
 
   if (level.kind === 'shop') {
     return (
-      <nav className="shell-crumbs" aria-label="Brødkrummer">
+      <nav className="shell-crumbs" aria-label="Breadcrumbs">
         {account && <Link href="/">{account.name}</Link>}
         <Sep />
         <Link href={project ? `/project/${project.id}` : '/'}>{project?.name ?? ''}</Link>
@@ -61,7 +61,7 @@ function Crumbs({ shell, pathname }: { shell: Shell; pathname: string }) {
   }
 
   return (
-    <nav className="shell-crumbs" aria-label="Brødkrummer">
+    <nav className="shell-crumbs" aria-label="Breadcrumbs">
       {account && <span>{account.name}</span>}
       {account && <Sep />}
       <b>{accountPageLabel(pathname)}</b>
@@ -96,7 +96,7 @@ function FeedSwitcher({ shell, pathname }: { shell: Shell; pathname: string }) {
 
   return (
     <Popover
-      label="Skift feed"
+      label="Switch feed"
       triggerClassName="shell-feedpill"
       trigger={
         <>
@@ -157,7 +157,7 @@ function MobileNav({ shell, pathname }: { shell: Shell; pathname: string }) {
       {shell.level.kind === 'shop' && (
         <Link href="/">
           <Icon name="back" size={13} />
-          Alle shops
+          All shops
         </Link>
       )}
       {links.map((l) => (

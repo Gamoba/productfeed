@@ -19,9 +19,9 @@ export default async function MasterFieldsPage({ params }: { params: Promise<{ p
   return (
     <PlaceholderPage
       title="Master fields"
-      lede={"Lav en regel én gang på shoppen, og brug den i alle feeds på tværs af lande og kanaler. Retter du et master field, følger alle feeds med."}
-      contents={["En liste over shoppens master fields med navn, regel, hvad de bruges til, og hvor mange feeds der bruger dem", "I Mapping vælger et felt typen Master field og henter reglen herfra", "Et enkelt land kan stadig få sin egen regel"]}
-      note="Master fields er udskudt i guidelines, indtil feeds er på plads."
+      lede={"Create a rule once on the shop and use it in all feeds across countries and channels. Change a master field and every feed follows."}
+      contents={["A list of the shop's master fields with name, rule, what they are used for, and how many feeds use them", "In Mapping, a field picks the Master field type and takes its rule from here", "A single country can still have its own rule"]}
+      note="Master fields are postponed in the guidelines until feeds are in place."
     />
   )
 }

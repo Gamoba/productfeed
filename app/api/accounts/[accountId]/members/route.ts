@@ -33,8 +33,8 @@ export async function POST(req: Request, { params }: Ctx) {
     await logActivity(db, {
       user,
       accountId,
-      area: 'Adgang',
-      action: result.kind === 'added' ? 'Bruger tilføjet' : 'Bruger inviteret',
+      area: 'Access',
+      action: result.kind === 'added' ? 'User added' : 'User invited',
       after: `${result.email}${isRole(body.role) ? ` · ${ROLE_LABEL[body.role]}` : ''}`,
     })
     return NextResponse.json(result)

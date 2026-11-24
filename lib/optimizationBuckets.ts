@@ -251,7 +251,7 @@ export async function createBucket(
   method: BucketMethod
 ): Promise<Bucket> {
   const trimmed = name.trim()
-  if (!trimmed) throw new Error('Bucket-navn må ikke være tomt')
+  if (!trimmed) throw new Error('Bucket name cannot be empty')
   const { data, error } = await db()
     .from('optimization_buckets')
     .insert({ feed_id: feedId, name: trimmed, method })
@@ -263,7 +263,7 @@ export async function createBucket(
 
 export async function renameBucket(feedId: string, bucketId: string, name: string): Promise<void> {
   const trimmed = name.trim()
-  if (!trimmed) throw new Error('Bucket-navn må ikke være tomt')
+  if (!trimmed) throw new Error('Bucket name cannot be empty')
   const { error } = await db()
     .from('optimization_buckets')
     .update({ name: trimmed, updated_at: new Date().toISOString() })
@@ -442,7 +442,7 @@ export async function setBucketCustomLabel(
   const trimmed = (value ?? '').trim()
   const clear = index === null || trimmed === ''
   if (!clear && (index! < 0 || index! > 4)) {
-    throw new Error('custom_label_index skal være mellem 0 og 4')
+    throw new Error('custom_label_index must be between 0 and 4')
   }
   const { error } = await db()
     .from('optimization_buckets')
@@ -763,7 +763,7 @@ export async function runBucketRefs(
 ): Promise<OptimizationOutcome[]> {
   if (refs.length === 0) return []
   const bucket = await getBucket(feedId, bucketId)
-  if (!bucket) throw new Error('Bucket ikke fundet')
+  if (!bucket) throw new Error('Bucket not found')
 
   const { config, rulesByType } = await buildBucketContext(feedId, bucketId, bucket.method)
   const [products, existing] = await Promise.all([

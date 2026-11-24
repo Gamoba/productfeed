@@ -77,10 +77,10 @@ const REQUIRED_SET = new Set<string>(REQUIRED_FIELDS)
 // Filter chips above the field list.
 type FieldChip = 'all' | 'unmapped' | 'rules' | 'lookup' | 'ai'
 const FIELD_CHIPS: { id: FieldChip; label: string }[] = [
-  { id: 'all', label: 'Alle' },
-  { id: 'unmapped', label: 'Ikke mappet' },
-  { id: 'rules', label: 'Med regler' },
-  { id: 'lookup', label: 'Opslag' },
+  { id: 'all', label: 'All' },
+  { id: 'unmapped', label: 'Not mapped' },
+  { id: 'rules', label: 'With rules' },
+  { id: 'lookup', label: 'Lookup' },
   { id: 'ai', label: 'AI' },
 ]
 
@@ -101,31 +101,31 @@ function fieldIcon(field: string): IconName {
 // field inside has a saved mapping.
 const COLLAPSIBLE_SECTIONS: { title: string; fields: string[] }[] = [
   {
-    title: 'Identifikatorer',
+    title: 'Identifiers',
     fields: ['condition', 'gtin', 'mpn', 'identifier_exists', 'item_group_id'],
   },
   {
-    title: 'Pris',
+    title: 'Price',
     fields: ['sale_price', 'sale_price_effective_date', 'cost_of_goods_sold', 'auto_pricing_min_price'],
   },
   {
-    title: 'Produktkategori',
+    title: 'Product category',
     fields: ['google_product_category', 'product_type'],
   },
   {
-    title: 'Varianter',
+    title: 'Variants',
     fields: ['color', 'size', 'gender', 'age_group', 'material', 'pattern', 'size_type', 'size_system'],
   },
   {
-    title: 'Kampagner',
+    title: 'Campaigns',
     fields: ['custom_label_0', 'custom_label_1', 'custom_label_2', 'custom_label_3', 'custom_label_4', 'promotion_id'],
   },
   {
-    title: 'Fragt',
+    title: 'Shipping',
     fields: ['shipping', 'shipping_label', 'shipping_weight', 'max_handling_time', 'min_handling_time'],
   },
   {
-    title: 'Flere billeder og medier',
+    title: 'More images and media',
     fields: ['additional_image_link', 'lifestyle_image_link', 'short_title'],
   },
 ]
@@ -134,7 +134,7 @@ const COLLAPSIBLE_SECTIONS: { title: string; fields: string[] }[] = [
 // via the "+ Tilføj felt" modal. Grouped here purely for the modal's layout.
 const ADVANCED_CATEGORIES: { title: string; fields: string[] }[] = [
   {
-    title: 'Pris og lagerstatus',
+    title: 'Price and stock status',
     fields: [
       'availability_date', 'expiration_date',
       'unit_pricing_measure', 'unit_pricing_base_measure',
@@ -143,7 +143,7 @@ const ADVANCED_CATEGORIES: { title: string; fields: string[] }[] = [
     ],
   },
   {
-    title: 'Produktdetaljer',
+    title: 'Product details',
     fields: [
       'adult', 'multipack', 'is_bundle',
       'product_detail', 'product_highlight',
@@ -151,18 +151,18 @@ const ADVANCED_CATEGORIES: { title: string; fields: string[] }[] = [
     ],
   },
   {
-    title: 'Certificering og energi',
+    title: 'Certification and energy',
     fields: [
       'certification',
       'energy_efficiency_class', 'min_energy_efficiency_class', 'max_energy_efficiency_class',
     ],
   },
   {
-    title: 'Medier',
+    title: 'Media',
     fields: ['video_link', 'virtual_model_link', 'mobile_link'],
   },
   {
-    title: 'Kampagner og annoncer',
+    title: 'Campaigns and ads',
     fields: [
       'ads_redirect',
       'excluded_destination', 'included_destination',
@@ -171,7 +171,7 @@ const ADVANCED_CATEGORIES: { title: string; fields: string[] }[] = [
     ],
   },
   {
-    title: 'Fragt (avanceret)',
+    title: 'Shipping (advanced)',
     fields: [
       'carrier_shipping', 'handling_cutoff_time', 'minimum_order_value',
       'shipping_length', 'shipping_width', 'shipping_height',
@@ -224,12 +224,12 @@ const STANDARD_FIELDS = [
 ]
 
 const MAPPING_TYPES: { value: MappingType; label: string }[] = [
-  { value: '', label: '— Ikke mappet —' },
+  { value: '', label: '— Not mapped —' },
   { value: 'FIELD', label: 'Field' },
   { value: 'STATIC', label: 'Static' },
   { value: 'COMBINE', label: 'Combine' },
   { value: 'PREFIX_SUFFIX', label: 'Prefix / Suffix' },
-  { value: 'FIND_REPLACE', label: 'Find & Replace' },
+  { value: 'FIND_REPLACE', label: 'Find & replace' },
   { value: 'TRUNCATE', label: 'Truncate' },
   { value: 'STRIP_HTML', label: 'Strip HTML' },
   { value: 'LOOKUP', label: 'Lookup table' },
@@ -237,16 +237,16 @@ const MAPPING_TYPES: { value: MappingType; label: string }[] = [
 ]
 
 const OPERATORS = [
-  { value: 'equals', label: '= er lig med' },
-  { value: 'not_equals', label: '≠ er ikke lig med' },
-  { value: 'contains', label: 'indeholder' },
-  { value: 'not_contains', label: 'indeholder ikke' },
-  { value: 'starts_with', label: 'starter med' },
-  { value: 'ends_with', label: 'slutter med' },
-  { value: 'greater_than', label: '> større end' },
-  { value: 'less_than', label: '< mindre end' },
-  { value: 'is_empty', label: 'er tom' },
-  { value: 'is_not_empty', label: 'er ikke tom' },
+  { value: 'equals', label: '= equals' },
+  { value: 'not_equals', label: '≠ does not equal' },
+  { value: 'contains', label: 'contains' },
+  { value: 'not_contains', label: 'does not contain' },
+  { value: 'starts_with', label: 'starts with' },
+  { value: 'ends_with', label: 'ends with' },
+  { value: 'greater_than', label: '> greater than' },
+  { value: 'less_than', label: '< less than' },
+  { value: 'is_empty', label: 'is empty' },
+  { value: 'is_not_empty', label: 'is not empty' },
 ]
 
 const NO_VALUE_OPERATORS = ['is_empty', 'is_not_empty']
@@ -469,14 +469,14 @@ function computePreviewValue(
 function getFieldLabels(feedMode: 'product' | 'variant'): Record<string, string> {
   const isVariant = feedMode === 'variant'
   return {
-    url: 'url (fuld produkt-URL)',
-    item_group_id: 'Produkt-ID (item_group_id)',
-    'variants[0].id': 'Variant-ID',
-    'variants[0].price': isVariant ? 'Variantpris' : 'Pris',
-    'variants[0].currency': 'Valuta',
-    'variants[0].sku': isVariant ? 'Variant-SKU' : 'SKU',
-    'variants[0].barcode': isVariant ? 'Variant-stregkode/GTIN' : 'Stregkode/GTIN',
-    'variants[0].inventory_quantity': isVariant ? 'Variantlager' : 'Lager',
+    url: 'url (full product URL)',
+    item_group_id: 'Product ID (item_group_id)',
+    'variants[0].id': 'Variant ID',
+    'variants[0].price': isVariant ? 'Variant price' : 'Price',
+    'variants[0].currency': 'Currency',
+    'variants[0].sku': isVariant ? 'Variant SKU' : 'SKU',
+    'variants[0].barcode': isVariant ? 'Variant barcode/GTIN' : 'Barcode/GTIN',
+    'variants[0].inventory_quantity': isVariant ? 'Variant stock' : 'Stock',
   }
 }
 
@@ -496,14 +496,14 @@ function FieldSelect({
   const meta = allFields.filter((f) => f.startsWith('metafield:'))
   return (
     <select value={value} onChange={(e) => onChange(e.target.value)} className={sel}>
-      <option value="">— Vælg felt —</option>
-      <optgroup label="Shopify-felter">
+      <option value="">— Choose field —</option>
+      <optgroup label="Shopify fields">
         {standard.map((f) => (
           <option key={f} value={f}>{labels[f] ?? f}</option>
         ))}
       </optgroup>
       {meta.length > 0 && (
-        <optgroup label="Metafelter">
+        <optgroup label="Metafields">
           {meta.map((f) => (
             <option key={f} value={f}>{metafieldDisplayName(f, metafieldLabels)}</option>
           ))}
@@ -617,7 +617,7 @@ function CombineChipsEditor({
               fontStyle: 'italic',
             }}
           >
-            Tilføj felter og tekst som brikker herunder
+            Add fields and text as chips below
           </span>
         )}
         {blocks.map((block, i) => (
@@ -643,7 +643,7 @@ function CombineChipsEditor({
           className={`${btnSm} bg-[var(--tint)] text-[var(--accent-ink)] hover:bg-[var(--tint)]`}
           aria-expanded={picker === 'field'}
         >
-          + Felt
+          + Field
         </button>
         <button
           type="button"
@@ -651,7 +651,7 @@ function CombineChipsEditor({
           className={`${btnSm} bg-[var(--card-2)] text-[var(--muted)] hover:bg-[var(--canvas-2)]`}
           aria-expanded={picker === 'text'}
         >
-          + Tekst
+          + Text
         </button>
       </div>
 
@@ -730,7 +730,7 @@ function CombineChip({
         {isField ? '{}' : 'txt'}
       </span>
       <span style={{ fontWeight: 500, whiteSpace: 'pre' }}>
-        {empty ? <em style={{ opacity: 0.6, fontStyle: 'italic' }}>tom</em> : label}
+        {empty ? <em style={{ opacity: 0.6, fontStyle: 'italic' }}>empty</em> : label}
       </span>
       <button
         type="button"
@@ -740,7 +740,7 @@ function CombineChip({
           e.stopPropagation()
           onRemove()
         }}
-        aria-label="Fjern brik"
+        aria-label="Remove chip"
       >
         ×
       </button>
@@ -825,7 +825,7 @@ function FieldPickerPanel({
           autoFocus
           value={search}
           onChange={(e) => setSearch(e.target.value)}
-          placeholder="Søg efter felt…"
+          placeholder="Search fields…"
           className={inp}
           onKeyDown={(e) => {
             if (e.key === 'Escape') onClose()
@@ -839,7 +839,7 @@ function FieldPickerPanel({
               className="ff-label"
               style={{ padding: '6px 10px', background: 'var(--bg-surface)' }}
             >
-              Shopify-felter
+              Shopify fields
             </div>
             {filteredStandard.map((f) => (
               <PickerOption
@@ -857,7 +857,7 @@ function FieldPickerPanel({
               className="ff-label"
               style={{ padding: '6px 10px', background: 'var(--bg-surface)' }}
             >
-              Metafelter
+              Metafields
             </div>
             {filteredMeta.map((f) => {
               const rawKey = f.replace('metafield:', '')
@@ -879,7 +879,7 @@ function FieldPickerPanel({
             className="text-center"
             style={{ padding: '12px', fontSize: '11px', color: 'var(--ink-muted)' }}
           >
-            Ingen felter matcher
+            No fields match
           </p>
         )}
       </div>
@@ -954,7 +954,7 @@ function TextInputPanel({
         autoFocus
         value={value}
         onChange={(e) => setValue(e.target.value)}
-        placeholder='fx " - " eller " | Køb online"'
+        placeholder='e.g. " - " or " | Buy online"'
         className={inp}
         style={{ flex: 1, minWidth: 0 }}
         onKeyDown={(e) => {
@@ -972,10 +972,10 @@ function TextInputPanel({
         disabled={!value}
         className="ff-btn-primary"
       >
-        Tilføj
+        Add
       </button>
       <button type="button" onClick={onClose} className="ff-btn-secondary">
-        Annuller
+        Cancel
       </button>
     </div>
   )
@@ -1012,7 +1012,7 @@ function ConfigEditor({
           type="text"
           value={String(config.value ?? '')}
           onChange={(e) => onChange({ ...config, value: e.target.value })}
-          placeholder="Skriv en fast værdi…"
+          placeholder="Enter a fixed value…"
           className={inp}
         />
       )
@@ -1035,7 +1035,7 @@ function ConfigEditor({
             type="text"
             value={String(config.prefix ?? '')}
             onChange={(e) => set('prefix', e.target.value)}
-            placeholder="Før"
+            placeholder="Before"
             className={inp}
           />
           <FieldSelect
@@ -1047,7 +1047,7 @@ function ConfigEditor({
             type="text"
             value={String(config.suffix ?? '')}
             onChange={(e) => set('suffix', e.target.value)}
-            placeholder="Efter"
+            placeholder="After"
             className={inp}
           />
         </div>
@@ -1086,7 +1086,7 @@ function ConfigEditor({
                   next[i] = { ...pair, replace: e.target.value }
                   set('pairs', next)
                 }}
-                placeholder="Erstat med…"
+                placeholder="Replace with…"
                 className={inpSm}
               />
               {pairs.length > 1 && (
@@ -1105,7 +1105,7 @@ function ConfigEditor({
             onClick={() => set('pairs', [...pairs, { find: '', replace: '' }])}
             className={`${btnSm} bg-[var(--tint)] text-[var(--accent-ink)] hover:bg-[var(--tint)]`}
           >
-            + Tilføj par
+            + Add pair
           </button>
         </div>
       )
@@ -1126,7 +1126,7 @@ function ConfigEditor({
             min={1}
             className="w-24 px-3 py-2 rounded-lg border border-[var(--line)] text-sm text-center focus:outline-none focus:ring-2 focus:ring-[rgba(39,67,214,0.15)] shrink-0"
           />
-          <span className="text-sm text-[var(--muted)] shrink-0">tegn</span>
+          <span className="text-sm text-[var(--muted)] shrink-0">characters</span>
         </div>
       )
 
@@ -1148,7 +1148,7 @@ function ConfigEditor({
           value={String(config.prompt ?? '')}
           onChange={(e) => onChange({ ...config, prompt: e.target.value })}
           rows={2}
-          placeholder="Beskriv, hvad Claude skal generere ud fra produktdata…"
+          placeholder="Describe what Claude should generate from the product data…"
           className="w-full px-3 py-2 rounded-lg border border-[var(--line)] text-sm focus:outline-none focus:ring-2 focus:ring-[rgba(39,67,214,0.15)] focus:border-[var(--accent-ink)] resize-none"
         />
       )
@@ -1180,14 +1180,14 @@ function LookupEditor({
   return (
     <div className="lk">
       <div className="lk-line">
-        <span className="lk-kw">SLÅ OP</span>
+        <span className="lk-kw">LOOK UP</span>
         <FieldSelect value={String(config.field ?? '')} onChange={(v) => onChange({ ...config, field: v })} allFields={allFields} />
       </div>
 
-      <div className="lk-table" role="table" aria-label="Opslagstabel">
+      <div className="lk-table" role="table" aria-label="Lookup table">
         <div className="lk-head" role="row">
-          <span role="columnheader">Hvis værdien {config.match === 'contains' ? 'indeholder' : 'er'}</span>
-          <span role="columnheader">så skriv</span>
+          <span role="columnheader">If the value {config.match === 'contains' ? 'contains' : 'is'}</span>
+          <span role="columnheader">then write</span>
           <span />
         </div>
         {rows.map((row, i) => (
@@ -1195,21 +1195,21 @@ function LookupEditor({
             <input
               className="ff-input"
               value={row.from}
-              placeholder="fx rot"
-              aria-label={`Række ${i + 1}: værdi i shoppen`}
+              placeholder="e.g. red"
+              aria-label={`Row ${i + 1}: value in the shop`}
               onChange={(e) => setRows(rows.map((r, j) => (j === i ? { ...r, from: e.target.value } : r)))}
             />
             <input
               className="ff-input"
               value={row.to}
-              placeholder="fx Rot"
-              aria-label={`Række ${i + 1}: værdi i feedet`}
+              placeholder="e.g. Red"
+              aria-label={`Row ${i + 1}: value in the feed`}
               onChange={(e) => setRows(rows.map((r, j) => (j === i ? { ...r, to: e.target.value } : r)))}
             />
             <button
               type="button"
               className="lk-x"
-              aria-label={`Fjern række ${i + 1}`}
+              aria-label={`Remove row ${i + 1}`}
               onClick={() => setRows(rows.length > 1 ? rows.filter((_, j) => j !== i) : [{ from: '', to: '' }])}
             >
               ×
@@ -1220,13 +1220,13 @@ function LookupEditor({
 
       <div className="lk-tools">
         <button type="button" className="ff-btn-ghost" onClick={() => setRows([...rows, { from: '', to: '' }])}>
-          + Række
+          + Row
         </button>
         <button type="button" className="ff-btn-ghost" onClick={() => setPaste(paste === null ? '' : null)}>
-          {paste === null ? 'Indsæt fra regneark' : 'Luk indsæt'}
+          {paste === null ? 'Paste from spreadsheet' : 'Close paste'}
         </button>
         <span className="lk-count">
-          {rows.filter((r) => r.from.trim()).length} rækker · første match vinder
+          {rows.filter((r) => r.from.trim()).length} rows · first match wins
         </span>
       </div>
 
@@ -1236,7 +1236,7 @@ function LookupEditor({
             className="ff-input"
             rows={4}
             value={paste}
-            placeholder="Kopiér to kolonner fra Excel eller Google Sheets, og indsæt dem her."
+            placeholder="Copy two columns from Excel or Google Sheets and paste them here."
             onChange={(e) => setPaste(e.target.value)}
           />
           <div className="lk-tools">
@@ -1250,7 +1250,7 @@ function LookupEditor({
                 setPaste(null)
               }}
             >
-              Tilføj {pasted.length} {pasted.length === 1 ? 'række' : 'rækker'}
+              Add {pasted.length} {pasted.length === 1 ? 'row' : 'rows'}
             </button>
           </div>
         </div>
@@ -1264,8 +1264,8 @@ function LookupEditor({
             value={config.match ?? 'exact'}
             onChange={(e) => onChange({ ...config, match: e.target.value as LookupConfig['match'] })}
           >
-            <option value="exact">Hele værdien er lig</option>
-            <option value="contains">Værdien indeholder</option>
+            <option value="exact">Whole value equals</option>
+            <option value="contains">Value contains</option>
           </select>
         </label>
         <label className="lk-check">
@@ -1274,26 +1274,26 @@ function LookupEditor({
             checked={config.caseSensitive ?? false}
             onChange={(e) => onChange({ ...config, caseSensitive: e.target.checked })}
           />
-          Skeln mellem store og små bogstaver
+          Match case
         </label>
         <label>
-          Ingen match
+          No match
           <select
             className="ff-select"
             value={config.fallback ?? 'source'}
             onChange={(e) => onChange({ ...config, fallback: e.target.value as LookupConfig['fallback'] })}
           >
-            <option value="source">Behold værdien fra shoppen</option>
-            <option value="empty">Lad feltet være tomt</option>
-            <option value="static">Skriv en fast værdi</option>
+            <option value="source">Keep the value from the shop</option>
+            <option value="empty">Leave the field empty</option>
+            <option value="static">Write a fixed value</option>
           </select>
         </label>
         {config.fallback === 'static' && (
           <input
             className="ff-input lk-fallback"
             value={config.fallbackValue ?? ''}
-            placeholder="Fast værdi"
-            aria-label="Fast værdi når intet matcher"
+            placeholder="Fixed value"
+            aria-label="Fixed value when nothing matches"
             onChange={(e) => onChange({ ...config, fallbackValue: e.target.value })}
           />
         )}
@@ -1322,7 +1322,7 @@ function ConditionModeToggle({
         borderRadius: '4px',
       }}
       role="group"
-      aria-label="Sammenlign med værdi eller felt"
+      aria-label="Compare with a value or a field"
     >
       {(['value', 'field'] as const).map((m, idx) => {
         const active = mode === m
@@ -1342,7 +1342,7 @@ function ConditionModeToggle({
               transition: 'background 0.12s ease, color 0.12s ease',
             }}
           >
-            {m === 'value' ? 'Værdi' : 'Felt'}
+            {m === 'value' ? 'Value' : 'Field'}
           </button>
         )
       })}
@@ -1434,7 +1434,7 @@ function ConditionRows({
                       type="text"
                       value={cond.value}
                       onChange={(e) => patch({ value: e.target.value })}
-                      placeholder="Værdi…"
+                      placeholder="Value…"
                       className={inp}
                     />
                   )}
@@ -1502,7 +1502,7 @@ function ValueSpecEditor({
         className={miniSel}
         style={{ flex: '0 0 120px' }}
       >
-        <option value="empty">Tom</option>
+        <option value="empty">Empty</option>
         <option value="static">Static</option>
         <option value="field">Field</option>
         <option value="combine">Combine</option>
@@ -1513,7 +1513,7 @@ function ValueSpecEditor({
             type="text"
             value={value.value}
             onChange={(e) => onChange({ type: 'static', value: e.target.value })}
-            placeholder='fx "out_of_stock"'
+            placeholder='e.g. "out_of_stock"'
             className={inp}
           />
         )}
@@ -1525,7 +1525,7 @@ function ValueSpecEditor({
           />
         )}
         {value.type === 'empty' && (
-          <span className="text-sm text-[var(--muted)] opacity-70 italic pt-1.5">Feltet forbliver tomt</span>
+          <span className="text-sm text-[var(--muted)] opacity-70 italic pt-1.5">The field stays empty</span>
         )}
         {value.type === 'combine' && (
           <CombineChipsEditor
@@ -1609,8 +1609,8 @@ function OnlyIfEditor({
                 type="button"
                 onClick={() => moveRule(i, -1)}
                 disabled={i === 0}
-                title="Højere prioritet"
-                aria-label="Flyt regel op"
+                title="Higher priority"
+                aria-label="Move rule up"
                 className={`${btnSm} ${i === 0 ? 'opacity-30 cursor-default' : 'hover:bg-[var(--bg-surface)]'}`}
               >
                 ↑
@@ -1619,8 +1619,8 @@ function OnlyIfEditor({
                 type="button"
                 onClick={() => moveRule(i, 1)}
                 disabled={i === rules.length - 1}
-                title="Lavere prioritet"
-                aria-label="Flyt regel ned"
+                title="Lower priority"
+                aria-label="Move rule down"
                 className={`${btnSm} ${i === rules.length - 1 ? 'opacity-30 cursor-default' : 'hover:bg-[var(--bg-surface)]'}`}
               >
                 ↓
@@ -1628,8 +1628,8 @@ function OnlyIfEditor({
               <button
                 type="button"
                 onClick={() => setRules(rules.filter((_, j) => j !== i))}
-                title="Fjern regel"
-                aria-label="Fjern regel"
+                title="Remove rule"
+                aria-label="Remove rule"
                 className={`${btnSm} hover:bg-[var(--bad-bg)] hover:text-[var(--bad)]`}
               >
                 ×
@@ -1674,7 +1674,7 @@ function OnlyIfEditor({
 
       {rules.length > 0 && (
         <p className="pl-16" style={{ fontSize: '11px', color: 'var(--ink-muted)' }}>
-          Regler læses oppefra — den første regel, der matcher, vinder.
+          Rules are read from the top. The first rule that matches wins.
         </p>
       )}
 
@@ -1684,7 +1684,7 @@ function OnlyIfEditor({
           onClick={onRemove}
           className="text-xs text-[var(--muted)] opacity-70 hover:text-[var(--bad)] transition-colors"
         >
-          Fjern betingelse
+          Remove condition
         </button>
       </div>
 
@@ -1725,9 +1725,9 @@ function UnresolvedReference({ value }: { value: string }) {
   return (
     <span
       title={
-        'Uopløst Shopify-reference. Metaobjektet blev ikke oversat til sin værdi ' +
-        'under synkroniseringen — som regel mangler access-tokenet scopet read_metaobjects. ' +
-        'Tjek forbindelsen til shoppen, og synkronisér feedet igen.'
+        'Unresolved Shopify reference. The metaobject was not translated to its value ' +
+        'during sync. Usually the access token is missing the read_metaobjects scope. ' +
+        'Check the shop connection and sync the feed again.'
       }
       style={{ display: 'inline-flex', alignItems: 'baseline', gap: '6px', flexWrap: 'wrap' }}
     >
@@ -1740,7 +1740,7 @@ function UnresolvedReference({ value }: { value: string }) {
           whiteSpace: 'nowrap',
         }}
       >
-        Uopløst reference
+        Unresolved reference
       </span>
       <span
         className="ff-mono"
@@ -1804,7 +1804,7 @@ function PreviewValueText({
             cursor: 'pointer',
           }}
         >
-          {expanded ? 'Vis mindre' : `Vis alt (${value.length} tegn)`}
+          {expanded ? 'Show less' : `Show all (${value.length} characters)`}
         </button>
       )}
     </div>
@@ -1848,7 +1848,7 @@ function TransformBody({
     case 'STRIP_HTML':
       return (
         <span className="text-sm text-[var(--muted)] opacity-70 italic pt-1.5">
-          Fjerner HTML-tags og beholder afsnitsskift
+          Removes HTML tags and keeps paragraph breaks
         </span>
       )
 
@@ -1880,7 +1880,7 @@ function TransformBody({
                   next[i] = { ...pair, replace: e.target.value }
                   setPairs(next)
                 }}
-                placeholder="Erstat med…"
+                placeholder="Replace with…"
                 className={inpSm}
               />
               {pairs.length > 1 && (
@@ -1899,7 +1899,7 @@ function TransformBody({
             onClick={() => setPairs([...pairs, { find: '', replace: '' }])}
             className={`${btnSm} bg-[var(--tint)] text-[var(--accent-ink)] hover:bg-[var(--tint)]`}
           >
-            + Tilføj par
+            + Add pair
           </button>
         </div>
       )
@@ -1915,7 +1915,7 @@ function TransformBody({
             min={1}
             className="w-24 px-3 py-2 rounded-lg border border-[var(--line)] text-sm text-center focus:outline-none focus:ring-2 focus:ring-[rgba(39,67,214,0.15)] shrink-0"
           />
-          <span className="text-sm text-[var(--muted)] shrink-0">tegn</span>
+          <span className="text-sm text-[var(--muted)] shrink-0">characters</span>
         </div>
       )
 
@@ -1926,14 +1926,14 @@ function TransformBody({
             type="text"
             value={transform.prefix ?? ''}
             onChange={(e) => onChange({ ...transform, prefix: e.target.value })}
-            placeholder="Før"
+            placeholder="Before"
             className={inp}
           />
           <input
             type="text"
             value={transform.suffix ?? ''}
             onChange={(e) => onChange({ ...transform, suffix: e.target.value })}
-            placeholder="Efter"
+            placeholder="After"
             className={inp}
           />
         </div>
@@ -1973,7 +1973,7 @@ function TransformsEditor({
     <div className="space-y-2 py-2">
       {transforms.length === 0 && (
         <p style={{ fontSize: '11px', color: 'var(--ink-muted)' }}>
-          Ingen formatering endnu. Tilføj en for at køre den på den mappede værdi.
+          No formatting yet. Add one to run it on the mapped value.
         </p>
       )}
 
@@ -1994,8 +1994,8 @@ function TransformsEditor({
               type="button"
               onClick={() => move(i, -1)}
               disabled={i === 0}
-              title="Kør tidligere"
-              aria-label="Flyt formatering op"
+              title="Run earlier"
+              aria-label="Move formatting up"
               className={`${btnSm} ${i === 0 ? 'opacity-30 cursor-default' : 'hover:bg-[var(--bg-surface)]'}`}
             >
               ↑
@@ -2004,8 +2004,8 @@ function TransformsEditor({
               type="button"
               onClick={() => move(i, 1)}
               disabled={i === transforms.length - 1}
-              title="Kør senere"
-              aria-label="Flyt formatering ned"
+              title="Run later"
+              aria-label="Move formatting down"
               className={`${btnSm} ${i === transforms.length - 1 ? 'opacity-30 cursor-default' : 'hover:bg-[var(--bg-surface)]'}`}
             >
               ↓
@@ -2013,8 +2013,8 @@ function TransformsEditor({
             <button
               type="button"
               onClick={() => onChange(transforms.filter((_, j) => j !== i))}
-              title="Fjern formatering"
-              aria-label="Fjern formatering"
+              title="Remove formatting"
+              aria-label="Remove formatting"
               className={`${btnSm} hover:bg-[var(--bad-bg)] hover:text-[var(--bad)]`}
             >
               ×
@@ -2044,7 +2044,7 @@ function TransformsEditor({
               onClick={() => setAdding(false)}
               className="text-xs text-[var(--muted)] opacity-70 hover:text-[var(--muted)] transition-colors"
             >
-              Annuller
+              Cancel
             </button>
           </>
         ) : (
@@ -2053,14 +2053,14 @@ function TransformsEditor({
             onClick={() => setAdding(true)}
             className={`${btnSm} bg-[var(--tint)] text-[var(--accent-ink)] hover:bg-[var(--tint)]`}
           >
-            + Tilføj formatering
+            + Add formatting
           </button>
         )}
       </div>
 
       {transforms.length > 1 && (
         <p style={{ fontSize: '11px', color: 'var(--ink-muted)', paddingLeft: '72px' }}>
-          Køres oppefra, hver på resultatet af den ovenfor.
+          Runs from the top, each on the result of the one above.
         </p>
       )}
 
@@ -2070,7 +2070,7 @@ function TransformsEditor({
           onClick={onRemove}
           className="text-xs text-[var(--muted)] opacity-70 hover:text-[var(--bad)] transition-colors"
         >
-          Fjern formatering
+          Remove formatting
         </button>
       </div>
     </div>
@@ -2147,7 +2147,7 @@ function FieldRow({
               <span className="mp-n" title={displayField}>
                 {displayField}
               </span>
-              {!state.type && REQUIRED_SET.has(field) && <span className="pill bad">Mangler</span>}
+              {!state.type && REQUIRED_SET.has(field) && <span className="pill bad">Missing</span>}
               {state.type === 'AI' && <span className="mp-ai">AI</span>}
             </span>
             <div className="flex items-center gap-1 shrink-0">
@@ -2155,7 +2155,7 @@ function FieldRow({
                 <button
                   type="button"
                   onClick={onPreview}
-                  title="Se feltet på tværs af varerne"
+                  title="See the field across products"
                   className="mp-mini"
                 >
                   Preview
@@ -2165,8 +2165,8 @@ function FieldRow({
                 <button
                   type="button"
                   onClick={onRemove}
-                  aria-label={`Slet feltet ${displayField}`}
-                  title="Slet eget felt"
+                  aria-label={`Delete the field ${displayField}`}
+                  title="Delete custom field"
                   style={{
                     width: '18px',
                     height: '18px',
@@ -2220,25 +2220,25 @@ function FieldRow({
               // mis-click on the thing that reports them would be a trap.
               // Deleting is the explicit "Remove filters" link inside the panel.
               onClick={() => setShowTransforms((v) => !v)}
-              title="Formatér værdien yderligere: fjern HTML, find og erstat, forkort, tilføj før/efter"
+              title="Format the value further: strip HTML, find and replace, truncate, add before/after"
               className={`mp-chip${transforms.length > 0 ? ' on' : ''}`}
             >
-              {transforms.length > 0 ? `Formatering · ${transforms.length}` : '+ Formatering'}
+              {transforms.length > 0 ? `Formatting · ${transforms.length}` : '+ Formatting'}
             </button>
             <button
               type="button"
               onClick={showOnlyIf ? removeOnlyIf : openOnlyIf}
-              title="Brug en anden værdi, når en betingelse er opfyldt"
+              title="Use a different value when a condition is met"
               className={`mp-chip${hasConditions ? ' on' : ''}`}
             >
-              {hasConditions ? 'Regler ✓' : '+ Regel'}
+              {hasConditions ? 'Rules ✓' : '+ Rule'}
             </button>
             {showOnlyIf && (
               <button
                 type="button"
                 onClick={removeOnlyIf}
-                title="Fjern alle regler"
-                aria-label="Fjern alle regler"
+                title="Remove all rules"
+                aria-label="Remove all rules"
                 className="mp-chip mp-chip-x"
               >
                 ×
@@ -2255,9 +2255,9 @@ function FieldRow({
           <div className="w-40 shrink-0" />
           <div className="flex-1 min-w-0 flex items-start gap-1.5">
             {previewValue === AI_PLACEHOLDER ? (
-              <span className="pill ai">Skrives af AI, kan ikke vises her</span>
+              <span className="pill ai">Written by AI, can’t be shown here</span>
             ) : previewValue === '' ? (
-              <span className="neg mp-prev">Tom</span>
+              <span className="neg mp-prev">Empty</span>
             ) : (
               <>
                 <span className="mp-prev-arrow shrink-0">→</span>
@@ -2343,14 +2343,14 @@ function MappedBadge({ mapped }: { mapped: boolean }) {
         mapped ? 'bg-[var(--good-bg)] text-[var(--good)]' : 'bg-[var(--card-2)] text-[var(--muted)]'
       }`}
     >
-      {mapped ? 'Mappet' : 'Ikke mappet'}
+      {mapped ? 'Mapped' : 'Not mapped'}
     </span>
   )
 }
 
 function FieldExample({ value }: { value: string }) {
   if (!value) {
-    return <span className="text-[var(--muted)] opacity-70 italic">tom</span>
+    return <span className="text-[var(--muted)] opacity-70 italic">empty</span>
   }
   const trimmed = value.length > 120 ? value.slice(0, 120) + '…' : value
   return <span>{trimmed}</span>
@@ -2405,16 +2405,16 @@ function ShopifyFieldsModal({
         onClick={(e) => e.stopPropagation()}
       >
         <div className="px-6 py-4 border-b border-[var(--line)] shrink-0">
-          <h2 className="text-base font-semibold text-[var(--ink)]">Shopify-felter</h2>
+          <h2 className="text-base font-semibold text-[var(--ink)]">Shopify fields</h2>
           <p className="text-sm text-[var(--muted)] mt-0.5">
-            {totalMapped} af {totalFields} felter bruges i en mapping
-            {product ? ` — eksempelværdier fra "${product.title}"` : ''}
+            {totalMapped} of {totalFields} fields are used in a mapping
+            {product ? ` — example values from "${product.title}"` : ''}
           </p>
           <input
             type="search"
             value={search}
             onChange={(e) => setSearch(e.target.value)}
-            placeholder="Søg efter felt…"
+            placeholder="Search fields…"
             className="mt-3 w-full px-3 py-2 rounded-lg border border-[var(--line)] text-sm focus:outline-none focus:ring-2 focus:ring-[rgba(39,67,214,0.15)] focus:border-[var(--accent-ink)]"
           />
         </div>
@@ -2423,13 +2423,13 @@ function ShopifyFieldsModal({
           {/* Standard fields */}
           <div className="px-6 py-2 bg-[var(--card-2)] border-b border-[var(--line)] sticky top-0 z-10">
             <h3 className="text-xs font-semibold text-[var(--muted)] uppercase tracking-wider">
-              Standardfelter
+              Standard fields
             </h3>
           </div>
           {loading && !product ? (
-            <div className="p-6 text-center text-sm text-[var(--muted)] opacity-70">Henter eksempelværdier…</div>
+            <div className="p-6 text-center text-sm text-[var(--muted)] opacity-70">Loading example values…</div>
           ) : filteredStandard.length === 0 ? (
-            <div className="p-6 text-center text-sm text-[var(--muted)] opacity-70">Ingen felter matcher søgningen</div>
+            <div className="p-6 text-center text-sm text-[var(--muted)] opacity-70">No fields match your search</div>
           ) : (
             filteredStandard.map((f) => (
               <div
@@ -2452,11 +2452,11 @@ function ShopifyFieldsModal({
             <>
               <div className="px-6 py-2 bg-[var(--card-2)] border-b border-[var(--line)] sticky top-0 z-10">
                 <h3 className="text-xs font-semibold text-[var(--muted)] uppercase tracking-wider">
-                  Metafelter ({metafields.length})
+                  Metafields ({metafields.length})
                 </h3>
               </div>
               {filteredMeta.length === 0 ? (
-                <div className="p-6 text-center text-sm text-[var(--muted)] opacity-70">Ingen metafelter matcher søgningen</div>
+                <div className="p-6 text-center text-sm text-[var(--muted)] opacity-70">No metafields match your search</div>
               ) : (
                 filteredMeta.map((m) => {
                   const fullKey = `metafield:${m.namespace}.${m.key}`
@@ -2493,7 +2493,7 @@ function ShopifyFieldsModal({
             onClick={onClose}
             className="px-4 py-2 rounded-lg border border-[var(--line)] text-sm text-[var(--muted)] hover:bg-[var(--canvas-2)] transition-colors"
           >
-            Luk
+            Close
           </button>
         </div>
       </div>
@@ -2596,10 +2596,10 @@ function ProductPickerModal({
         onClick={(e) => e.stopPropagation()}
       >
         <div className="p-4 border-b border-[var(--line)] shrink-0">
-          <p className="text-xs font-medium text-[var(--muted)] mb-2">Vælg eksempelvare</p>
+          <p className="text-xs font-medium text-[var(--muted)] mb-2">Choose an example product</p>
           <input
             type="search"
-            placeholder="Søg i titel, leverandør, handle, tags…"
+            placeholder="Search title, vendor, handle, tags…"
             value={search}
             onChange={(e) => setSearch(e.target.value)}
             // eslint-disable-next-line jsx-a11y/no-autofocus
@@ -2612,10 +2612,10 @@ function ProductPickerModal({
           style={{ flex: 1, opacity: loading && products.length > 0 ? 0.6 : 1 }}
         >
           {loading && products.length === 0 ? (
-            <div className="p-8 text-center text-sm text-[var(--muted)] opacity-70">Henter varer…</div>
+            <div className="p-8 text-center text-sm text-[var(--muted)] opacity-70">Loading products…</div>
           ) : products.length === 0 ? (
             <div className="p-8 text-center text-sm text-[var(--muted)] opacity-70">
-              {debouncedSearch ? 'Ingen varer matcher søgningen' : 'Ingen varer fundet'}
+              {debouncedSearch ? 'No products match your search' : 'No products found'}
             </div>
           ) : (
             products.map((p) => (
@@ -2653,10 +2653,10 @@ function ProductPickerModal({
               disabled={loading || page <= 1}
               className="ff-btn-secondary"
             >
-              Forrige
+              Previous
             </button>
             <span style={{ fontSize: '11px', color: 'var(--ink-muted)' }}>
-              Side {page} af {totalPages} · {total} varer
+              Page {page} of {totalPages} · {total} products
             </span>
             <button
               type="button"
@@ -2664,7 +2664,7 @@ function ProductPickerModal({
               disabled={loading || page >= totalPages}
               className="ff-btn-secondary"
             >
-              Næste
+              Next
             </button>
           </div>
         )}
@@ -2681,7 +2681,7 @@ function ConfidenceBadge({ confidence }: { confidence: AISuggestion['confidence'
     medium: 'bg-[var(--warn-bg)] text-[var(--warn)]',
     low:    'bg-[var(--card-2)] text-[var(--muted)]',
   }
-  const labels = { high: 'Høj', medium: 'Middel', low: 'Lav' }
+  const labels = { high: 'High', medium: 'Medium', low: 'Low' }
   return (
     <span className={`text-xs px-1.5 py-0.5 rounded font-medium ${styles[confidence]}`}>
       {labels[confidence]}
@@ -2744,9 +2744,9 @@ function AISuggestionsModal({
       >
         {/* Header */}
         <div className="px-6 py-4 border-b border-[var(--line)] shrink-0">
-          <h2 className="text-base font-semibold text-[var(--ink)]">AI-forslag til mapping</h2>
+          <h2 className="text-base font-semibold text-[var(--ink)]">AI mapping suggestions</h2>
           <p className="text-sm text-[var(--muted)] mt-0.5">
-            {validSuggestions.length} forslag · {selectableCount} kan anvendes
+            {validSuggestions.length} suggestions · {selectableCount} can be applied
           </p>
         </div>
 
@@ -2754,7 +2754,7 @@ function AISuggestionsModal({
         <div className="overflow-y-auto flex-1">
           {validSuggestions.length === 0 ? (
             <p className="p-8 text-center text-sm text-[var(--muted)] opacity-70">
-              AI fandt ingen sikre forslag til mapping for din shop.
+              AI found no confident mapping suggestions for your shop.
             </p>
           ) : (
             validSuggestions.map((s) => {
@@ -2794,12 +2794,12 @@ function AISuggestionsModal({
                       <ConfidenceBadge confidence={s.confidence} />
                       {same && (
                         <span className="text-xs bg-[var(--card-2)] text-[var(--muted)] px-1.5 py-0.5 rounded">
-                          Samme som nu
+                          Same as now
                         </span>
                       )}
                       {willOverwrite && (
                         <span className="text-xs bg-[var(--warn-bg)] text-[var(--warn)] border border-[var(--warn-bg)] px-1.5 py-0.5 rounded">
-                          Overskriver eksisterende mapping
+                          Overwrites existing mapping
                         </span>
                       )}
                     </div>
@@ -2814,21 +2814,21 @@ function AISuggestionsModal({
         {/* Footer */}
         <div className="px-6 py-4 border-t border-[var(--line)] flex items-center justify-between shrink-0">
           <span className="text-sm text-[var(--muted)]">
-            {selected.size} valgt
+            {selected.size} selected
           </span>
           <div className="flex gap-2">
             <button
               onClick={onClose}
               className="px-4 py-2 rounded-lg border border-[var(--line)] text-sm text-[var(--muted)] hover:bg-[var(--canvas-2)] transition-colors"
             >
-              Annuller
+              Cancel
             </button>
             <button
               onClick={() => onApply([...selected])}
               disabled={selected.size === 0}
               className="px-4 py-2 rounded-lg bg-[var(--accent-ink)] text-white text-sm font-medium hover:bg-[var(--accent-ink)] disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
             >
-              Anvend {selected.size > 0 ? `${selected.size} ` : ''}valgte
+              Apply {selected.size > 0 ? `${selected.size} ` : ''}selected
             </button>
           </div>
         </div>
@@ -2887,9 +2887,9 @@ function SectionPanel({
         <b>{title}</b>
         {!open && <small>{totalFields.join(' · ')}</small>}
       </span>
-      {missing > 0 && <span className="pill bad">{missing} mangler</span>}
+      {missing > 0 && <span className="pill bad">{missing} missing</span>}
       <span className="mp-count">
-        {mapped}/{totalFields.length} mappet
+        {mapped}/{totalFields.length} mapped
       </span>
     </>
   )
@@ -2978,10 +2978,10 @@ function CustomFieldsSection({
     <div className="card flush mp-card">
       <div className="mp-group-h mp-static">
         <span className="mp-group-t">
-          <b>Egne felter</b>
-          <small>Felter uden for Google-standarden, skrevet i feedet med det navn, du giver dem.</small>
+          <b>Custom fields</b>
+          <small>Fields outside the Google standard, written to the feed with the name you give them.</small>
         </span>
-        <span className="mp-count">{mappedCount}/{customFields.length} mappet</span>
+        <span className="mp-count">{mappedCount}/{customFields.length} mapped</span>
       </div>
       <div
         style={{ borderColor: 'var(--hairline)' }}
@@ -2992,8 +2992,8 @@ function CustomFieldsSection({
             className="px-3.5 py-3"
             style={{ fontSize: '11px', color: 'var(--ink-muted)' }}
           >
-            Ingen egne felter endnu. Tilføj felter, der ikke findes i Google Shopping-standarden —
-            de skrives i feedet uden præfikset <code className="ff-mono">g:</code>.
+            No custom fields yet. Add fields that aren’t in the Google Shopping standard.
+            They’re written to the feed without the prefix <code className="ff-mono">g:</code>.
           </div>
         )}
 
@@ -3022,7 +3022,7 @@ function CustomFieldsSection({
                   setName(e.target.value)
                   if (error) setError(null)
                 }}
-                placeholder="fx vintage_year"
+                placeholder="e.g. vintage_year"
                 className={`${inp} ff-mono`}
                 style={{ flex: '1 1 280px', minWidth: 0, maxWidth: '320px' }}
                 onKeyDown={(e) => {
@@ -3036,17 +3036,17 @@ function CustomFieldsSection({
                 }}
               />
               <button type="button" onClick={tryAdd} className="ff-btn-primary">
-                Tilføj
+                Add
               </button>
               <button type="button" onClick={cancelAdd} className="ff-btn-secondary">
-                Annuller
+                Cancel
               </button>
             </div>
             {error && (
               <p style={{ fontSize: '11px', color: 'var(--accent-red)' }}>{error}</p>
             )}
             <p style={{ fontSize: '11px', color: 'var(--ink-muted)' }}>
-              Kun bogstaver, tal og understreg. Feltet skrives i XML som{' '}
+              Letters, numbers and underscores only. The field is written to the XML as{' '}
               <code className="ff-mono">{`<${name.trim() || 'field_name'}>…</${name.trim() || 'field_name'}>`}</code>
             </p>
           </div>
@@ -3057,7 +3057,7 @@ function CustomFieldsSection({
               onClick={() => setShowAdd(true)}
               className="ff-btn-secondary"
             >
-              ＋ Tilføj eget felt
+              ＋ Add custom field
             </button>
           </div>
         )}
@@ -3104,12 +3104,12 @@ function AddFieldModal({
           style={{ textTransform: 'none', letterSpacing: 0, fontSize: '12px' }}
         >
           <span style={{ fontSize: '13px', fontWeight: 500, color: 'var(--ink)' }}>
-            Tilføj felt
+            Add field
           </span>
           <button
             type="button"
             onClick={onClose}
-            aria-label="Luk"
+            aria-label="Close"
             style={{
               fontSize: '16px',
               lineHeight: 1,
@@ -3130,7 +3130,7 @@ function AddFieldModal({
             autoFocus
             value={search}
             onChange={(e) => setSearch(e.target.value)}
-            placeholder="Søg efter felt…"
+            placeholder="Search fields…"
             className={inp}
           />
         </div>
@@ -3178,7 +3178,7 @@ function AddFieldModal({
                           className="ff-btn-secondary"
                           style={{ color: 'var(--accent-red)' }}
                         >
-                          Fjern
+                          Remove
                         </button>
                       ) : (
                         <button
@@ -3186,7 +3186,7 @@ function AddFieldModal({
                           onClick={() => onAdd(field)}
                           className="ff-btn-primary"
                         >
-                          Tilføj
+                          Add
                         </button>
                       )}
                     </div>
@@ -3202,7 +3202,7 @@ function AddFieldModal({
           style={{ borderTop: '1px solid var(--hairline)' }}
         >
           <button type="button" onClick={onClose} className="ff-btn-secondary">
-            Luk
+            Close
           </button>
         </div>
       </div>
@@ -3239,80 +3239,80 @@ type FilterDef = {
 const FILTER_DEFS: FilterDef[] = [
   {
     key: 'vendor',
-    label: 'Leverandør',
+    label: 'Vendor',
     kind: 'text',
-    placeholder: 'fx Acme ApS',
-    formatChip: (v) => `Leverandør: ${v}`,
+    placeholder: 'e.g. Acme Ltd',
+    formatChip: (v) => `Vendor: ${v}`,
   },
   {
     key: 'product_type',
-    label: 'Produkttype',
+    label: 'Product type',
     kind: 'text',
-    placeholder: 'fx Vin',
-    formatChip: (v) => `Produkttype: ${v}`,
+    placeholder: 'e.g. Wine',
+    formatChip: (v) => `Product type: ${v}`,
   },
   {
     key: 'status',
     label: 'Status',
     kind: 'select',
     options: [
-      { value: 'active', label: 'Aktiv' },
-      { value: 'inactive', label: 'Inaktiv' },
+      { value: 'active', label: 'Active' },
+      { value: 'inactive', label: 'Inactive' },
     ],
-    formatChip: (v) => `Status: ${v === 'active' ? 'Aktiv' : 'Inaktiv'}`,
+    formatChip: (v) => `Status: ${v === 'active' ? 'Active' : 'Inactive'}`,
   },
   {
     key: 'in_stock',
-    label: 'Lagerstatus',
+    label: 'Stock status',
     kind: 'select',
     options: [
-      { value: 'true', label: 'På lager' },
-      { value: 'false', label: 'Ikke på lager' },
+      { value: 'true', label: 'In stock' },
+      { value: 'false', label: 'Out of stock' },
     ],
     formatChip: (v) =>
-      `Lagerstatus: ${v === 'true' ? 'På lager' : 'Ikke på lager'}`,
+      `Stock status: ${v === 'true' ? 'In stock' : 'Out of stock'}`,
   },
   {
     key: 'tags',
-    label: 'Tags indeholder',
+    label: 'Tags contain',
     kind: 'text',
-    placeholder: 'fx vintage',
-    formatChip: (v) => `Tags indeholder: ${v}`,
+    placeholder: 'e.g. vintage',
+    formatChip: (v) => `Tags contain: ${v}`,
   },
   {
     key: 'price_gt',
-    label: 'Pris større end',
+    label: 'Price greater than',
     kind: 'number',
-    placeholder: 'fx 100',
-    formatChip: (v) => `Pris > ${v}`,
+    placeholder: 'e.g. 100',
+    formatChip: (v) => `Price > ${v}`,
   },
   {
     key: 'price_lt',
-    label: 'Pris mindre end',
+    label: 'Price less than',
     kind: 'number',
-    placeholder: 'fx 500',
-    formatChip: (v) => `Pris < ${v}`,
+    placeholder: 'e.g. 500',
+    formatChip: (v) => `Price < ${v}`,
   },
   {
     key: 'sku',
-    label: 'SKU indeholder',
+    label: 'SKU contains',
     kind: 'text',
-    placeholder: 'fx ABC',
-    formatChip: (v) => `SKU indeholder: ${v}`,
+    placeholder: 'e.g. ABC',
+    formatChip: (v) => `SKU contains: ${v}`,
   },
   {
     key: 'title',
-    label: 'Titel indeholder',
+    label: 'Title contains',
     kind: 'text',
-    placeholder: 'fx vintage',
-    formatChip: (v) => `Titel indeholder: ${v}`,
+    placeholder: 'e.g. vintage',
+    formatChip: (v) => `Title contains: ${v}`,
   },
   {
     key: 'handle',
-    label: 'Handle indeholder',
+    label: 'Handle contains',
     kind: 'text',
-    placeholder: 'fx red-shirt',
-    formatChip: (v) => `Handle indeholder: ${v}`,
+    placeholder: 'e.g. red-shirt',
+    formatChip: (v) => `Handle contains: ${v}`,
   },
 ]
 
@@ -3436,7 +3436,7 @@ function FieldPreviewSidebar({
 
   const hasMapping = state.type !== ''
 
-  let mappingLabel = 'Ingen mapping'
+  let mappingLabel = 'No mapping'
   if (state.type === 'FIELD') mappingLabel = `FIELD → ${(state.config.field as string) ?? ''}`
   else if (state.type === 'STATIC')
     mappingLabel = `STATIC → "${(state.config.value as string) ?? ''}"`
@@ -3447,9 +3447,9 @@ function FieldPreviewSidebar({
   const sidebarRules = (state.config.onlyIf as OnlyIf | undefined)?.rules?.length ?? 0
   const sidebarTransforms = configTransforms(state.config).length
   const layerNotes: string[] = []
-  if (sidebarRules > 0) layerNotes.push(`${sidebarRules + 1} regler`)
+  if (sidebarRules > 0) layerNotes.push(`${sidebarRules + 1} rules`)
   if (sidebarTransforms > 0) {
-    layerNotes.push(`${sidebarTransforms} formatering${sidebarTransforms > 1 ? 'er' : ''}`)
+    layerNotes.push(`${sidebarTransforms} format${sidebarTransforms > 1 ? 's' : ''}`)
   }
   if (layerNotes.length > 0) mappingLabel += ` · ${layerNotes.join(' · ')}`
 
@@ -3501,7 +3501,7 @@ function FieldPreviewSidebar({
           <button
             type="button"
             onClick={onClose}
-            aria-label="Luk preview"
+            aria-label="Close preview"
             style={{
               fontSize: '18px',
               lineHeight: 1,
@@ -3525,7 +3525,7 @@ function FieldPreviewSidebar({
             type="search"
             value={search}
             onChange={(e) => setSearch(e.target.value)}
-            placeholder="Søg i titel, leverandør, handle, tags…"
+            placeholder="Search title, vendor, handle, tags…"
             className={inp}
           />
 
@@ -3544,7 +3544,7 @@ function FieldPreviewSidebar({
                     <button
                       type="button"
                       onClick={() => removeFilter(key)}
-                      aria-label={`Fjern filteret ${def.label}`}
+                      aria-label={`Remove the ${def.label} filter`}
                       style={{
                         background: 'transparent',
                         border: 'none',
@@ -3571,7 +3571,7 @@ function FieldPreviewSidebar({
               className="ff-btn-secondary"
               style={{ fontSize: '11px' }}
             >
-              ＋ Tilføj filter
+              ＋ Add filter
             </button>
           )}
 
@@ -3635,8 +3635,8 @@ function FieldPreviewSidebar({
           }}
         >
           {loading && products.length === 0
-            ? 'Henter…'
-            : `${total} varer · side ${page} af ${totalPages}`}
+            ? 'Loading…'
+            : `${total} products · page ${page} of ${totalPages}`}
         </div>
 
         {/* List */}
@@ -3646,7 +3646,7 @@ function FieldPreviewSidebar({
               className="px-3.5 py-6 text-center"
               style={{ fontSize: '11px', color: 'var(--ink-muted)' }}
             >
-              Ingen varer matcher
+              No products match
             </p>
           ) : (
             products.map((p) => {
@@ -3719,10 +3719,10 @@ function FieldPreviewSidebar({
             disabled={loading || page <= 1}
             className="ff-btn-secondary"
           >
-            Forrige
+            Previous
           </button>
           <span style={{ fontSize: '11px', color: 'var(--ink-muted)' }}>
-            Side {page} af {totalPages}
+            Page {page} of {totalPages}
           </span>
           <button
             type="button"
@@ -3730,7 +3730,7 @@ function FieldPreviewSidebar({
             disabled={loading || page >= totalPages}
             className="ff-btn-secondary"
           >
-            Næste
+            Next
           </button>
         </div>
       </aside>
@@ -3788,7 +3788,7 @@ function FilterValueEditor({
             }
           }}
         >
-          <option value="">— Vælg —</option>
+          <option value="">— Choose —</option>
           {def.options?.map((o) => (
             <option key={o.value} value={o.value}>
               {o.label}
@@ -3821,10 +3821,10 @@ function FilterValueEditor({
         disabled={!value.trim()}
         className="ff-btn-primary"
       >
-        Tilføj
+        Add
       </button>
       <button type="button" onClick={onCancel} className="ff-btn-secondary">
-        Annuller
+        Cancel
       </button>
     </div>
   )
@@ -3908,12 +3908,12 @@ export default function MappingClient({
 
   function addCustomField(rawName: string): string | null {
     const trimmed = rawName.trim()
-    if (!trimmed) return 'Feltnavnet må ikke være tomt'
+    if (!trimmed) return 'The field name can’t be empty'
     if (!/^[a-zA-Z0-9_]+$/.test(trimmed)) {
-      return 'Kun bogstaver, tal og understreg. Ingen mellemrum eller specialtegn.'
+      return 'Letters, numbers and underscores only. No spaces or special characters.'
     }
     const fullKey = `custom:${trimmed}`
-    if (customFields.includes(fullKey)) return 'Feltet findes allerede'
+    if (customFields.includes(fullKey)) return 'The field already exists'
     setCustomFields((prev) => [...prev, fullKey])
     setMappings((prev) => ({ ...prev, [fullKey]: { type: '', config: {} } }))
     setRemovedCustomFields((prev) => prev.filter((f) => f !== fullKey))
@@ -4020,7 +4020,7 @@ export default function MappingClient({
       setAISuggestions(filtered)
       setShowAIModal(true)
     } catch (err) {
-      setAIError(err instanceof Error ? err.message : 'AI-analysen fejlede')
+      setAIError(err instanceof Error ? err.message : 'The AI analysis failed')
     } finally {
       setIsFetchingAI(false)
     }
@@ -4193,9 +4193,9 @@ export default function MappingClient({
   const chipCount = (c: FieldChip) => visibleFields.filter((f) => matchesChip(f, c)).length
 
   const groups: { title: string; fields: string[]; required?: boolean; collapsible: boolean }[] = [
-    { title: 'Påkrævet', fields: [...REQUIRED_FIELDS], required: true, collapsible: false },
+    { title: 'Required', fields: [...REQUIRED_FIELDS], required: true, collapsible: false },
     ...COLLAPSIBLE_SECTIONS.map((g) => ({ title: g.title, fields: g.fields, collapsible: true })),
-    ...(addedFields.length > 0 ? [{ title: 'Tilføjede felter', fields: addedFields, collapsible: false }] : []),
+    ...(addedFields.length > 0 ? [{ title: 'Added fields', fields: addedFields, collapsible: false }] : []),
   ]
   const shownGroups = groups
     .map((g) => ({ ...g, shown: g.fields.filter(fieldMatches) }))
@@ -4242,17 +4242,17 @@ export default function MappingClient({
         <div>
           <h1>Mapping</h1>
           <p className="mp-lede">
-            Påkrævede felter står åbne. Resten er klappet sammen i grupper. Ikonet viser, hvilken slags
-            felt det er. {mappedCount} af {totalVisibleFields} felter er mappet.
+            Required fields are open. The rest are collapsed into groups. The icon shows what kind of
+            field it is. {mappedCount} of {totalVisibleFields} fields are mapped.
           </p>
         </div>
         <div className="mp-actions">
           <button onClick={openFieldsModal} className="wl-btn-secondary">
-            Shopify-felter
+            Shopify fields
           </button>
           <button onClick={fetchAISuggestions} disabled={isFetchingAI} className="wl-btn-secondary">
             <Icon name="bolt" size={14} />
-            {isFetchingAI ? 'AI analyserer…' : 'Auto-map med AI'}
+            {isFetchingAI ? 'AI is analysing…' : 'Auto-map with AI'}
           </button>
           {previewProduct ? (
             <span className="mp-prodchip">
@@ -4261,24 +4261,24 @@ export default function MappingClient({
                 <img src={previewProduct.images[0].src as string} alt="" />
               )}
               <span className="mp-prodchip-t">{previewProduct.title}</span>
-              <button onClick={() => setPreviewProduct(null)} aria-label="Fjern eksempelvaren">
+              <button onClick={() => setPreviewProduct(null)} aria-label="Remove the example product">
                 ×
               </button>
             </span>
           ) : (
             <button onClick={openPicker} className="wl-btn-secondary">
               <Icon name="eye" size={14} />
-              Vis på en vare
+              Show on a product
             </button>
           )}
           <button onClick={handleSave} disabled={isPending} className="wl-btn-primary">
-            {isPending ? 'Gemmer…' : status === 'saved' ? '✓ Gemt' : 'Gem'}
+            {isPending ? 'Saving…' : status === 'saved' ? '✓ Saved' : 'Save'}
           </button>
         </div>
       </div>
 
-      {aiError && <p className="note warn">AI-forslagene kunne ikke hentes: {aiError}</p>}
-      {status === 'error' && <p className="note warn">Mappingen kunne ikke gemmes: {errorMsg}</p>}
+      {aiError && <p className="note warn">Couldn’t load the AI suggestions: {aiError}</p>}
+      {status === 'error' && <p className="note warn">Couldn’t save the mapping: {errorMsg}</p>}
 
       <section className="card flush mp-card">
         <div className="mp-tools">
@@ -4288,11 +4288,11 @@ export default function MappingClient({
               type="search"
               value={query}
               onChange={(e) => setQuery(e.target.value)}
-              placeholder="Find et felt, fx price eller custom_label"
-              aria-label="Find et felt"
+              placeholder="Find a field, e.g. price or custom_label"
+              aria-label="Find a field"
             />
           </label>
-          <div className="mp-chips" role="group" aria-label="Filtrér felter">
+          <div className="mp-chips" role="group" aria-label="Filter fields">
             {FIELD_CHIPS.map((c) => (
               <button
                 key={c.id}
@@ -4308,7 +4308,7 @@ export default function MappingClient({
         </div>
 
         {shownGroups.length === 0 ? (
-          <p className="mp-none">Ingen felter matcher. Prøv et andet filter.</p>
+          <p className="mp-none">No fields match. Try another filter.</p>
         ) : (
           shownGroups.map((g) => (
             <SectionPanel
@@ -4333,7 +4333,7 @@ export default function MappingClient({
 
         <div className="mp-addrow">
           <button type="button" onClick={() => setShowAddFieldModal(true)} className="ff-btn-ghost">
-            + Tilføj felt
+            + Add field
           </button>
         </div>
       </section>

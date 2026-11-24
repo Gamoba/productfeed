@@ -79,8 +79,8 @@ export function WasteTables({
             value={query}
             onChange={(e) => setQuery(e.target.value)}
             onKeyDown={(e) => e.key === 'Escape' && setQuery('')}
-            placeholder="Søg i listerne på titel, producent eller id"
-            aria-label="Søg varer"
+            placeholder="Search the lists by title, vendor or ID"
+            aria-label="Search products"
           />
         </label>
       )}
@@ -88,33 +88,33 @@ export function WasteTables({
       {/* Spending on something nobody can buy today */}
       {unavailable.length > 0 && (
         <Table
-          title="Forbrug på udsolgte varer"
-          note={`Udsolgt nu · ${formatMoney(unavailableCost, currency)} brugt de sidste ${days} dage`}
-          head={['Vare', 'Varianter på lager', 'Klik', 'Forbrug']}
+          title="Spend on out-of-stock products"
+          note={`Out of stock now · ${formatMoney(unavailableCost, currency)} spent in the last ${days} days`}
+          head={['Product', 'Variants in stock', 'Clicks', 'Spend']}
           shown={Math.min(unavailableShown.length, ROW_LIMIT)}
           total={unavailableShown.length}
           filtered={searching}
           emptyNote={
             searching && unavailableShown.length === 0
-              ? `Ingen vare her matcher «${q}». ${unavailable.length} er udsolgt.`
+              ? `No product here matches «${q}». ${unavailable.length} ${unavailable.length === 1 ? 'is' : 'are'} out of stock.`
               : undefined
           }
           // The caveat that decides whether this table can be acted on at all:
           // it pairs a window of spend with stock as of one moment.
           footnote={
             stockSyncedAt
-              ? `Lageret er fra ${new Date(stockSyncedAt).toLocaleString('da-DK')}` +
+              ? `Stock is from ${new Date(stockSyncedAt).toLocaleString('en-GB')}` +
                 (stockAgeDays !== null && stockAgeDays > 0
-                  ? `, ${stockAgeDays} ${stockAgeDays === 1 ? 'dag' : 'dage'} siden`
+                  ? `, ${stockAgeDays} ${stockAgeDays === 1 ? 'day' : 'days'} ago`
                   : '') +
-                `. Forbruget er for hele perioden på ${days} dage, så det meste blev nok brugt, mens varen var på lager. Listen viser budget, der går til noget, der ikke kan sendes i dag, ikke penge der allerede er tabt.`
+                `. Spend covers the whole ${days}-day period, so most of it was probably spent while the product was in stock. The list shows budget going to something that cannot be shipped today, not money already lost.`
               : undefined
           }
         >
           {unavailableShown.slice(0, ROW_LIMIT).map((r) => (
             <tr key={r.productRef}>
               <Name r={r} />
-              <td className="r ws-muted num">{r.variantsTotal > 0 ? `0 af ${r.variantsTotal}` : '—'}</td>
+              <td className="r ws-muted num">{r.variantsTotal > 0 ? `0 of ${r.variantsTotal}` : '—'}</td>
               <td className="r num">{formatInt(r.clicks)}</td>
               <td className="r num neg">{formatMoney(r.cost, currency)}</td>
             </tr>
@@ -125,14 +125,14 @@ export function WasteTables({
       {/* Converting, and still underwater */}
       {showLosing && losing.length > 0 && (
         <Table
-          title="Sælger, men med tab"
-          note={`Bruttoprofit under annonceforbruget · ${formatMoney(losingCost, currency)} i alt`}
-          head={['Vare', 'Forbrug', 'Bruttoprofit', 'Profit − forbrug']}
+          title="Selling, but at a loss"
+          note={`Gross profit below ad spend · ${formatMoney(losingCost, currency)} in total`}
+          head={['Product', 'Spend', 'Gross profit', 'Profit − spend']}
           shown={Math.min(losingShown.length, ROW_LIMIT)}
           total={losingShown.length}
           filtered={searching}
           emptyNote={
-            searching && losingShown.length === 0 ? `Ingen vare her matcher «${q}». ${losing.length} sælger med tab.` : undefined
+            searching && losingShown.length === 0 ? `No product here matches «${q}». ${losing.length} ${losing.length === 1 ? 'sells' : 'sell'} at a loss.` : undefined
           }
         >
           {losingShown.slice(0, ROW_LIMIT).map((r) => (
@@ -151,15 +151,15 @@ export function WasteTables({
         wastedEmpty
       ) : (
         <Table
-          title="Forbrug uden omsætning"
-          note={`${days} dage · sorteret efter forbrug`}
-          head={['Vare', 'Visninger', 'Klik', 'Forbrug', 'Andel']}
+          title="Spend without revenue"
+          note={`${days} days · sorted by spend`}
+          head={['Product', 'Impressions', 'Clicks', 'Spend', 'Share']}
           shown={Math.min(wastedShown.length, ROW_LIMIT)}
           total={wastedShown.length}
           filtered={searching}
           emptyNote={
             searching && wastedShown.length === 0
-              ? `Ingen vare her matcher «${q}». ${wasted.length} varer har brugt budget uden omsætning.`
+              ? `No product here matches «${q}». ${wasted.length} ${wasted.length === 1 ? 'product has' : 'products have'} spent budget without revenue.`
               : undefined
           }
         >
@@ -234,8 +234,8 @@ function Table({
       {emptyNote && <p className="ws-none">{emptyNote}</p>}
       {total > shown && (
         <p className="ws-foot">
-          Viser de {shown} største af {total}
-          {filtered ? ' der matcher' : ''}. Tallene øverst dækker alle varer.
+          Showing the {shown} largest of {total}
+          {filtered ? ' matching' : ''}. The figures at the top cover all products.
         </p>
       )}
       {footnote && <p className="ws-foot ws-foot-line">{footnote}</p>}

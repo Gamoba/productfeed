@@ -78,7 +78,7 @@ export async function PATCH(
 
   if (error) return errorResponse(error, 'PATCH /api/projects/[projectId]')
   if (update.name !== undefined && update.name !== owned.name) {
-    await logActivity(db, { user, projectId, accountId: owned.account_id, area: 'Shop', action: 'Shop omdøbt', before: owned.name, after: update.name })
+    await logActivity(db, { user, projectId, accountId: owned.account_id, area: 'Shop', action: 'Shop renamed', before: owned.name, after: update.name })
   }
   return NextResponse.json({ project: data })
 }

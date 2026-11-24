@@ -26,43 +26,43 @@ export function AgencyDashboardClient({ initial }: { initial: AgencyOverview }) 
       <header className="ag-head">
         <div>
           <h1>Agency dashboard</h1>
-          <p className="ag-lede">Alle de kunder, bureauet har adgang til. Klik på en kunde for at åbne shoppen med dens feeds.</p>
+          <p className="ag-lede">All the customers the agency has access to. Click a customer to open the shop and its feeds.</p>
         </div>
         <button type="button" className="wl-btn-primary" onClick={() => setCreating(true)}>
-          <Icon name="plus" size={14} /> Opret kunde
+          <Icon name="plus" size={14} /> Create customer
         </button>
       </header>
 
       <section className="card flush">
         <div className="ag-stats">
           <div>
-            <span>Kunder</span>
+            <span>Customers</span>
             <strong className="num">{formatNumber(shops.length)}</strong>
             <small>
-              {formatNumber(withFeeds)} med feeds i drift
+              {formatNumber(withFeeds)} with live feeds
             </small>
           </div>
           <div>
-            <span>Feeds i alt</span>
+            <span>Total feeds</span>
             <strong className="num">{formatNumber(feedTotal)}</strong>
-            <small>på tværs af kunder</small>
+            <small>across customers</small>
           </div>
           <div>
-            <span>Fejl der kræver handling</span>
+            <span>Errors needing action</span>
             <strong className={`num${errorTotal > 0 ? ' neg' : ''}`}>{formatNumber(errorTotal)}</strong>
             <small>
               {errorTotal === 0
-                ? 'Alle feeds er klar'
-                : `hos ${formatNumber(shopsWithErrors)} ${shopsWithErrors === 1 ? 'kunde' : 'kunder'}`}
+                ? 'All feeds are ready'
+                : `for ${formatNumber(shopsWithErrors)} ${shopsWithErrors === 1 ? 'customer' : 'customers'}`}
             </small>
           </div>
         </div>
 
         {shops.length === 0 ? (
           <div className="ag-empty">
-            <p>Ingen kunder endnu. Opret den første, og forbind dens Shopify-shop eller feed-URL.</p>
+            <p>No customers yet. Create the first one and connect its Shopify shop or feed URL.</p>
             <button type="button" className="wl-btn-primary" onClick={() => setCreating(true)}>
-              Opret første kunde
+              Create first customer
             </button>
           </div>
         ) : (
@@ -70,12 +70,12 @@ export function AgencyDashboardClient({ initial }: { initial: AgencyOverview }) 
             <table className="ag-table">
               <thead>
                 <tr>
-                  <th>Kunde</th>
-                  <th>Adgang</th>
-                  <th>Land</th>
+                  <th>Customer</th>
+                  <th>Access</th>
+                  <th>Country</th>
                   <th className="r">Feeds</th>
-                  <th className="r">Fejl</th>
-                  <th aria-label="Handlinger" />
+                  <th className="r">Errors</th>
+                  <th aria-label="Actions" />
                 </tr>
               </thead>
               <tbody>
@@ -96,7 +96,7 @@ export function AgencyDashboardClient({ initial }: { initial: AgencyOverview }) 
       </section>
 
       <p className="ag-foot">
-        Fejl tæller valideringsfejl i feeds og feeds, hvis varer ikke er synkroniseret i over to døgn. Advarsler er ikke med.
+        Errors count validation errors in feeds, plus feeds whose products have not synced for more than two days. Warnings are not included.
       </p>
 
       {creating && <CreateDialog onClose={() => setCreating(false)} />}
@@ -107,10 +107,10 @@ export function AgencyDashboardClient({ initial }: { initial: AgencyOverview }) 
 // ── one customer ─────────────────────────────────────────────────────────────
 
 function Access({ shop }: { shop: AgencyShop }) {
-  if (shop.source === 'feed_url') return <span className="st">Feed-URL</span>
-  if (shop.connection === 'connected') return <span className="st">Shopify forbundet</span>
-  if (shop.connection === 'error') return <span className="neg">Shopify fejler</span>
-  return <span className="pill warn">Ikke forbundet</span>
+  if (shop.source === 'feed_url') return <span className="st">Feed URL</span>
+  if (shop.connection === 'connected') return <span className="st">Shopify connected</span>
+  if (shop.connection === 'error') return <span className="neg">Shopify failing</span>
+  return <span className="pill warn">Not connected</span>
 }
 
 function ShopRow({
@@ -150,7 +150,7 @@ function ShopRow({
           </span>
           <span>
             <b>{shop.name}</b>
-            <small>{sub || 'Ingen kilde endnu'}</small>
+            <small>{sub || 'No source yet'}</small>
           </span>
         </span>
       </td>
@@ -175,10 +175,10 @@ function ShopRow({
       </td>
       <td className="r ag-act" onClick={stop} onKeyDown={stop}>
         <Link href={`/project/${shop.id}`} className="link">
-          Åbn kunde
+          Open customer
         </Link>
         <Popover
-          label={`Flere handlinger for ${shop.name}`}
+          label={`More actions for ${shop.name}`}
           align="right"
           triggerClassName="ag-more"
           trigger={<span aria-hidden="true">⋯</span>}
@@ -194,7 +194,7 @@ function ShopRow({
                   setDialog('rename')
                 }}
               >
-                Omdøb
+                Rename
               </button>
               <button
                 type="button"
@@ -205,7 +205,7 @@ function ShopRow({
                   setDialog('delete')
                 }}
               >
-                Slet kunde
+                Delete customer
               </button>
             </>
           )}
@@ -289,24 +289,24 @@ function CreateDialog({ onClose }: { onClose: () => void }) {
   }
 
   return (
-    <Dialog title="Opret kunde" onClose={onClose}>
+    <Dialog title="Create customer" onClose={onClose}>
       <form className="ag-dlg-body" onSubmit={submit}>
         <label className="ag-field">
-          <span>Navn</span>
-          <input className="ag-inp" value={name} onChange={(e) => setName(e.target.value)} placeholder="fx Bottles With History" autoFocus required />
+          <span>Name</span>
+          <input className="ag-inp" value={name} onChange={(e) => setName(e.target.value)} placeholder="e.g. Bottles With History" autoFocus required />
         </label>
         <label className="ag-field">
-          <span>Beskrivelse (valgfri)</span>
+          <span>Description (optional)</span>
           <textarea className="ag-inp" rows={3} value={description} onChange={(e) => setDescription(e.target.value)} />
         </label>
-        <p className="ag-muted">Bagefter forbinder du shoppens Shopify eller en feed-URL og opretter feeds pr. land.</p>
+        <p className="ag-muted">Next, you connect the shop&apos;s Shopify or a feed URL and create feeds per country.</p>
         {error && <p className="note warn">{error}</p>}
         <div className="ag-dlg-foot">
           <button type="button" className="wl-btn-secondary" onClick={onClose} disabled={busy}>
-            Annullér
+            Cancel
           </button>
           <button type="submit" className="wl-btn-primary" disabled={busy || !name.trim()}>
-            {busy ? 'Opretter…' : 'Opret kunde'}
+            {busy ? 'Creating…' : 'Create customer'}
           </button>
         </div>
       </form>
@@ -337,19 +337,19 @@ function RenameDialog({ shop, onClose, onSaved }: { shop: AgencyShop; onClose: (
   }
 
   return (
-    <Dialog title="Omdøb kunde" onClose={onClose}>
+    <Dialog title="Rename customer" onClose={onClose}>
       <form className="ag-dlg-body" onSubmit={submit}>
         <label className="ag-field">
-          <span>Navn</span>
+          <span>Name</span>
           <input className="ag-inp" value={name} onChange={(e) => setName(e.target.value)} autoFocus required />
         </label>
         {error && <p className="note warn">{error}</p>}
         <div className="ag-dlg-foot">
           <button type="button" className="wl-btn-secondary" onClick={onClose}>
-            Annullér
+            Cancel
           </button>
           <button type="submit" className="wl-btn-primary" disabled={busy || !name.trim() || name.trim() === shop.name}>
-            {busy ? 'Gemmer…' : 'Gem'}
+            {busy ? 'Saving…' : 'Save'}
           </button>
         </div>
       </form>
@@ -374,26 +374,26 @@ function DeleteDialog({ shop, onClose, onDeleted }: { shop: AgencyShop; onClose:
   }
 
   return (
-    <Dialog title="Slet kunde" onClose={onClose}>
+    <Dialog title="Delete customer" onClose={onClose}>
       <div className="ag-dlg-body">
         <p>
-          Slet <b>{shop.name}</b>?
+          Delete <b>{shop.name}</b>?
           {shop.feeds > 0 && (
             <>
               {' '}
-              Det sletter også {shop.feeds === 1 ? 'dens feed' : `dens ${formatNumber(shop.feeds)} feeds`} og alle data i
+              This also deletes {shop.feeds === 1 ? 'its feed' : `its ${formatNumber(shop.feeds)} feeds`} and all its data in
               FeedFlow.
             </>
           )}{' '}
-          Det kan ikke fortrydes. Shopify røres ikke.
+          This cannot be undone. Shopify is not touched.
         </p>
         {error && <p className="note warn">{error}</p>}
         <div className="ag-dlg-foot">
           <button type="button" className="wl-btn-secondary" onClick={onClose} disabled={busy}>
-            Annullér
+            Cancel
           </button>
           <button type="button" className="wl-btn-primary ag-danger" onClick={submit} disabled={busy}>
-            {busy ? 'Sletter…' : 'Slet kunde'}
+            {busy ? 'Deleting…' : 'Delete customer'}
           </button>
         </div>
       </div>

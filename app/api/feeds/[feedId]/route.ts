@@ -39,7 +39,7 @@ export async function DELETE(
     feedLabel: label?.label ?? owned.name,
     projectId: owned.project_id ?? undefined,
     area: 'Feed',
-    action: 'Feed slettet',
+    action: 'Feed deleted',
     before: owned.name,
   })
   return NextResponse.json({ ok: true })
@@ -77,10 +77,10 @@ export async function PATCH(
 
   if (error) return errorResponse(error, 'PATCH /api/feeds/[feedId]')
   if (update.name !== undefined && update.name !== owned.name) {
-    await logActivity(db, { user, feedId, area: 'Feed', action: 'Feed omdøbt', before: owned.name, after: update.name })
+    await logActivity(db, { user, feedId, area: 'Feed', action: 'Feed renamed', before: owned.name, after: update.name })
   }
   if (update.description !== undefined && update.description !== (owned.description ?? null)) {
-    await logActivity(db, { user, feedId, area: 'Feed', action: 'Beskrivelse ændret', before: owned.description, after: update.description })
+    await logActivity(db, { user, feedId, area: 'Feed', action: 'Description changed', before: owned.description, after: update.description })
   }
   return NextResponse.json({ feed: data })
 }

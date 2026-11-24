@@ -19,8 +19,8 @@ export default async function NotificationsPage({ params }: { params: Promise<{ 
   return (
     <PlaceholderPage
       title="Notifications"
-      lede={"Hvilke mails shoppen sender, og hvem der får dem."}
-      contents={["Hvad I vil have besked om: fejl i feeds, labels der skifter, og en ugentlig status", "Hvor ofte: kun fejl, fejl og information, eller en ugentlig opsummering", "Modtagere"]}
+      lede={"Which emails the shop sends, and who receives them."}
+      contents={["What you want to hear about: feed errors, labels that change, and a weekly status", "How often: errors only, errors and information, or a weekly summary", "Recipients"]}
     />
   )
 }

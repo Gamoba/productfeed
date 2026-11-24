@@ -179,7 +179,7 @@ export async function POST(req: Request) {
 
   const channel = body.channel ?? 'google_shopping'
   if (!isChannelId(channel)) {
-    return NextResponse.json({ error: 'Ukendt kanal' }, { status: 400 })
+    return NextResponse.json({ error: 'Unknown channel' }, { status: 400 })
   }
   const availability = channelAvailability(channel, body.country)
   if (!availability.available) {
@@ -188,7 +188,7 @@ export async function POST(req: Request) {
 
   // A feed hangs on a project — project_id is required and must be owned.
   if (!body.project_id) {
-    return NextResponse.json({ error: 'project_id er påkrævet' }, { status: 400 })
+    return NextResponse.json({ error: 'project_id is required' }, { status: 400 })
   }
   const owned = await getOwnedProject(user.id, body.project_id)
   if (!owned) return NextResponse.json({ error: 'Project not found' }, { status: 404 })
@@ -209,6 +209,6 @@ export async function POST(req: Request) {
 
   if (error) return errorResponse(error, 'POST /api/feeds')
 
-  await logActivity(db, { user, feedId: data.id, area: 'Feed', action: 'Feed oprettet', after: `${channelOf(channel).label} · ${name}` })
+  await logActivity(db, { user, feedId: data.id, area: 'Feed', action: 'Feed created', after: `${channelOf(channel).label} · ${name}` })
   return NextResponse.json({ feed: data })
 }

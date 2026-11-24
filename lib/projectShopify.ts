@@ -30,7 +30,7 @@ export async function getProjectCredentials(
     .maybeSingle<ProjectCredsRow>()
 
   if (error) dbError('getProjectCredentials', error)
-  if (!data) throw new AppError('Projektet blev ikke fundet', 404)
+  if (!data) throw new AppError('The project was not found', 404)
   if (
     !data.shop_url ||
     !data.access_token_ciphertext ||

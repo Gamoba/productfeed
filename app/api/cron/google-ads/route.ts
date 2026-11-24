@@ -97,7 +97,7 @@ export async function GET(req: Request) {
         .from('google_ads_feed_settings')
         .update({ last_auto_sync_status: 'error', last_auto_sync_error: message })
         .eq('feed_id', row.feed_id)
-      await logActivity(db, { user: null, feedId: row.feed_id, area: 'Performance', action: 'Hentning af Google Ads-tal fejlede', after: message })
+      await logActivity(db, { user: null, feedId: row.feed_id, area: 'Performance', action: 'Google Ads data fetch failed', after: message })
       results.push({ feedId: row.feed_id, status: 'error' })
     }
   }

@@ -48,7 +48,7 @@ const clip = (v: string | number | null | undefined): string | null => {
 function actorName(user: Actor): string {
   if (!user) return 'System'
   const meta = (user.user_metadata ?? {}) as { full_name?: string; name?: string }
-  return meta.full_name || meta.name || user.email || 'Ukendt bruger'
+  return meta.full_name || meta.name || user.email || 'Unknown user'
 }
 
 // "Google Shopping · Tyskland", from the feed's channel and market.
@@ -105,21 +105,21 @@ export function describeMapping(type: string | null | undefined, config: Record<
   const field = typeof c.field === 'string' && c.field ? c.field : null
   switch (type) {
     case 'FIELD':
-      return field ? `Felt: ${field}` : 'Felt'
+      return field ? `Field: ${field}` : 'Field'
     case 'STATIC':
-      return `Fast tekst: ${String(c.value ?? '')}`
+      return `Static text: ${String(c.value ?? '')}`
     case 'COMBINE':
-      return 'Kombineret'
+      return 'Combined'
     case 'PREFIX_SUFFIX':
-      return field ? `Før/efter-tekst på ${field}` : 'Før/efter-tekst'
+      return field ? `Prefix/suffix on ${field}` : 'Prefix/suffix'
     case 'FIND_REPLACE':
-      return field ? `Find og erstat på ${field}` : 'Find og erstat'
+      return field ? `Find and replace on ${field}` : 'Find and replace'
     case 'TRUNCATE':
-      return field ? `Afkortet ${field}` : 'Afkortet'
+      return field ? `Truncated ${field}` : 'Truncated'
     case 'STRIP_HTML':
-      return field ? `${field} uden HTML` : 'Uden HTML'
+      return field ? `${field} without HTML` : 'Without HTML'
     case 'LOOKUP':
-      return field ? `Opslagstabel på ${field}` : 'Opslagstabel'
+      return field ? `Lookup table on ${field}` : 'Lookup table'
     case 'AI':
       return 'AI'
     default:
@@ -154,7 +154,7 @@ export async function getShopActivity(
       at: String(r.created_at),
       actor: String(r.actor),
       isSystem: r.user_id === null && r.actor === 'System',
-      where: (r.feed_label as string | null) ?? (r.project_id ? 'Shop' : 'Konto'),
+      where: (r.feed_label as string | null) ?? (r.project_id ? 'Shop' : 'Account'),
       area: String(r.area),
       action: String(r.action),
       before: (r.before as string | null) ?? null,

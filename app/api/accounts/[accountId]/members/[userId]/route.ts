@@ -21,8 +21,8 @@ export async function PATCH(req: Request, { params }: Ctx) {
       await logActivity(db, {
         user,
         accountId,
-        area: 'Adgang',
-        action: `Rolle ændret for ${target.email}`,
+        area: 'Access',
+        action: `Role changed for ${target.email}`,
         before: ROLE_LABEL[target.role],
         after: ROLE_LABEL[body.role],
       })
@@ -41,7 +41,7 @@ export async function DELETE(_req: Request, { params }: Ctx) {
     const db = adminDb()
     const target = (await listAccountUsers(db, user.id, accountId)).members.find((m) => m.userId === userId)
     await removeMember(db, user.id, accountId, userId)
-    await logActivity(db, { user, accountId, area: 'Adgang', action: 'Bruger fjernet', before: target?.email ?? null })
+    await logActivity(db, { user, accountId, area: 'Access', action: 'User removed', before: target?.email ?? null })
     return NextResponse.json({ ok: true })
   } catch (err) {
     return errorResponse(err, 'DELETE /api/accounts/[accountId]/members/[userId]')

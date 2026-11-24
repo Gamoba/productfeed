@@ -20,9 +20,9 @@ export default async function CompanySettingsPage({ params }: { params: Promise<
   return (
     <PlaceholderPage
       title="Company settings"
-      lede={`Plan og virksomhedsoplysninger for ${project.name}.`}
-      contents={["Planen: hvor mange shops, feeds, SKU'er og brugere I kan have", "Virksomhed: navn, telefon og att.", "Adresse: adresse, postnummer, by og land"]}
-      note="Plan og grænser er et åbent spørgsmål i guidelines (§8)."
+      lede={`Plan and company details for ${project.name}.`}
+      contents={["The plan: how many shops, feeds, SKUs and users you can have", "Company: name, phone and attn.", "Address: address, postcode, city and country"]}
+      note="Plan and limits are an open question in the guidelines (§8)."
     />
   )
 }

@@ -91,10 +91,10 @@ export async function POST(
       s?.customer_id ? (s.customer_name ?? s.customer_id) : null
     const list = (a: string[] | null | undefined) => (a?.length ? a.join(' + ') : null)
     const changes: { action: string; before: string | null; after: string | null }[] = [
-      { action: 'Google Ads-konto ændret', before: acct(prev), after: acct(settings) },
-      { action: 'Feed label ændret', before: prev?.feed_label ?? null, after: settings.feed_label },
-      { action: 'Mål for omsætning ændret', before: list(prev?.roas_conversion_actions), after: list(settings.roas_conversion_actions) },
-      { action: 'Mål for profit ændret', before: list(prev?.poas_conversion_actions), after: list(settings.poas_conversion_actions) },
+      { action: 'Google Ads account changed', before: acct(prev), after: acct(settings) },
+      { action: 'Feed label changed', before: prev?.feed_label ?? null, after: settings.feed_label },
+      { action: 'Revenue goal changed', before: list(prev?.roas_conversion_actions), after: list(settings.roas_conversion_actions) },
+      { action: 'Profit goal changed', before: list(prev?.poas_conversion_actions), after: list(settings.poas_conversion_actions) },
     ]
     for (const c of changes) {
       if (c.before !== c.after) await logActivity(db, { user, feedId, area: 'Settings', ...c })

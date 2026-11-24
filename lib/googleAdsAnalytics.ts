@@ -490,7 +490,7 @@ export function breakEvenRoas(margin: number | null, uplift = 1): number | null 
 
 export function formatMoney(v: number | null, currency: string | null): string {
   if (v === null) return '—'
-  return new Intl.NumberFormat('da-DK', {
+  return new Intl.NumberFormat('en-GB', {
     style: 'currency',
     currency: currency || 'DKK',
     maximumFractionDigits: 0,
@@ -498,19 +498,19 @@ export function formatMoney(v: number | null, currency: string | null): string {
 }
 
 export function formatRatio(v: number | null, digits = 2): string {
-  return v === null ? '—' : v.toLocaleString('da-DK', {
+  return v === null ? '—' : v.toLocaleString('en-GB', {
     minimumFractionDigits: digits,
     maximumFractionDigits: digits,
   })
 }
 
 export function formatPercent(v: number | null, digits = 1): string {
-  return v === null ? '—' : `${(v * 100).toLocaleString('da-DK', {
+  return v === null ? '—' : `${(v * 100).toLocaleString('en-GB', {
     minimumFractionDigits: digits,
     maximumFractionDigits: digits,
-  })} %`
+  })}%`
 }
 
 export function formatInt(v: number): string {
-  return v.toLocaleString('da-DK', { maximumFractionDigits: 0 })
+  return v.toLocaleString('en-GB', { maximumFractionDigits: 0 })
 }

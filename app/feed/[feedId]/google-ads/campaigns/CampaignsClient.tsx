@@ -117,11 +117,11 @@ export function CampaignsClient({
         <div>
           <h1>Campaigns</h1>
           <p className="cp-lede">
-            Se hvilke kampagner der bruger feedet, og hvor meget af forbruget der faktisk rammer varerne. {from} → {to},
-            sammenlignet med {comparison.from} → {comparison.to}.
+            See which campaigns use the feed, and how much of their spend actually reaches products. {from} → {to},
+            compared with {comparison.from} → {comparison.to}.
           </p>
         </div>
-        <div className="cp-seg" role="group" aria-label="Periode">
+        <div className="cp-seg" role="group" aria-label="Period">
           {windows.map((w) => (
             <Link key={w} href={hrefFor(w)} aria-current={w === days ? 'true' : undefined}>
               {w}d
@@ -133,46 +133,46 @@ export function CampaignsClient({
       <div className="cp-top">
         <section className="card cp-stats">
           <div>
-            <span>Forbrug på varer</span>
+            <span>Spend on products</span>
             <strong className="num">{formatMoney(attributed, currency)}</strong>
-            <small>det Google har knyttet til en vare i feedet</small>
+            <small>what Google has attributed to a product in the feed</small>
           </div>
           <div>
-            <span>Samlet kampagneforbrug</span>
+            <span>Total campaign spend</span>
             <strong className="num">{realSpend > 0 ? formatMoney(realSpend, currency) : '—'}</strong>
-            <small>{realSpend > 0 ? 'alle placeringer med' : 'ikke hentet for perioden, så ukendt (ikke nul)'}</small>
+            <small>{realSpend > 0 ? 'all placements included' : 'not fetched for the period, so unknown (not zero)'}</small>
           </div>
           <div>
-            <span>Kampagner</span>
+            <span>Campaigns</span>
             <strong className="num">{formatInt(campaignCount)}</strong>
-            <small>med tal i perioden</small>
+            <small>with figures in the period</small>
           </div>
         </section>
 
         <section className="card hi cp-hi">
-          <span className="cp-hi-l">Rammer ikke varerne</span>
+          <span className="cp-hi-l">Not reaching products</span>
           <strong className="num">{unattributed === null ? '—' : formatMoney(unattributed, currency)}</strong>
           <span className="cp-bar" aria-hidden="true">
             <i style={{ width: `${coverage === null ? 0 : Math.round(coverage * 100)}%` }} />
           </span>
           <small>
             {coverage === null
-              ? 'Kampagnernes samlede forbrug er ikke hentet, så dækningen kan ikke regnes ud.'
-              : `${formatPercent(coverage, 0)} af forbruget rammer en vare. Resten går til placeringer uden vare, typisk i Performance Max, og ses ikke i nogen af appens vare-rapporter.`}
+              ? 'Total campaign spend has not been fetched, so coverage cannot be calculated.'
+              : `${formatPercent(coverage, 0)} of spend reaches a product. The rest goes to placements without a product, typically in Performance Max, and does not appear in any of the app's product reports.`}
           </small>
         </section>
       </div>
 
       {rows.length === 0 ? (
         <section className="card cp-empty">
-          <p>Ingen kampagnetal i perioden.</p>
+          <p>No campaign figures in the period.</p>
           <p className="cp-muted">
             {lastSyncedAt
-              ? 'Kampagner registreres fra synkroniseringen og frem. Hent tal på Performance for at fylde siden.'
-              : 'Feedet er koblet, men der er ikke hentet tal endnu.'}
+              ? 'Campaigns are recorded from the sync onwards. Fetch figures on Performance to fill the page.'
+              : 'The feed is connected, but no figures have been fetched yet.'}
           </p>
           <Link href={`/feed/${feedId}/google-ads?days=${days}`} className="wl-btn-secondary">
-            Gå til Performance
+            Go to Performance
           </Link>
         </section>
       ) : (
@@ -181,15 +181,15 @@ export function CampaignsClient({
             <table className="cp-table">
               <thead>
                 <tr>
-                  <th>Kampagne</th>
-                  {sortTh('cost', 'Forbrug på varer')}
-                  {sortTh('totalCost', 'Samlet forbrug')}
-                  {sortTh('coverage', 'Dækning')}
-                  {sortTh('clicks', 'Klik')}
+                  <th>Campaign</th>
+                  {sortTh('cost', 'Spend on products')}
+                  {sortTh('totalCost', 'Total spend')}
+                  {sortTh('coverage', 'Coverage')}
+                  {sortTh('clicks', 'Clicks')}
                   {sortTh('roas', 'ROAS')}
                   {sortTh('poas', 'POAS')}
-                  {sortTh('products', 'Varer')}
-                  <th className="r">Mod perioden før</th>
+                  {sortTh('products', 'Products')}
+                  <th className="r">Vs. previous period</th>
                 </tr>
               </thead>
               <tbody>
@@ -202,14 +202,14 @@ export function CampaignsClient({
                         <span className="cp-name">
                           <b>
                             {r.isSentinel
-                              ? 'Før kampagnesporing'
+                              ? 'Before campaign tracking'
                               : r.isUnknown
-                                ? 'Ingen kampagne oplyst'
+                                ? 'No campaign reported'
                                 : (r.name ?? r.campaignId)}
                           </b>
                           <small>
                             {r.isSentinel ? (
-                              <span className="neg">synket før kampagner blev registreret</span>
+                              <span className="neg">synced before campaigns were recorded</span>
                             ) : (
                               <>
                                 {describeChannel(r.channelType)}
@@ -236,7 +236,7 @@ export function CampaignsClient({
                       <td className="r num">{formatInt(r.products)}</td>
                       <td className="r">
                         <span className="cp-deltas">
-                          <DeltaChip d={costDelta} label="forbrug" invert />
+                          <DeltaChip d={costDelta} label="spend" invert />
                           <DeltaChip d={roasDelta} label="ROAS" />
                         </span>
                       </td>
@@ -252,11 +252,11 @@ export function CampaignsClient({
       {overlaps.length > 0 && (
         <section className="card flush">
           <div className="cp-card-h">
-            <h3>Varer der får budget fra flere kampagner</h3>
+            <h3>Products getting budget from several campaigns</h3>
             <small>
-              {formatInt(overlapTotal)} {overlapTotal === 1 ? 'vare' : 'varer'} fik budget fra flere kampagner i perioden
-              {overlapTotal > overlaps.length ? `. Viser de ${overlaps.length} største` : ''}. Det er ofte med vilje, fx en
-              brand-kampagne og en catch-all. Listen er til at se efter, om fordelingen er den, I ønsker.
+              {formatInt(overlapTotal)} {overlapTotal === 1 ? 'product' : 'products'} got budget from several campaigns in the period
+              {overlapTotal > overlaps.length ? `. Showing the ${overlaps.length} largest` : ''}. This is often deliberate, e.g. a
+              brand campaign and a catch-all. Use the list to check the split is the one you want.
             </small>
           </div>
           <ul className="cp-overlaps">
@@ -265,7 +265,7 @@ export function CampaignsClient({
                 <span className="cp-name">
                   <b>{o.title ?? o.productRef}</b>
                   <small>
-                    {o.campaigns.length} kampagner · {formatMoney(o.totalCost, currency)}
+                    {o.campaigns.length} campaigns · {formatMoney(o.totalCost, currency)}
                   </small>
                 </span>
                 <span className="cp-chips">
@@ -283,31 +283,31 @@ export function CampaignsClient({
 
       <div className="cp-notes">
         <p>
-          <b>Forbrug på varer</b> er det, Google har knyttet til en vare i dette feed. <b>Samlet forbrug</b> er, hvad
-          kampagnen faktisk kostede, alle placeringer med. ROAS og POAS regnes kun på forbruget på varer, så for en
-          kampagne med lav dækning beskriver de Shopping-delen og ikke hele kampagnen.
+          <b>Spend on products</b> is what Google has attributed to a product in this feed. <b>Total spend</b> is what
+          the campaign actually cost, all placements included. ROAS and POAS are calculated on spend on products only, so
+          for a campaign with low coverage they describe the Shopping part, not the whole campaign.
         </p>
         {feedLabel && (
           <p className="neg">
-            Feedet er afgrænset til feed-labelet «{feedLabel}». En kampagnes samlede forbrug kan ikke deles op pr.
-            feed-label, så det hentes ikke, og Samlet forbrug står som «—». Tallene på varerne er rigtige og hører til dette
+            The feed is limited to the feed label «{feedLabel}». A campaign&apos;s total spend cannot be split by feed
+            label, so it is not fetched, and Total spend shows «—». The product figures are correct and belong to this
             feed.
           </p>
         )}
         {comparison.partial && (
           <p className="neg">
-            Sammenligningsperioden {comparison.from} → {comparison.to} har kun {comparison.coveredDays}{' '}
-            {comparison.coveredDays === 1 ? 'dag' : 'dage'} i arkivet, så ændringerne ser større ud, end de er. Gør
-            synkroniseringsvinduet større, og hent tal igen.
+            The comparison period {comparison.from} → {comparison.to} has only {comparison.coveredDays}{' '}
+            {comparison.coveredDays === 1 ? 'day' : 'days'} in the archive, so the changes look bigger than they are.
+            Widen the sync window and fetch figures again.
           </p>
         )}
         {hasSentinel && (
           <p className="neg">
-            En del af perioden blev synket, før kampagner blev registreret, og står under «Før kampagnesporing». Hent tal
-            på Performance for at erstatte det med rigtige kampagner.
+            Part of the period was synced before campaigns were recorded and is shown under «Before campaign tracking».
+            Fetch figures on Performance to replace it with real campaigns.
           </p>
         )}
-        <p>Omsætning og bruttoprofit bruger de konverteringshandlinger, der er valgt på Performance.</p>
+        <p>Revenue and gross profit use the conversion actions selected on Performance.</p>
       </div>
     </div>
   )
@@ -329,7 +329,7 @@ function DeltaChip({
   invert?: boolean
 }) {
   if (!d || (d.abs === 0 && d.pct === 0)) {
-    return <span className="cp-muted cp-d">{d ? `${label} uændret` : `${label} —`}</span>
+    return <span className="cp-muted cp-d">{d ? `${label} unchanged` : `${label} —`}</span>
   }
   const up = d.abs > 0
   const good = invert ? !up : up
@@ -338,12 +338,12 @@ function DeltaChip({
       className={`cp-d ${good ? 'pos' : 'neg'}`}
       // The absolute change is always available even when the percentage is
       // not: a previous value of zero has no percentage.
-      title={`${label}: ${d.abs > 0 ? '+' : ''}${d.abs.toLocaleString('da-DK', { maximumFractionDigits: 2 })}`}
+      title={`${label}: ${d.abs > 0 ? '+' : ''}${d.abs.toLocaleString('en-GB', { maximumFractionDigits: 2 })}`}
     >
       {up ? '▲' : '▼'} {label}{' '}
       {d.pct === null
-        ? 'ny'
-        : `${d.pct > 0 ? '+' : ''}${(d.pct * 100).toLocaleString('da-DK', { maximumFractionDigits: 0 })} %`}
+        ? 'new'
+        : `${d.pct > 0 ? '+' : ''}${(d.pct * 100).toLocaleString('en-GB', { maximumFractionDigits: 0 })}%`}
     </span>
   )
 }
@@ -356,7 +356,7 @@ function Coverage({ value }: { value: number | null }) {
   return (
     <span
       className="cp-cov"
-      title={low ? 'Under halvdelen af kampagnens forbrug ramte en vare i feedet, så ROAS og POAS beskriver kun en del af den.' : undefined}
+      title={low ? 'Less than half of the campaign\'s spend reached a product in the feed, so ROAS and POAS describe only part of it.' : undefined}
     >
       <span className="cp-cov-bar" aria-hidden="true">
         <i className={low ? 'low' : undefined} style={{ width: `${Math.round(value * 100)}%` }} />

@@ -93,11 +93,11 @@ export function ScopeProductPanel({ feedId, bucketId }: { feedId: string; bucket
   return (
     <div className="ff-panel" style={{ position: 'sticky', top: '12px', overflow: 'visible' }}>
       <div className="ff-panel-header" style={{ textTransform: 'none', letterSpacing: 0, fontSize: '12px', padding: '10px 14px' }}>
-        Eksempel på en vare
+        Example product
       </div>
       <div className="p-3.5 space-y-2.5">
         <p style={{ fontSize: '11px', color: 'var(--ink-muted)' }}>
-          De data, du kan filtrere på. Søg på en titel for at se en anden vare.
+          The data you can filter on. Search for a title to see another product.
         </p>
 
         <div ref={boxRef} style={{ position: 'relative' }}>
@@ -109,7 +109,7 @@ export function ScopeProductPanel({ feedId, bucketId }: { feedId: string; bucket
               setOpen(true)
             }}
             onFocus={() => setOpen(true)}
-            placeholder="Søg efter varer på titel eller producent…"
+            placeholder="Search products by title or vendor…"
             className="ff-input w-full"
           />
           {open && (searching || results.length > 0) && (
@@ -117,7 +117,7 @@ export function ScopeProductPanel({ feedId, bucketId }: { feedId: string; bucket
               className="ff-panel"
               style={{ position: 'absolute', zIndex: 50, top: 'calc(100% + 4px)', left: 0, right: 0, maxHeight: '260px', overflowY: 'auto', padding: '4px' }}
             >
-              {searching && <p style={{ fontSize: '11px', color: 'var(--ink-muted)', padding: '4px 6px' }}>Søger…</p>}
+              {searching && <p style={{ fontSize: '11px', color: 'var(--ink-muted)', padding: '4px 6px' }}>Searching…</p>}
               {results.map((p) => (
                 <button
                   key={p.product_ref}
@@ -148,13 +148,13 @@ export function ScopeProductPanel({ feedId, bucketId }: { feedId: string; bucket
               aria-hidden
               style={{ display: 'inline-block', width: '12px', height: '12px', border: '2px solid var(--hairline)', borderTopColor: 'var(--accent-ink)', borderRadius: '50%', animation: 'ff-spin 0.6s linear infinite' }}
             />{' '}
-            Henter…
+            Loading…
           </div>
         ) : detail ? (
           // Every row is STACKED — label on top (small, muted), value below — so the
           // two can never overlap and long values wrap cleanly, regardless of width.
           <dl className="space-y-2.5">
-            {[{ token: '__title__', label: 'Titel', value: detail.current_title || '—' }, ...detail.fields].map((f) => (
+            {[{ token: '__title__', label: 'Title', value: detail.current_title || '—' }, ...detail.fields].map((f) => (
               <div key={f.token}>
                 <dt style={{ fontSize: '10px', fontWeight: 500, textTransform: 'uppercase', letterSpacing: '0.04em', color: 'var(--ink-muted)' }}>
                   {f.label}
@@ -166,7 +166,7 @@ export function ScopeProductPanel({ feedId, bucketId }: { feedId: string; bucket
             ))}
           </dl>
         ) : (
-          <p style={{ fontSize: '11px', color: 'var(--ink-muted)' }}>Søg efter en vare for at se dens data.</p>
+          <p style={{ fontSize: '11px', color: 'var(--ink-muted)' }}>Search for a product to see its data.</p>
         )}
       </div>
     </div>

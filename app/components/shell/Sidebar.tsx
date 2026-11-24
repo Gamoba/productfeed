@@ -34,7 +34,7 @@ export function Sidebar({ shell, pathname }: { shell: Shell; pathname: string })
   const { level, project, feed, account } = shell
 
   return (
-    <aside className="shell-side" aria-label="Hovedmenu">
+    <aside className="shell-side" aria-label="Main menu">
       <Link href="/" className="shell-brand">
         <span className="shell-brand-mark">
           <Icon name="bolt" size={15} />
@@ -48,7 +48,7 @@ export function Sidebar({ shell, pathname }: { shell: Shell; pathname: string })
             <span className="shell-avatar shell-avatar-hi">{initials(account.name)}</span>
             <span className="shell-ctx-text">
               <b>{account.name}</b>
-              <small>Konto · {ROLE_LABEL[account.role]}</small>
+              <small>Account · {ROLE_LABEL[account.role]}</small>
             </span>
           </div>
         )
@@ -59,23 +59,23 @@ export function Sidebar({ shell, pathname }: { shell: Shell; pathname: string })
       {level.kind === 'shop' && (
         <Link href="/" className="shell-back">
           <Icon name="back" size={13} />
-          Alle shops
+          All shops
         </Link>
       )}
       {level.kind === 'feed' && (
         <>
           <Link href={project ? `/project/${project.id}` : '/'} className="shell-back">
             <Icon name="back" size={13} />
-            Tilbage til shop
+            Back to shop
           </Link>
           <Link href={`/feed/${level.feedId}`} className="shell-feedcard">
             <ChannelIcon channel={feed?.channel} />
             <span className="shell-ctx-text">
               <b>
                 {feed?.country && <span className="shell-flag-sm">{flagEmoji(feed.country)} </span>}
-                {feed ? channelOf(feed.channel).label : 'Indlæser feed'}
+                {feed ? channelOf(feed.channel).label : 'Loading feed'}
               </b>
-              <small>{feed ? `${feed.name} · du er inde på dette feed` : ''}</small>
+              <small>{feed ? `${feed.name} · you are in this feed` : ''}</small>
             </span>
           </Link>
         </>
@@ -153,7 +153,7 @@ function ShopSwitcher({ shell }: { shell: Shell }) {
 
   return (
     <Popover
-      label="Skift shop"
+      label="Switch shop"
       className="shell-shopsel-wrap"
       triggerClassName="shell-shopsel"
       trigger={
@@ -161,7 +161,7 @@ function ShopSwitcher({ shell }: { shell: Shell }) {
           <span className="shell-avatar shell-avatar-hi">{project ? initials(project.name) : ''}</span>
           <span className="shell-ctx-text">
             <small>Shop</small>
-            <b>{project?.name ?? 'Indlæser'}</b>
+            <b>{project?.name ?? 'Loading'}</b>
           </span>
           <Icon name="chevron-down" size={14} className="shell-muted" />
         </>
@@ -188,7 +188,7 @@ function ShopSwitcher({ shell }: { shell: Shell }) {
                 <span className="shell-ctx-text">
                   <b>{p.name}</b>
                   <small>
-                    {[p.shopUrl, n ? `${n} ${n === 1 ? 'feed' : 'feeds'}` : 'ingen feeds endnu']
+                    {[p.shopUrl, n ? `${n} ${n === 1 ? 'feed' : 'feeds'}` : 'no feeds yet']
                       .filter(Boolean)
                       .join(' · ')}
                   </small>
@@ -198,7 +198,7 @@ function ShopSwitcher({ shell }: { shell: Shell }) {
             )
           })}
           <Link href="/" className="shell-menu-item shell-menu-foot" onClick={close}>
-            Alle shops
+            All shops
           </Link>
         </>
       )}

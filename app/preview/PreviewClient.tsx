@@ -79,7 +79,7 @@ export function PreviewClient({
       if (!res.ok) throw new Error(j.error ?? `HTTP ${res.status}`)
       setGenerated({ at: j.generated_at ?? new Date().toISOString(), count: j.product_count ?? null })
     } catch (e) {
-      setGenError(e instanceof Error ? e.message : 'Feedet kunne ikke genereres')
+      setGenError(e instanceof Error ? e.message : 'The feed could not be generated')
     } finally {
       setGenerating(false)
     }
@@ -92,30 +92,30 @@ export function PreviewClient({
     <div className="pv">
       <div className="pv-head">
         <div>
-          <h1>Preview &amp; eksport</h1>
+          <h1>Preview &amp; export</h1>
           <p className="pv-lede">
-            Linket {target} henter feedet fra, vejen fra kilde til kanal, og hver vare, som den står i feedet.
+            The link {target} fetches the feed from, the path from source to channel, and each product as it stands in the feed.
           </p>
         </div>
         <div className="pv-actions">
           <a href={`/api/feed/generate/${feedId}`} target="_blank" rel="noopener noreferrer" className="wl-btn-secondary">
-            Åbn XML
+            Open XML
           </a>
           <button type="button" className="wl-btn-primary" onClick={() => void regenerate()} disabled={generating}>
-            {generating ? 'Genererer…' : 'Generér nu'}
+            {generating ? 'Generating…' : 'Generate now'}
           </button>
         </div>
       </div>
 
-      {genError && <p className="note warn">Feedet kunne ikke genereres: {genError}</p>}
+      {genError && <p className="note warn">The feed could not be generated: {genError}</p>}
 
       <section className="card">
-        <p className="pv-label">Link til feedet · brug det i {target}</p>
+        <p className="pv-label">Feed link · use it in {target}</p>
         <UrlBox feedId={feedId} />
         <p className="pv-muted pv-small">
           {generated.at
-            ? `Genereret ${formatWhen(generated.at)}${generated.count != null ? ` med ${formatNumber(generated.count)} varer` : ''}. Linket giver altid den seneste version.`
-            : 'Feedet er ikke genereret endnu. Linket bygger det første gang, det hentes.'}
+            ? `Generated ${formatWhen(generated.at)}${generated.count != null ? ` with ${formatNumber(generated.count)} products` : ''}. The link always gives the latest version.`
+            : 'The feed has not been generated yet. The link builds it the first time it is fetched.'}
         </p>
       </section>
 
@@ -124,12 +124,12 @@ export function PreviewClient({
       <ItemPreview data={data} upgrading={upgrading} />
 
       <div className="pv-step">
-        <span>Trin 5 af 5 i opsætningen af feedet</span>
+        <span>Step 5 of 5 in setting up the feed</span>
         <Link href={`/feed/${feedId}/google-ads/labels`} className="wl-btn-secondary">
-          Tilbage til Labels
+          Back to Labels
         </Link>
         <Link href={`/feed/${feedId}`} className="wl-btn-primary">
-          Færdig. Se feed status
+          Done. See feed status
         </Link>
       </div>
     </div>
@@ -160,7 +160,7 @@ function UrlBox({ feedId }: { feedId: string }) {
         {origin}/api/feed/generate/{feedId}
       </span>
       <button type="button" className="ff-btn-primary" onClick={() => void copy()}>
-        {copied ? '✓ Kopieret' : 'Kopiér link'}
+        {copied ? '✓ Copied' : 'Copy link'}
       </button>
     </div>
   )
@@ -189,57 +189,57 @@ function Pipeline({
   const stages: Stage[] = [
     {
       icon: 'box',
-      title: pipeline.source === 'feed_url' ? 'Hent fra feed-URL' : 'Hent fra Shopify',
-      detail: pipeline.lastSynced ? `Synket ${formatWhen(pipeline.lastSynced)}` : 'Aldrig synket',
+      title: pipeline.source === 'feed_url' ? 'Fetch from feed URL' : 'Fetch from Shopify',
+      detail: pipeline.lastSynced ? `Synced ${formatWhen(pipeline.lastSynced)}` : 'Never synced',
       bad: !pipeline.lastSynced,
       href: f('/products'),
     },
     {
       icon: 'filter',
-      title: 'Inkludér / ekskludér',
-      detail: `${formatNumber(data.totalProducts)} ${data.feedMode === 'variant' ? 'varer (før varianter)' : 'varer'} med`,
+      title: 'Include / exclude',
+      detail: `${formatNumber(data.totalProducts)} ${data.feedMode === 'variant' ? 'products (before variants)' : 'products'} included`,
       href: f('/filters'),
     },
     {
       icon: 'mapping',
       title: 'Mapping',
-      detail: `${data.googleFields.length} felter`,
+      detail: `${data.googleFields.length} fields`,
       bad: data.googleFields.length === 0,
       href: f('/mapping'),
     },
     {
       icon: 'titles',
       title: 'AI Titles',
-      detail: pipeline.optimizedTitles ? `${formatNumber(pipeline.optimizedTitles)} godkendte titler` : 'Ingen endnu',
+      detail: pipeline.optimizedTitles ? `${formatNumber(pipeline.optimizedTitles)} approved titles` : 'None yet',
       href: f('/optimize'),
     },
     {
       icon: 'tag',
       title: 'Labels',
       detail: pipeline.labels
-        ? `${pipeline.labelsComputed} af ${pipeline.labels} beregnet · ikke i feedet endnu`
-        : 'Ingen labels',
+        ? `${pipeline.labelsComputed} of ${pipeline.labels} calculated · not in the feed yet`
+        : 'No labels',
       href: f('/google-ads/labels'),
     },
     {
       icon: 'check',
-      title: 'Validering',
+      title: 'Validation',
       detail: !pipeline.validated
-        ? 'Ikke valideret'
+        ? 'Not validated'
         : pipeline.errors
-          ? `${formatNumber(pipeline.errors)} fejl`
+          ? `${formatNumber(pipeline.errors)} ${pipeline.errors === 1 ? 'error' : 'errors'}`
           : pipeline.warnings
-            ? `${formatNumber(pipeline.warnings)} ${pipeline.warnings === 1 ? 'advarsel' : 'advarsler'}`
-            : 'Ingen fejl',
+            ? `${formatNumber(pipeline.warnings)} ${pipeline.warnings === 1 ? 'warning' : 'warnings'}`
+            : 'No errors',
       bad: pipeline.errors > 0 || pipeline.warnings > 0,
       href: f(''),
     },
     {
       icon: 'feeds',
-      title: `Hentes af ${target}`,
+      title: `Fetched by ${target}`,
       detail: generated.at
-        ? `${channelLabel} · ${generated.count != null ? `${formatNumber(generated.count)} varer` : 'genereret'} ${formatWhen(generated.at)}`
-        : 'Ikke genereret endnu',
+        ? `${channelLabel} · ${generated.count != null ? `${formatNumber(generated.count)} products` : 'generated'} ${formatWhen(generated.at)}`
+        : 'Not generated yet',
       bad: !generated.at,
     },
   ]
@@ -247,8 +247,8 @@ function Pipeline({
   return (
     <section className="card">
       <div className="pv-card-h">
-        <h3>Fra kilde til kanal</h3>
-        <small>Hver vare går gennem trinene i denne rækkefølge. Klik på et trin for at rette det.</small>
+        <h3>From source to channel</h3>
+        <small>Each product goes through the steps in this order. Click a step to fix it.</small>
       </div>
       <ol className="pv-pipe">
         {stages.map((s, i) => {
@@ -294,7 +294,7 @@ function itemXml(row: PreviewRow, fields: string[]): string {
   for (const f of fields) {
     const v = row.fields[f]
     const tag = f.startsWith('custom:') ? f.slice('custom:'.length) : f
-    if (v === '__AI__') lines.push(`  <!-- g:${tag}: skrives af AI ved generering -->`)
+    if (v === '__AI__') lines.push(`  <!-- g:${tag}: written by AI at generation -->`)
     else if (v) lines.push(`  <g:${tag}>${xmlEscape(v)}</g:${tag}>`)
   }
   lines.push('</item>')
@@ -302,8 +302,8 @@ function itemXml(row: PreviewRow, fields: string[]): string {
 }
 
 function Value({ value }: { value: string | undefined }) {
-  if (value === '__AI__') return <span className="pill ai">Skrives af AI</span>
-  if (!value) return <span className="pv-muted">tom</span>
+  if (value === '__AI__') return <span className="pill ai">Written by AI</span>
+  if (!value) return <span className="pv-muted">empty</span>
   if (value.startsWith('http'))
     return (
       <a href={value} target="_blank" rel="noopener noreferrer" className="link pv-break">
@@ -333,19 +333,19 @@ function ItemPreview({ data, upgrading }: { data: PreviewData; upgrading: boolea
     <section className={`card flush${upgrading ? ' pv-upgrading' : ''}`}>
       <div className="pv-ip-h">
         <div className="pv-card-h">
-          <h3>Varerne i feedet</h3>
+          <h3>Products in the feed</h3>
           <small>
-            {formatNumber(rows.length)} {data.feedMode === 'variant' ? 'varianter' : 'varer'} vist
-            {data.totalProducts > rows.length ? ` af ${formatNumber(data.totalProducts)} varer i feedet` : ''} ·{' '}
-            {fields.length} felter
+            {formatNumber(rows.length)} {data.feedMode === 'variant' ? 'variants' : 'products'} shown
+            {data.totalProducts > rows.length ? ` of ${formatNumber(data.totalProducts)} products in the feed` : ''} ·{' '}
+            {fields.length} fields
           </small>
         </div>
-        <div className="pv-seg" role="tablist" aria-label="Visning">
+        <div className="pv-seg" role="tablist" aria-label="View">
           {(
             [
-              ['product', 'Én vare'],
+              ['product', 'One product'],
               ['xml', 'XML'],
-              ['field', 'Ét felt'],
+              ['field', 'One field'],
             ] as const
           ).map(([v, label]) => (
             <button key={v} type="button" role="tab" aria-selected={view === v} onClick={() => setView(v)}>
@@ -357,16 +357,16 @@ function ItemPreview({ data, upgrading }: { data: PreviewData; upgrading: boolea
 
       {unmappedRequired.length > 0 && (
         <p className="note warn pv-inset">
-          Påkrævede felter er ikke mappet: {unmappedRequired.join(', ')}.
+          Required fields are not mapped: {unmappedRequired.join(', ')}.
         </p>
       )}
 
       {rows.length === 0 ? (
-        <p className="pv-muted pv-pad">Ingen varer er med i feedet med de nuværende regler.</p>
+        <p className="pv-muted pv-pad">No products are in the feed with the current rules.</p>
       ) : view === 'field' ? (
         <div className="pv-pad">
           <label className="pv-fieldpick">
-            Felt
+            Field
             <select className="ff-select" value={activeField} onChange={(e) => setField(e.target.value)}>
               {fields.map((f) => (
                 <option key={f} value={f}>
@@ -375,14 +375,14 @@ function ItemPreview({ data, upgrading }: { data: PreviewData; upgrading: boolea
               ))}
             </select>
             <span className="pv-muted">
-              {formatNumber(rows.filter((r) => !r.fields[activeField]).length)} tomme af {formatNumber(rows.length)}
+              {formatNumber(rows.filter((r) => !r.fields[activeField]).length)} empty of {formatNumber(rows.length)}
             </span>
           </label>
           <table className="pv-table">
             <tbody>
               {rows.slice(0, 50).map((r) => (
                 <tr key={r.productId}>
-                  <td className="pv-t">{r.title || 'Uden titel'}</td>
+                  <td className="pv-t">{r.title || 'Untitled'}</td>
                   <td>
                     <Value value={r.fields[activeField]} />
                   </td>
@@ -400,8 +400,8 @@ function ItemPreview({ data, upgrading }: { data: PreviewData; upgrading: boolea
                 type="search"
                 value={search}
                 onChange={(e) => setSearch(e.target.value)}
-                placeholder="Søg vare"
-                aria-label="Søg vare"
+                placeholder="Search products"
+                aria-label="Search products"
               />
             </label>
             <ul>
@@ -412,17 +412,17 @@ function ItemPreview({ data, upgrading }: { data: PreviewData; upgrading: boolea
                     aria-pressed={selected?.productId === r.productId}
                     onClick={() => setSelectedId(r.productId)}
                   >
-                    <b>{r.title || 'Uden titel'}</b>
+                    <b>{r.title || 'Untitled'}</b>
                     <small>{r.productId}</small>
                   </button>
                 </li>
               ))}
-              {filtered.length === 0 && <li className="pv-muted pv-small pv-none">Ingen varer matcher.</li>}
+              {filtered.length === 0 && <li className="pv-muted pv-small pv-none">No products match.</li>}
             </ul>
           </div>
           <div className="pv-detail">
             {!selected ? (
-              <p className="pv-muted">Vælg en vare til venstre.</p>
+              <p className="pv-muted">Choose a product on the left.</p>
             ) : view === 'xml' ? (
               <pre className="pv-code">{itemXml(selected, fields)}</pre>
             ) : (
@@ -434,9 +434,9 @@ function ItemPreview({ data, upgrading }: { data: PreviewData; upgrading: boolea
                     <div key={f} className={missing ? 'missing' : undefined}>
                       <dt>
                         {f.replace(/^custom:/, '')}
-                        {REQUIRED.has(f) && <span className="pv-req" title="Påkrævet"> *</span>}
+                        {REQUIRED.has(f) && <span className="pv-req" title="Required"> *</span>}
                       </dt>
-                      <dd>{missing ? <span className="neg">Mangler</span> : <Value value={v} />}</dd>
+                      <dd>{missing ? <span className="neg">Missing</span> : <Value value={v} />}</dd>
                     </div>
                   )
                 })}

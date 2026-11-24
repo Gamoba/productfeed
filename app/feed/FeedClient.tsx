@@ -91,7 +91,7 @@ export function FeedClient({
         setValidation({ status: info.validation_status, issues: info.validation_errors, productsChecked: 0 })
       }
     } catch (err) {
-      setGenerateError(err instanceof Error ? err.message : 'Feedet kunne ikke genereres')
+      setGenerateError(err instanceof Error ? err.message : 'The feed could not be generated')
     } finally {
       setIsGenerating(false)
     }
@@ -121,27 +121,27 @@ export function FeedClient({
         <div>
           <h1>Overview</h1>
           <p className="ov-lede">
-            {where ? `${where}. ` : ''}Status på feedet, det der skal rettes, og linket du kobler op med.
+            {where ? `${where}. ` : ''}The feed’s status, what needs fixing, and the link you connect with.
           </p>
         </div>
         <div className="ov-actions">
           <button type="button" className="wl-btn-secondary" onClick={runValidation} disabled={isValidating || !generated}>
             <Icon name="check" size={14} />
-            {isValidating ? 'Validerer…' : 'Kør validering'}
+            {isValidating ? 'Validating…' : 'Run validation'}
           </button>
           <button type="button" className="wl-btn-primary" onClick={() => void regenerate()} disabled={isGenerating}>
-            {isGenerating ? 'Genererer…' : 'Generér feed'}
+            {isGenerating ? 'Generating…' : 'Generate feed'}
           </button>
         </div>
       </div>
 
-      {generateError && <p className="note warn">Feedet kunne ikke genereres: {generateError}</p>}
-      {validationError && <p className="note warn">Valideringen fejlede: {validationError}</p>}
+      {generateError && <p className="note warn">The feed could not be generated: {generateError}</p>}
+      {validationError && <p className="note warn">Validation failed: {validationError}</p>}
       {staleDays != null && (
         <p className="note warn">
-          Varerne er {staleDays} dage gamle, fordi synkroniseringen fejler. Se fejlen under{' '}
-          <Link href={`/feed/${feedId}/settings`}>Settings</Link>. En afvist Shopify-nøgle skiftes på
-          shoppens Feeds-side.
+          The products are {staleDays} days old because the sync is failing. See the error under{' '}
+          <Link href={`/feed/${feedId}/settings`}>Settings</Link>. A rejected Shopify key is replaced on
+          the shop’s Feeds page.
         </p>
       )}
 
@@ -150,57 +150,57 @@ export function FeedClient({
           <div>
             <h3>Feed status</h3>
             <small>
-              {generated ? `Genereret ${formatWhen(cacheInfo?.generated_at)}` : 'Ikke genereret endnu'}
-              {lastSynced ? ` · varer synket ${formatWhen(lastSynced)}` : ''}
+              {generated ? `Generated ${formatWhen(cacheInfo?.generated_at)}` : 'Not generated yet'}
+              {lastSynced ? ` · products synced ${formatWhen(lastSynced)}` : ''}
             </small>
           </div>
           {!generated ? (
-            <span className="st st-off">Ikke genereret</span>
+            <span className="st st-off">Not generated</span>
           ) : errorCount > 0 ? (
-            <span className="neg">Feedet har fejl</span>
+            <span className="neg">The feed has errors</span>
           ) : (
-            <span className="st">Feedet kører</span>
+            <span className="st">The feed is running</span>
           )}
         </div>
 
         <div className="ov-stats">
-          <Stat label="Varer i feed">
+          <Stat label="Products in feed">
             <strong className="num">{generated && cacheInfo?.product_count != null ? formatNumber(cacheInfo.product_count) : '—'}</strong>
             <small>
-              {counts ? `af ${formatNumber(counts.included + counts.excluded)} i shoppen` : generated ? '' : 'Generér feedet først'}
+              {counts ? `of ${formatNumber(counts.included + counts.excluded)} in the shop` : generated ? '' : 'Generate the feed first'}
             </small>
           </Stat>
-          <Stat label="Felter mappet">
+          <Stat label="Fields mapped">
             <strong className="num">
               {mappingCount}
               <sub> / {totalFields}</sub>
             </strong>
             {missingRequired.length > 0 ? (
               <small className="neg">
-                {missingRequired.length} påkrævede {missingRequired.length === 1 ? 'felt' : 'felter'} mangler
+                {missingRequired.length} required {missingRequired.length === 1 ? 'field' : 'fields'} missing
               </small>
             ) : (
-              <small>Alle påkrævede felter er mappet</small>
+              <small>All required fields are mapped</small>
             )}
           </Stat>
-          <Stat label="Ekskluderet">
+          <Stat label="Excluded">
             <strong className="num">{counts ? formatNumber(counts.excluded) : '…'}</strong>
-            <small>af reglerne under Inkludér / ekskludér</small>
+            <small>by the rules under Include / exclude</small>
           </Stat>
-          <Stat label="Advarsler">
+          <Stat label="Warnings">
             <strong className={`num${warningCount > 0 ? ' neg-num' : ''}`}>{validation ? formatNumber(warningCount) : '—'}</strong>
             {errorCount > 0 ? (
               <small className="neg">
-                {formatNumber(errorCount)} fejl
+                {formatNumber(errorCount)} {errorCount === 1 ? 'error' : 'errors'}
               </small>
             ) : (
-              <small>{validation ? '0 fejl' : 'Ikke valideret endnu'}</small>
+              <small>{validation ? '0 errors' : 'Not validated yet'}</small>
             )}
           </Stat>
         </div>
 
         <div className="ov-link">
-          <p className="ov-label">Link til feedet · brug det i Merchant Center eller der, hvor feedet skal hentes</p>
+          <p className="ov-label">Feed link · use it in Merchant Center or wherever the feed is fetched from</p>
           <FeedUrlBox feedId={feedId} />
         </div>
       </section>
@@ -254,7 +254,7 @@ function FeedUrlBox({ feedId }: { feedId: string }) {
       <Icon name="feeds" size={16} />
       <span className="ov-url-text">{url}</span>
       <button type="button" className="ff-btn-primary" onClick={() => void copy()}>
-        {copied ? '✓ Kopieret' : 'Kopiér link'}
+        {copied ? '✓ Copied' : 'Copy link'}
       </button>
     </div>
   )
@@ -298,18 +298,18 @@ function IssuesCard({
     items.push({
       key: 'not-generated',
       icon: 'feeds',
-      title: 'Feedet er ikke genereret endnu',
-      detail: 'Kanalerne kan først hente feedet, når det er genereret.',
-      action: { label: isGenerating ? 'Genererer…' : 'Generér feed', onClick: onGenerate, busy: isGenerating },
+      title: 'The feed has not been generated yet',
+      detail: 'Channels can only fetch the feed once it has been generated.',
+      action: { label: isGenerating ? 'Generating…' : 'Generate feed', onClick: onGenerate, busy: isGenerating },
     })
   }
   if (mappingCount < NEW_FEED_THRESHOLD && missingRequired.length === 0) {
     items.push({
       key: 'few-mappings',
       icon: 'mapping',
-      title: `Kun ${mappingCount} felter er mappet`,
-      detail: 'Map flere felter, så kanalen får de oplysninger, den bruger til at vise varerne.',
-      action: { label: 'Åbn mapping', href: mappingHref },
+      title: `Only ${mappingCount} fields are mapped`,
+      detail: 'Map more fields so the channel gets the information it uses to show the products.',
+      action: { label: 'Open mapping', href: mappingHref },
     })
   }
   // Validator issues. Unmapped required fields come from the validator too
@@ -320,39 +320,39 @@ function IssuesCard({
     items.push({
       key: `missing-${f}`,
       icon: 'mapping',
-      title: `${f} er ikke mappet`,
-      detail: 'Feltet er påkrævet. Uden det afviser kanalen varerne.',
-      action: { label: 'Åbn mapping', href: mappingHref },
+      title: `${f} is not mapped`,
+      detail: 'The field is required. Without it the channel rejects the products.',
+      action: { label: 'Open mapping', href: mappingHref },
     })
   }
   for (const [n, issue] of (validation?.issues ?? []).entries()) {
-    const affected = issue.affectedCount > 0 ? `${formatNumber(issue.affectedCount)} varer` : null
-    const example = issue.exampleValue !== undefined ? `fx «${issue.exampleValue || 'tom'}»` : null
+    const affected = issue.affectedCount > 0 ? `${formatNumber(issue.affectedCount)} ${issue.affectedCount === 1 ? 'product' : 'products'}` : null
+    const example = issue.exampleValue !== undefined ? `e.g. “${issue.exampleValue || 'empty'}”` : null
     items.push({
       key: `v-${n}`,
       icon: issue.type === 'error' ? 'drop' : 'tag',
       title: `${issue.field}: ${issue.message}`,
-      detail: [issue.type === 'error' ? 'Fejl' : 'Advarsel', affected, example].filter(Boolean).join(' · '),
-      action: { label: 'Åbn mapping', href: mappingHref },
+      detail: [issue.type === 'error' ? 'Error' : 'Warning', affected, example].filter(Boolean).join(' · '),
+      action: { label: 'Open mapping', href: mappingHref },
     })
   }
 
   const total = errorCount + warningCount
   const summary =
     errorCount > 0
-      ? `${formatNumber(errorCount)} fejl${warningCount ? ` · ${formatNumber(warningCount)} advarsler` : ''}`
+      ? `${formatNumber(errorCount)} ${errorCount === 1 ? 'error' : 'errors'}${warningCount ? ` · ${formatNumber(warningCount)} ${warningCount === 1 ? 'warning' : 'warnings'}` : ''}`
       : warningCount > 0
-        ? `${formatNumber(warningCount)} ${warningCount === 1 ? 'advarsel' : 'advarsler'}`
+        ? `${formatNumber(warningCount)} ${warningCount === 1 ? 'warning' : 'warnings'}`
         : null
 
   return (
     <section className="card ov-issues">
       <div className="ov-card-h">
         <div>
-          <h3>Fejl og advarsler</h3>
-          <small>{items.length ? 'Klik for at rette' : 'Her står det, der skal rettes i feedet'}</small>
+          <h3>Errors and warnings</h3>
+          <small>{items.length ? 'Click to fix' : 'Anything that needs fixing in the feed shows up here'}</small>
         </div>
-        {summary ? <span className="neg">{summary}</span> : total === 0 && validation ? <span className="st">Ingen fejl</span> : null}
+        {summary ? <span className="neg">{summary}</span> : total === 0 && validation ? <span className="st">No errors</span> : null}
       </div>
 
       {items.length > 0 && (
@@ -368,11 +368,11 @@ function IssuesCard({
       <p className="ov-checked">
         {!validation
           ? generated
-            ? 'Feedet er ikke valideret endnu. Kør validering for at tjekke det.'
-            : 'Valideringen kører, når feedet genereres.'
+            ? 'The feed has not been validated yet. Run validation to check it.'
+            : 'Validation runs when the feed is generated.'
           : validation.productsChecked > 0
-            ? `Tjekket på ${formatNumber(validation.productsChecked)} varer.`
-            : 'Viser senest gemte validering. Kør validering igen for et friskt resultat.'}
+            ? `Checked on ${formatNumber(validation.productsChecked)} products.`
+            : 'Showing the last saved validation. Run validation again for a fresh result.'}
       </p>
     </section>
   )
@@ -511,7 +511,7 @@ function SyncStatusBanner({ feedId }: { feedId: string }) {
   if (phase === 'syncing') {
     return (
       <div className="note ov-banner" role="status">
-        <b>Henter varer fra kilden…</b> Du kan godt gå videre. Synkroniseringen kører i baggrunden.
+        <b>Fetching products from the source…</b> You can carry on. The sync runs in the background.
         {syncStatus?.status === 'running' && (
           <div className="ov-banner-bar">
             <SyncProgressBar status={syncStatus} variant="inline" />
@@ -523,14 +523,14 @@ function SyncStatusBanner({ feedId }: { feedId: string }) {
   if (phase === 'sync-done') {
     return (
       <p className="note ov-banner ov-banner-ok" role="status">
-        Varerne er hentet{syncedCount != null ? `: ${formatNumber(syncedCount)}` : ''}.
+        Products fetched{syncedCount != null ? `: ${formatNumber(syncedCount)}` : ''}.
       </p>
     )
   }
   if (phase === 'generating') {
     return (
       <p className="note ov-banner" role="status">
-        <b>Genererer feedet…</b> Bygger XML ud fra de hentede varer.
+        <b>Generating the feed…</b> Building XML from the fetched products.
       </p>
     )
   }
@@ -538,7 +538,7 @@ function SyncStatusBanner({ feedId }: { feedId: string }) {
     const n = feedItemCount ?? syncedCount ?? 0
     return (
       <p className="note ov-banner ov-banner-ok" role="status">
-        Feedet er klar med {formatNumber(n)} {n === 1 ? 'vare' : 'varer'}.
+        The feed is ready with {formatNumber(n)} {n === 1 ? 'product' : 'products'}.
       </p>
     )
   }

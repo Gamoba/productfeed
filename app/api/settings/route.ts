@@ -85,7 +85,7 @@ export async function POST(req: Request) {
   const was = prev ? `${prev.selected_country ?? '?'} · ${prev.selected_locale ?? '?'}` : null
   const now = `${body.selected_country ?? 'US'} · ${body.selected_locale ?? 'en'}`
   if (was !== now) {
-    await logActivity(db, { user, feedId: body.feed_id, area: 'Settings', action: 'Marked og sprog ændret', before: was, after: now })
+    await logActivity(db, { user, feedId: body.feed_id, area: 'Settings', action: 'Market and language changed', before: was, after: now })
   }
   return NextResponse.json({ ok: true })
 }

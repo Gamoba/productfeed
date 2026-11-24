@@ -26,7 +26,7 @@ export type RateLimitKind = keyof typeof RATE_LIMITS
 // (and carries HTTP 429 for API routes).
 export class RateLimitError extends AppError {
   constructor(kind: RateLimitKind) {
-    super('For mange forespørgsler — vent lidt og prøv igen.', 429)
+    super('Too many requests. Wait a moment and try again.', 429)
     this.name = 'RateLimitError'
     this.kind = kind
   }

@@ -42,8 +42,8 @@ export async function POST(req: Request) {
       await logActivity(adminDb(), {
         user,
         feedId,
-        area: 'Synkronisering',
-        action: 'Synkronisering fejlede',
+        area: 'Sync',
+        action: 'Sync failed',
         after: clientMessage(err, 'POST /api/shopify/sync'),
       })
       throw err
@@ -51,9 +51,9 @@ export async function POST(req: Request) {
     await logActivity(adminDb(), {
       user,
       feedId,
-      area: 'Synkronisering',
-      action: 'Varer synkroniseret',
-      after: `${formatNumber(result.synced)} varer`,
+      area: 'Sync',
+      action: 'Products synced',
+      after: `${formatNumber(result.synced)} products`,
     })
     return Response.json(result)
   } catch (err) {

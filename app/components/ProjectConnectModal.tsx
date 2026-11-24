@@ -130,7 +130,7 @@ export function ProjectConnectModal({
         // modal open so the user reads it here, where they still have the
         // Shopify app settings in mind — not later, from a feed full of IDs.
         setWarning(
-          'Forbundet, men nøglen mangler adgang: ' +
+          'Connected, but the token is missing access: ' +
             result.missingScopes.map((s) => `${s.handle}: ${s.impact}`).join(' ')
         )
         onConnected(result)
@@ -139,7 +139,7 @@ export function ProjectConnectModal({
         onClose()
       }
     } catch (err) {
-      setError(err instanceof Error ? err.message : 'Kunne ikke forbinde')
+      setError(err instanceof Error ? err.message : 'Could not connect')
     } finally {
       setSubmitting(false)
     }
@@ -147,26 +147,26 @@ export function ProjectConnectModal({
 
   const title =
     mode === 'connect'
-      ? 'Forbind varekilde'
+      ? 'Connect product source'
       : source === 'feed_url'
         ? rotating
-          ? 'Skift feed-URL'
-          : 'Skift til feed-URL'
+          ? 'Change feed URL'
+          : 'Switch to feed URL'
         : rotating
-          ? 'Skift Shopify-nøgle'
-          : 'Skift til Shopify'
+          ? 'Change Shopify token'
+          : 'Switch to Shopify'
 
   const submitLabel = submitting
     ? source === 'feed_url'
-      ? 'Tjekker feedet…'
-      : 'Tjekker nøglen…'
+      ? 'Checking the feed…'
+      : 'Checking the token…'
     : source === 'feed_url'
       ? rotating
-        ? 'Gem feed-URL'
-        : 'Forbind feed'
+        ? 'Save feed URL'
+        : 'Connect feed'
       : rotating
-        ? 'Skift nøgle'
-        : 'Forbind'
+        ? 'Change token'
+        : 'Connect'
 
   // Portalled to <body> so no ancestor (a table row, an animated page) can clip
   // or contain the fixed backdrop.
@@ -183,11 +183,11 @@ export function ProjectConnectModal({
         <h2>{title}</h2>
         <form onSubmit={submit} className="pc-body">
           <div className="pc-field">
-            <span>Kilde</span>
-            <div role="radiogroup" aria-label="Varekilde" className="pc-seg">
+            <span>Source</span>
+            <div role="radiogroup" aria-label="Product source" className="pc-seg">
               <SourceOption
                 label="Shopify"
-                hint="Admin API-nøgle"
+                hint="Admin API token"
                 selected={source === 'shopify'}
                 onSelect={() => {
                   setSource('shopify')
@@ -195,8 +195,8 @@ export function ProjectConnectModal({
                 }}
               />
               <SourceOption
-                label="Feed-URL"
-                hint="Google Shopping-XML"
+                label="Feed URL"
+                hint="Google Shopping XML"
                 selected={source === 'feed_url'}
                 onSelect={() => {
                   setSource('feed_url')
@@ -209,28 +209,28 @@ export function ProjectConnectModal({
           {source === 'shopify' ? (
             <>
               <p className="pc-muted">
-                Vi tjekker nøglen mod Shopify, før den gemmes. Den gemmes krypteret og vises aldrig igen. FeedFlow
-                læser kun og ændrer aldrig noget i shoppen.
+                We check the token against Shopify before saving it. It is stored encrypted and never shown again. FeedFlow
+                only reads and never changes anything in the shop.
               </p>
               <label className="pc-field">
-                <span>Shop-URL</span>
+                <span>Shop URL</span>
                 <input
                   type="text"
                   value={shopUrl}
                   onChange={(e) => setShopUrl(e.target.value)}
-                  placeholder="din-shop.myshopify.com"
+                  placeholder="your-shop.myshopify.com"
                   autoFocus={mode === 'connect'}
                   className="pc-inp"
                   required
                 />
               </label>
               <label className="pc-field">
-                <span>{rotating ? 'Ny nøgle' : 'Admin API-nøgle'}</span>
+                <span>{rotating ? 'New token' : 'Admin API token'}</span>
                 <input
                   type="password"
                   value={token}
                   onChange={(e) => setToken(e.target.value)}
-                  placeholder={rotating ? 'Indsæt den nye nøgle' : 'shpat_…'}
+                  placeholder={rotating ? 'Paste the new token' : 'shpat_…'}
                   autoComplete="off"
                   autoFocus={rotating}
                   className="pc-inp"
@@ -241,47 +241,47 @@ export function ProjectConnectModal({
           ) : (
             <>
               <p className="pc-muted">
-                Et offentligt varefeed, fx det Google Shopping-feed en Umbraco-side eksporterer. Vi henter det én gang
-                for at tjekke, at det har varer, før det gemmes, og igen ved hver synkronisering.
+                A public product feed, e.g. the Google Shopping feed an Umbraco site exports. We fetch it once to check
+                it has products before saving, and again at every sync.
               </p>
               <label className="pc-field">
-                <span>Feed-URL</span>
+                <span>Feed URL</span>
                 <input
                   type="url"
                   value={feedUrl}
                   onChange={(e) => setFeedUrl(e.target.value)}
-                  placeholder="https://eksempel.dk/google-feed.xml"
+                  placeholder="https://example.com/google-feed.xml"
                   autoFocus
                   className="pc-inp"
                   required
                 />
               </label>
               <div className="pc-field">
-                <span>Login (valgfrit)</span>
+                <span>Login (optional)</span>
                 <div className="pc-two">
                   <input
                     type="text"
                     value={authUser}
                     onChange={(e) => setAuthUser(e.target.value)}
-                    placeholder="Brugernavn"
+                    placeholder="Username"
                     autoComplete="off"
-                    aria-label="Brugernavn til feedet"
+                    aria-label="Username for the feed"
                     className="pc-inp"
                   />
                   <input
                     type="password"
                     value={authPass}
                     onChange={(e) => setAuthPass(e.target.value)}
-                    placeholder="Adgangskode"
+                    placeholder="Password"
                     autoComplete="new-password"
-                    aria-label="Adgangskode til feedet"
+                    aria-label="Password for the feed"
                     className="pc-inp"
                   />
                 </div>
                 <small>
                   {rotating
-                    ? 'Kun til feeds bag et login (HTTP Basic Auth). Lad felterne stå tomme for at beholde det gemte login på samme domæne.'
-                    : 'Kun til feeds bag et login (HTTP Basic Auth). Gemmes krypteret og vises aldrig igen.'}
+                    ? 'Only for feeds behind a login (HTTP Basic Auth). Leave the fields empty to keep the saved login on the same domain.'
+                    : 'Only for feeds behind a login (HTTP Basic Auth). Stored encrypted and never shown again.'}
                 </small>
               </div>
             </>
@@ -290,8 +290,8 @@ export function ProjectConnectModal({
           {switching && (
             <p className="note warn">
               {source === 'feed_url'
-                ? 'Det erstatter Shopify-forbindelsen, og den gemte nøgle slettes. Feedsene henter varer fra feed-URL’en ved næste synkronisering.'
-                : 'Det erstatter feed-URL’en. Feedsene henter varer fra Shopify ved næste synkronisering.'}
+                ? 'This replaces the Shopify connection, and the saved token is deleted. The feeds fetch products from the feed URL at the next sync.'
+                : 'This replaces the feed URL. The feeds fetch products from Shopify at the next sync.'}
             </p>
           )}
           {error && <p className="note warn">{error}</p>}
@@ -299,7 +299,7 @@ export function ProjectConnectModal({
 
           <div className="pc-foot">
             <button type="button" onClick={onClose} className="wl-btn-secondary" disabled={submitting}>
-              {warning ? 'Luk' : 'Annullér'}
+              {warning ? 'Close' : 'Cancel'}
             </button>
             <button type="submit" disabled={!canSubmit} className="wl-btn-primary">
               {submitLabel}

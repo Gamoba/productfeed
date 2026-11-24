@@ -642,7 +642,7 @@ async function recomputeOne(
   const { entities, unmatchedCost } = await build(level, windowDays)
 
   if (unmatchedCost > 0) {
-    const spend = unmatchedCost.toLocaleString('da-DK', { maximumFractionDigits: 0 })
+    const spend = unmatchedCost.toLocaleString('en-GB', { maximumFractionDigits: 0 })
     warnings.push(
       `${spend} ${settings.currency_code ?? ''}`.trim() +
         ' of ad spend is on item IDs that could not be matched to a product, and is not labelled.'

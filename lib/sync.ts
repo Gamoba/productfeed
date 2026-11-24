@@ -308,7 +308,7 @@ async function fetchShopifyAndTrackConnection(
 // Fetches a feed-URL project's products from its public product feed.
 async function fetchFeedUrlSource(project: ProjectSourceRow, projectId: string): Promise<SourceFetch> {
   if (!project.feed_url) {
-    throw new AppError('Projektet har ingen feed-URL konfigureret endnu')
+    throw new AppError('The shop has no feed URL set up yet')
   }
   const result = await fetchFeedUrlProducts(project.feed_url, decryptFeedAuth(project))
   console.log(
@@ -367,7 +367,7 @@ async function runSync(
     .maybeSingle()
   const projectId = (feedRow as { project_id: string | null } | null)?.project_id ?? null
   if (!projectId) {
-    throw new Error(`Feed ${feedId} har intet project_id — kan ikke synkronisere`)
+    throw new Error(`Feed ${feedId} has no project_id, cannot sync`)
   }
 
   const { data: project, error: projectErr } = await db
@@ -376,7 +376,7 @@ async function runSync(
     .eq('id', projectId)
     .maybeSingle<ProjectSourceRow>()
   if (projectErr) throw new Error(`Project lookup failed: ${projectErr.message}`)
-  if (!project) throw new AppError('Projektet blev ikke fundet', 404)
+  if (!project) throw new AppError('The shop was not found', 404)
 
   let source: SourceFetch
   if (project.source_type === 'feed_url') {

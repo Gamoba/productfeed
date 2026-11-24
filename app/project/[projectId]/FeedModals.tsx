@@ -71,29 +71,29 @@ export function RenameFeedDialog({
     try {
       onSaved(await patchFeed(feed.id, { name: trimmed }))
     } catch (e2) {
-      setErr(e2 instanceof Error ? e2.message : 'Navnet kunne ikke gemmes')
+      setErr(e2 instanceof Error ? e2.message : 'Could not save the name')
       setBusy(false)
     }
   }
 
   return (
-    <Dialog title="Omdøb feed" onClose={onClose}>
+    <Dialog title="Rename feed" onClose={onClose}>
       <form onSubmit={submit} className="dlg-body">
         <label className="dlg-field">
-          <span>Navn</span>
+          <span>Name</span>
           <input value={name} onChange={(e) => setName(e.target.value)} autoFocus className="ff-input" required />
         </label>
         {err && <p className="neg dlg-err">{err}</p>}
         <div className="dlg-foot">
           <button type="button" onClick={onClose} className="ff-btn-secondary">
-            Annullér
+            Cancel
           </button>
           <button
             type="submit"
             disabled={busy || !name.trim() || name.trim() === feed.name}
             className="ff-btn-primary"
           >
-            {busy ? 'Gemmer…' : 'Gem'}
+            {busy ? 'Saving…' : 'Save'}
           </button>
         </div>
       </form>
@@ -122,16 +122,16 @@ export function DescribeFeedDialog({
     try {
       onSaved(await patchFeed(feed.id, { description }))
     } catch (e2) {
-      setErr(e2 instanceof Error ? e2.message : 'Beskrivelsen kunne ikke gemmes')
+      setErr(e2 instanceof Error ? e2.message : 'Could not save the description')
       setBusy(false)
     }
   }
 
   return (
-    <Dialog title="Rediger beskrivelse" onClose={onClose}>
+    <Dialog title="Edit description" onClose={onClose}>
       <form onSubmit={submit} className="dlg-body">
         <label className="dlg-field">
-          <span>Beskrivelse</span>
+          <span>Description</span>
           <textarea
             value={description}
             onChange={(e) => setDescription(e.target.value)}
@@ -144,10 +144,10 @@ export function DescribeFeedDialog({
         {err && <p className="neg dlg-err">{err}</p>}
         <div className="dlg-foot">
           <button type="button" onClick={onClose} className="ff-btn-secondary">
-            Annullér
+            Cancel
           </button>
           <button type="submit" disabled={busy || !dirty} className="ff-btn-primary">
-            {busy ? 'Gemmer…' : 'Gem'}
+            {busy ? 'Saving…' : 'Save'}
           </button>
         </div>
       </form>
@@ -178,25 +178,25 @@ export function DeleteFeedDialog({
       }
       onDeleted()
     } catch (e2) {
-      setErr(e2 instanceof Error ? e2.message : 'Feedet kunne ikke slettes')
+      setErr(e2 instanceof Error ? e2.message : 'Could not delete the feed')
       setBusy(false)
     }
   }
 
   return (
-    <Dialog title="Slet feed" onClose={onClose}>
+    <Dialog title="Delete feed" onClose={onClose}>
       <div className="dlg-body">
         <p>
-          Vil du slette <b>{feed.name}</b>? Mapping, regler og varer i feedet slettes også, og det kan
-          ikke fortrydes. Shoppen påvirkes ikke.
+          Delete <b>{feed.name}</b>? The feed&apos;s mapping, rules and products are deleted too, and this cannot
+          be undone. The shop is not affected.
         </p>
         {err && <p className="neg dlg-err">{err}</p>}
         <div className="dlg-foot">
           <button type="button" onClick={onClose} className="ff-btn-secondary" disabled={busy}>
-            Annullér
+            Cancel
           </button>
           <button type="button" onClick={submit} disabled={busy} className="ff-btn-primary dlg-danger">
-            {busy ? 'Sletter…' : 'Slet feed'}
+            {busy ? 'Deleting…' : 'Delete feed'}
           </button>
         </div>
       </div>

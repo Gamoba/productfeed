@@ -64,9 +64,9 @@ export default async function WastedSpendPage({
     return (
       <Shell days={days} hrefFor={hrefFor}>
         <Empty
-          title="Feedet er ikke koblet til Google Ads"
-          body="Rapporten læser det forbrug, Google har knyttet til varerne, så feedet skal have en forbindelse og mindst én synkronisering først."
-          action={{ href: `/feed/${feedId}/google-ads`, label: 'Gå til Performance' }}
+          title="This feed is not connected to Google Ads"
+          body="The report reads the spend Google has attributed to your products, so the feed needs a connection and at least one sync first."
+          action={{ href: `/feed/${feedId}/google-ads`, label: 'Go to Performance' }}
         />
       </Shell>
     )
@@ -78,9 +78,9 @@ export default async function WastedSpendPage({
     return (
       <Shell days={days} hrefFor={hrefFor}>
         <Empty
-          title="Der er ikke valgt en konverteringshandling for omsætning"
-          body="Spild er forbrug uden omsætning, så rapporten skal vide, hvilken handling der tæller som omsætning. Uden den ser alle varer ud, som om de intet har solgt."
-          action={{ href: `/feed/${feedId}/google-ads?days=${days}`, label: 'Vælg den på Performance' }}
+          title="No revenue conversion action is selected"
+          body="Wasted spend is spend without revenue, so the report needs to know which action counts as revenue. Without it, every product looks as if it has sold nothing."
+          action={{ href: `/feed/${feedId}/google-ads?days=${days}`, label: 'Choose it on Performance' }}
         />
       </Shell>
     )
@@ -133,57 +133,57 @@ export default async function WastedSpendPage({
   const suggestions: { text: string; href: string; cta: string }[] = []
   if (unavailable.length > 0)
     suggestions.push({
-      text: `${formatInt(unavailable.length)} ${unavailable.length === 1 ? 'vare er' : 'varer er'} udsolgt, men får stadig budget. En regel om lager under 1 tager dem ud af feedet.`,
+      text: `${formatInt(unavailable.length)} ${unavailable.length === 1 ? 'product is' : 'products are'} out of stock but still get budget. A rule for stock below 1 takes them out of the feed.`,
       href: f('/filters'),
-      cta: 'Åbn Inkludér / ekskludér',
+      cta: 'Open Include / exclude',
     })
   if (wasted.length > 0)
     suggestions.push({
-      text: `${formatInt(wasted.length)} ${wasted.length === 1 ? 'vare har' : 'varer har'} brugt ${formatMoney(wastedCost, currency)} uden omsætning. Læg dem i en bucket med lavere bud.`,
+      text: `${formatInt(wasted.length)} ${wasted.length === 1 ? 'product has' : 'products have'} spent ${formatMoney(wastedCost, currency)} without revenue. Put them in a bucket with lower bids.`,
       href: f('/google-ads/labels'),
-      cta: 'Åbn Labels',
+      cta: 'Open Labels',
     })
   if (losing.length > 0)
     suggestions.push({
-      text: `${formatInt(losing.length)} ${losing.length === 1 ? 'vare sælger' : 'varer sælger'} med tab efter annoncer. Se margin og break-even, før du skruer ned.`,
+      text: `${formatInt(losing.length)} ${losing.length === 1 ? 'product sells' : 'products sell'} at a loss after ad spend. Check margin and break-even before you cut back.`,
       href: f(`/google-ads?days=${days}`),
-      cta: 'Åbn Performance',
+      cta: 'Open Performance',
     })
 
   return (
     <Shell days={days} hrefFor={hrefFor}>
       <p className="ws-def">
-        Omsætning = {actions.roas.map((a) => `«${a}»`).join(' + ')}
-        {actions.poas.length > 0 && <> · Bruttoprofit = {actions.poas.map((a) => `«${a}»`).join(' + ')}</>}
+        Revenue = {actions.roas.map((a) => `«${a}»`).join(' + ')}
+        {actions.poas.length > 0 && <> · Gross profit = {actions.poas.map((a) => `«${a}»`).join(' + ')}</>}
         {' · '}
         <Link href={`/feed/${feedId}/google-ads?days=${days}`} className="link">
-          Skift på Performance
+          Change on Performance
         </Link>
       </p>
 
       <div className="ws-top">
         <section className="card ws-stats">
           <div>
-            <span>Forbrug uden omsætning</span>
+            <span>Spend without revenue</span>
             <strong className={`num${wastedCost > 0 ? ' neg' : ''}`}>{formatMoney(wastedCost, currency)}</strong>
-            <small>de sidste {days} dage</small>
+            <small>last {days} days</small>
           </div>
           <div>
-            <span>Varer</span>
+            <span>Products</span>
             <strong className="num">{formatInt(wasted.length)}</strong>
-            <small>med forbrug og ingen omsætning</small>
+            <small>with spend and no revenue</small>
           </div>
           <div>
-            <span>Andel af forbruget</span>
+            <span>Share of spend</span>
             <strong className="num">{totals.cost > 0 ? formatPercent(wastedCost / totals.cost) : '—'}</strong>
-            <small>af {formatMoney(totals.cost, currency)} i alt</small>
+            <small>of {formatMoney(totals.cost, currency)} in total</small>
           </div>
         </section>
 
         <section className="card hi ws-hi">
-          <span className="ws-hi-l">Forslag</span>
+          <span className="ws-hi-l">Suggestions</span>
           {suggestions.length === 0 ? (
-            <p>Intet at gøre lige nu. Alle varer med forbrug har givet omsætning, og ingen er udsolgt.</p>
+            <p>Nothing to do right now. Every product with spend has generated revenue, and none is out of stock.</p>
           ) : (
             <ul>
               {suggestions.map((s) => (
@@ -213,31 +213,31 @@ export default async function WastedSpendPage({
         stockAgeDays={stockAgeDays(stock.syncedAt)}
         wastedEmpty={
           <Empty
-            title="Alle varer med forbrug har givet omsætning"
-            body={`Intet har de sidste ${days} dage brugt budget uden at give noget tilbage. Vælg en længere periode for at se længere tilbage.`}
+            title="Every product with spend has generated revenue"
+            body={`Nothing has spent budget without return in the last ${days} days. Choose a longer period to look further back.`}
           />
         }
       />
 
       <div className="ws-notes">
         <p>
-          {from} → {to}. Kun forbrug, Google kan knytte til en vare, er med. Performance Max-forbrug på placeringer uden
-          vare tælles ikke, så tallene er lavere end kontoens samlede forbrug.
+          {from} → {to}. Only spend Google can attribute to a product is included. Performance Max spend on placements
+          without a product is not counted, so the figures are lower than the account&apos;s total spend.
         </p>
         {actions.poas.length === 0 && (
           <p>
-            Der er ikke valgt en handling for bruttoprofit, så varer der sælger med tab kan ikke findes, kun dem der
-            slet ikke har givet omsætning.
+            No gross profit action is selected, so products selling at a loss cannot be found — only those that have
+            generated no revenue at all.
           </p>
         )}
         {unmatchedCost > 0 && (
           <p className="neg">
-            {formatMoney(unmatchedCost, currency)} kunne ikke knyttes til en vare i feedet og er ikke med i tallene.
+            {formatMoney(unmatchedCost, currency)} could not be matched to a product in the feed and is not included in the figures.
           </p>
         )}
         <p>
-          En vare uden konverteringer er ikke nødvendigvis en fejl. Den kan være ny, sæsonbetonet eller vise sig på
-          søgninger, der konverterer et andet sted.
+          A product without conversions is not necessarily a mistake. It may be new, seasonal, or show up on
+          searches that convert elsewhere.
         </p>
       </div>
     </Shell>
@@ -261,10 +261,10 @@ function Shell({
         <div>
           <h1>Wasted spend</h1>
           <p className="ws-lede">
-            Forbrug på varer, der ikke giver noget tilbage. En liste at se på, ikke at handle blindt på.
+            Spend on products that give nothing back. A list to look at, not to act on blindly.
           </p>
         </div>
-        <div className="ws-seg" role="group" aria-label="Periode">
+        <div className="ws-seg" role="group" aria-label="Period">
           {WINDOWS.map((w) => (
             <Link key={w} href={hrefFor(w)} aria-current={w === days ? 'true' : undefined}>
               {w}d

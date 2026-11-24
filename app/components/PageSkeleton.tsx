@@ -15,7 +15,7 @@ export type SkeletonBlock =
 
 export function PageSkeleton({ blocks, actions = 1 }: { blocks: SkeletonBlock[]; actions?: number }) {
   return (
-    <div style={{ display: 'flex', flexDirection: 'column', gap: 14 }} aria-busy="true" aria-label="Indlæser">
+    <div style={{ display: 'flex', flexDirection: 'column', gap: 14 }} aria-busy="true" aria-label="Loading">
       <div style={{ display: 'flex', alignItems: 'flex-end', justifyContent: 'space-between', gap: 16, padding: '2px 2px 0' }}>
         <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
           <Bar w={200} h={26} />

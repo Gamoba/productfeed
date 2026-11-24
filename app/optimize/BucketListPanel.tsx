@@ -58,7 +58,7 @@ export function BucketListPanel({
     setError(null)
     if (
       !confirm(
-        `Slet gruppen “${bname}”? Varerne fjernes fra gruppen, men titler den allerede har lavet, bliver i feedet.`
+        `Delete the bucket “${bname}”? Its products are removed from the bucket, but titles it has already made stay in the feed.`
       )
     )
       return
@@ -77,12 +77,12 @@ export function BucketListPanel({
         {list.map((b) => {
           const state =
             b.memberCount === 0
-              ? { cls: 'st st-off', label: 'Tom' }
+              ? { cls: 'st st-off', label: 'Empty' }
               : b.needsReview > 0
-                ? { cls: 'neg', label: `${formatNumber(b.needsReview)} venter på godkendelse` }
+                ? { cls: 'neg', label: `${formatNumber(b.needsReview)} awaiting review` }
                 : b.aiGenerated + b.humanEdited > 0
-                  ? { cls: 'st', label: 'Optimeret' }
-                  : { cls: 'st st-off', label: 'Kladde' }
+                  ? { cls: 'st', label: 'Optimised' }
+                  : { cls: 'st st-off', label: 'Draft' }
           return (
             <div key={b.id} className="ts-bcard">
               {editingId === b.id ? (
@@ -97,13 +97,13 @@ export function BucketListPanel({
                     }}
                     autoFocus
                     className="ff-input"
-                    aria-label="Nyt navn"
+                    aria-label="New name"
                   />
                   <button onClick={() => handleRename(b.id)} disabled={isPending} className="ff-btn-primary">
-                    Gem
+                    Save
                   </button>
                   <button onClick={() => setEditingId(null)} className="ff-btn-ghost">
-                    Annullér
+                    Cancel
                   </button>
                 </div>
               ) : (
@@ -113,7 +113,7 @@ export function BucketListPanel({
                       {b.name}
                     </Link>
                     <Popover
-                      label={`Flere handlinger for ${b.name}`}
+                      label={`More actions for ${b.name}`}
                       align="right"
                       triggerClassName="ts-more"
                       trigger={<span aria-hidden="true">⋯</span>}
@@ -130,7 +130,7 @@ export function BucketListPanel({
                               setEditName(b.name)
                             }}
                           >
-                            Omdøb
+                            Rename
                           </button>
                           <button
                             type="button"
@@ -141,7 +141,7 @@ export function BucketListPanel({
                               handleDelete(b.id, b.name)
                             }}
                           >
-                            Slet gruppe
+                            Delete bucket
                           </button>
                         </>
                       )}
@@ -149,11 +149,11 @@ export function BucketListPanel({
                   </div>
                   <p className="ts-bmeta">
                     {b.memberCount === 0
-                      ? 'Ingen varer endnu. Vælg dem under Scope.'
+                      ? 'No products yet. Choose them under Scope.'
                       : [
-                          `${formatNumber(b.memberCount)} ${b.memberCount === 1 ? 'vare' : 'varer'}`,
-                          b.aiGenerated > 0 ? `${formatNumber(b.aiGenerated)} optimeret` : null,
-                          b.humanEdited > 0 ? `${formatNumber(b.humanEdited)} rettet i hånden` : null,
+                          `${formatNumber(b.memberCount)} ${b.memberCount === 1 ? 'product' : 'products'}`,
+                          b.aiGenerated > 0 ? `${formatNumber(b.aiGenerated)} optimised` : null,
+                          b.humanEdited > 0 ? `${formatNumber(b.humanEdited)} edited by hand` : null,
                         ]
                           .filter(Boolean)
                           .join(' · ')}
@@ -161,7 +161,7 @@ export function BucketListPanel({
                   <div className="ts-bfoot">
                     <span className={state.cls}>{state.label}</span>
                     <Link href={`/feed/${feedId}/optimize/${b.id}`} className="link">
-                      Åbn
+                      Open
                     </Link>
                   </div>
                 </>
@@ -173,7 +173,7 @@ export function BucketListPanel({
         {adding ? (
           <div className="ts-bcard ts-new">
             <label className="ts-field">
-              <span>Navn på gruppen</span>
+              <span>Bucket name</span>
               <input
                 type="text"
                 value={name}
@@ -182,31 +182,31 @@ export function BucketListPanel({
                   if (e.key === 'Enter') handleCreate()
                   if (e.key === 'Escape') setAdding(false)
                 }}
-                placeholder="fx Årgangsvine"
+                placeholder="e.g. Vintage wines"
                 className="ff-input"
                 autoFocus
               />
             </label>
             <div className="ts-bfoot">
               <button onClick={() => setAdding(false)} className="ff-btn-ghost">
-                Annullér
+                Cancel
               </button>
               <button onClick={handleCreate} disabled={isPending || !name.trim()} className="ff-btn-primary">
-                {isPending ? 'Opretter…' : 'Opret og vælg varer'}
+                {isPending ? 'Creating…' : 'Create and choose products'}
               </button>
             </div>
           </div>
         ) : (
           <button type="button" className="ts-bcard ts-add" onClick={() => setAdding(true)}>
-            + Ny gruppe
+            + New bucket
           </button>
         )}
       </div>
 
       {list.length === 0 && !adding && (
         <p className="ts-hint">
-          Ingen grupper endnu. En gruppe samler varer, der skal have titler i samme stil, fx årgangsvine eller
-          gaveæsker.
+          No buckets yet. A bucket groups products that should have titles in the same style, e.g. vintage wines
+          or gift boxes.
         </p>
       )}
     </div>

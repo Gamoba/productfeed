@@ -24,7 +24,7 @@ export const metadata: Metadata = {
 
 export default function RootLayout({ children }: { children: React.ReactNode }) {
   return (
-    <html lang="da" className={`${outfit.variable} ${jetbrains.variable} h-full antialiased`}>
+    <html lang="en" className={`${outfit.variable} ${jetbrains.variable} h-full antialiased`}>
       <body className="h-full" suppressHydrationWarning>
         <AppShell>{children}</AppShell>
       </body>

@@ -15,9 +15,9 @@ import './FeedWizardModal.css'
 // country rules in lib/channels.ts), step 3 the name and structure.
 
 const STEPS = [
-  { id: 1, label: 'Marked' },
-  { id: 2, label: 'Kanal' },
-  { id: 3, label: 'Navn' },
+  { id: 1, label: 'Market' },
+  { id: 2, label: 'Channel' },
+  { id: 3, label: 'Name' },
 ] as const
 
 export function FeedWizardModal({
@@ -77,7 +77,7 @@ export function FeedWizardModal({
         if (preset) selectMarket(preset)
       })
       .catch((e: unknown) => {
-        if (!cancelled) setMarketsError(e instanceof Error ? e.message : 'Markederne kunne ikke hentes')
+        if (!cancelled) setMarketsError(e instanceof Error ? e.message : 'The markets could not be fetched')
       })
       .finally(() => {
         if (!cancelled) setLoadingMarkets(false)
@@ -176,7 +176,7 @@ export function FeedWizardModal({
 
       router.push(`/feed/${feedId}?syncing=1`)
     } catch (e) {
-      setError(e instanceof Error ? e.message : 'Feedet kunne ikke oprettes')
+      setError(e instanceof Error ? e.message : 'The feed could not be created')
       setSubmitting(false)
     }
   }
@@ -192,10 +192,10 @@ export function FeedWizardModal({
       >
         <div className="fw-head">
           <div>
-            <h2 id="fw-title">Nyt feed</h2>
-            <p>Et feed er én kanal i ét marked.</p>
+            <h2 id="fw-title">New feed</h2>
+            <p>A feed is one channel in one market.</p>
           </div>
-          <button type="button" onClick={onClose} aria-label="Luk" className="fw-x">
+          <button type="button" onClick={onClose} aria-label="Close" className="fw-x">
             ×
           </button>
         </div>
@@ -244,7 +244,7 @@ export function FeedWizardModal({
         </div>
 
         <div className="fw-foot">
-          <span className="fw-foot-note">Trin {step} af 3</span>
+          <span className="fw-foot-note">Step {step} of 3</span>
           {step > 1 && (
             <button
               type="button"
@@ -252,11 +252,11 @@ export function FeedWizardModal({
               disabled={submitting}
               className="ff-btn-secondary"
             >
-              Tilbage
+              Back
             </button>
           )}
           <button type="button" onClick={next} disabled={!canNext || submitting} className="ff-btn-primary">
-            {submitting ? 'Opretter…' : isLast ? 'Opret feed' : 'Videre'}
+            {submitting ? 'Creating…' : isLast ? 'Create feed' : 'Next'}
           </button>
         </div>
       </div>
@@ -294,24 +294,24 @@ function StepMarket({
   return (
     <div className="fw-stack">
       <p className="fw-lede">
-        Hvilket marked er feedet til? Markedet styrer land, sprog, valuta og priser.
+        Which market is the feed for? The market sets country, language, currency and prices.
       </p>
 
-      {loading && <p className="fw-muted">Henter markeder fra Shopify…</p>}
+      {loading && <p className="fw-muted">Fetching markets from Shopify…</p>}
       {error && <p className="note warn">{error}</p>}
 
       {!loading && !error && fromFeedUrl && (
         <p className="note">
-          Shoppen henter varer fra en feed-URL. Sprog og valuta kommer fra det feed, så der er
-          intet marked at vælge. Gå videre til kanal.
+          The shop fetches products from a feed URL. Language and currency come from that feed, so there is
+          no market to choose. Continue to channel.
         </p>
       )}
       {!loading && !error && !fromFeedUrl && markets.length === 0 && (
-        <p className="note">Shoppen har ingen markeder. Du kan stadig oprette feedet.</p>
+        <p className="note">The shop has no markets. You can still create the feed.</p>
       )}
 
       {markets.length > 0 && (
-        <div className="fw-options" role="radiogroup" aria-label="Marked">
+        <div className="fw-options" role="radiogroup" aria-label="Market">
           {markets.map((m) => {
             const locales = [...(m.defaultLocale ? [m.defaultLocale] : []), ...m.alternateLocales]
             const selected = marketId === m.id
@@ -336,8 +336,8 @@ function StepMarket({
                       .join(' · ')}
                   </small>
                 </span>
-                {m.type === 'PRIMARY' && <span className="pill">Primært</span>}
-                {m.status !== 'ACTIVE' && <span className="pill">Kladde</span>}
+                {m.type === 'PRIMARY' && <span className="pill">Primary</span>}
+                {m.status !== 'ACTIVE' && <span className="pill">Draft</span>}
               </button>
             )
           })}
@@ -347,17 +347,17 @@ function StepMarket({
       {selectedMarket && availableLocales.length > 0 && (
         <div className="fw-row">
           <label className="fw-field">
-            <span>Sprog</span>
+            <span>Language</span>
             <select value={locale} onChange={(e) => onLocale(e.target.value)} className="ff-select">
               {availableLocales.map((l) => (
                 <option key={l.locale} value={l.locale}>
-                  {l.name} ({l.locale}){l.primary ? ', standard' : ''}
+                  {l.name} ({l.locale}){l.primary ? ', default' : ''}
                 </option>
               ))}
             </select>
           </label>
           <div className="fw-field">
-            <span>Valuta</span>
+            <span>Currency</span>
             <p className="fw-static">
               {currency}
               {selectedMarket.currencyName ? ` · ${selectedMarket.currencyName}` : ''}
@@ -383,9 +383,9 @@ function StepChannel({
   return (
     <div className="fw-stack">
       <p className="fw-lede">
-        Hvor skal feedet bruges?{country ? ` Viser hvad der kan bruges i ${country}.` : ''}
+        Where will the feed be used?{country ? ` Showing what can be used in ${country}.` : ''}
       </p>
-      <div className="fw-options" role="radiogroup" aria-label="Kanal">
+      <div className="fw-options" role="radiogroup" aria-label="Channel">
         {CHANNEL_IDS.map((id) => {
           const c = CHANNELS[id]
           const avail = channelAvailability(id, country)
@@ -434,7 +434,7 @@ function StepName({
   return (
     <div className="fw-stack">
       <label className="fw-field">
-        <span>Navn</span>
+        <span>Name</span>
         <input
           type="text"
           value={name}
@@ -445,7 +445,7 @@ function StepName({
         />
       </label>
       <label className="fw-field">
-        <span>Beskrivelse (valgfri)</span>
+        <span>Description (optional)</span>
         <textarea
           value={description}
           onChange={(e) => onDescription(e.target.value)}
@@ -455,8 +455,8 @@ function StepName({
         />
       </label>
       <div className="fw-field">
-        <span>Opbygning</span>
-        <div className="fw-options fw-options-2" role="radiogroup" aria-label="Opbygning">
+        <span>Structure</span>
+        <div className="fw-options fw-options-2" role="radiogroup" aria-label="Structure">
           <button
             type="button"
             role="radio"
@@ -465,8 +465,8 @@ function StepName({
             onClick={() => onMode('product')}
           >
             <span className="fw-option-main">
-              <b>Pr. vare</b>
-              <small>Én linje pr. vare. Bruger den første variants data.</small>
+              <b>Per product</b>
+              <small>One line per product. Uses the first variant’s data.</small>
             </span>
           </button>
           <button
@@ -477,13 +477,13 @@ function StepName({
             onClick={() => onMode('variant')}
           >
             <span className="fw-option-main">
-              <b>Pr. variant</b>
-              <small>Én linje pr. variant, samlet med item_group_id.</small>
+              <b>Per variant</b>
+              <small>One line per variant, grouped with item_group_id.</small>
             </span>
           </button>
         </div>
       </div>
-      <p className="fw-muted">Kanalen ligger fast. Navn, marked og opbygning kan ændres bagefter.</p>
+      <p className="fw-muted">The channel is fixed. Name, market and structure can be changed afterwards.</p>
     </div>
   )
 }

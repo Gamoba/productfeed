@@ -98,7 +98,7 @@ export function ShopFeedsClient({
           .catch(() => {})
       })
       .catch((e: unknown) => {
-        if (!cancelled) setLoadError(e instanceof Error ? e.message : 'Feeds kunne ikke hentes')
+        if (!cancelled) setLoadError(e instanceof Error ? e.message : 'Could not load feeds')
       })
     return () => {
       cancelled = true
@@ -167,22 +167,22 @@ export function ShopFeedsClient({
         <div>
           <h1>Feeds</h1>
           <p className="sf-lede">
-            Alle shoppens feeds på én liste, samlet pr. marked. Klik på et feed for at arbejde med netop
-            det feed.
+            All the shop&apos;s feeds in one list, grouped by market. Click a feed to work on that
+            feed.
           </p>
         </div>
         <div className="sf-actions">
           <button type="button" className="wl-btn-secondary" onClick={() => setConnectOpen(true)}>
-            {connected ? 'Skift kilde' : 'Forbind kilde'}
+            {connected ? 'Change source' : 'Connect source'}
           </button>
           <button
             type="button"
             className="wl-btn-primary"
             disabled={!canCreate}
-            title={canCreate ? undefined : 'Forbind en kilde først'}
+            title={canCreate ? undefined : 'Connect a source first'}
             onClick={() => setWizardMarket('')}
           >
-            + Nyt feed
+            + New feed
           </button>
         </div>
       </div>
@@ -191,25 +191,25 @@ export function ShopFeedsClient({
           shop can update until a new token is pasted. */}
       {status === 'error' && !isFeedUrl && (
         <p className="note warn">
-          <b>Shopify afviste adgangsnøglen.</b> Ingen af shoppens feeds kan synkronisere, før den er
-          skiftet. Appen er nok afinstalleret, eller nøglen er roteret i Shopify Admin. Lav en ny
-          læse-nøgle der, og indsæt den under Skift kilde.
+          <b>Shopify rejected the access token.</b> None of the shop&apos;s feeds can sync until it is
+          replaced. The app has probably been uninstalled, or the token rotated in Shopify Admin. Create a new
+          read-only token there and paste it under Change source.
         </p>
       )}
       {!connected && status !== 'error' && (
         <p className="note">
-          Forbind shoppen til en kilde, før du opretter feeds: en Shopify-butik med en læse-nøgle eller
-          en offentlig produktfeed-URL.
+          Connect the shop to a source before you create feeds: a Shopify store with a read-only token or
+          a public product feed URL.
         </p>
       )}
       {connected && isFeedUrl && productCount !== null && (
-        <p className="note">Feed-URL&apos;en er tjekket: {formatNumber(productCount)} varer fundet.</p>
+        <p className="note">Feed URL checked: {formatNumber(productCount)} products found.</p>
       )}
       {connected &&
         !isFeedUrl &&
         missing.map((s) => (
           <p key={s.handle} className={s.required ? 'note warn' : 'note'}>
-            Shopify-nøglen mangler adgangen <b>{s.handle}</b>. {s.impact}
+            The Shopify token is missing the <b>{s.handle}</b> scope. {s.impact}
           </p>
         ))}
 
@@ -220,32 +220,32 @@ export function ShopFeedsClient({
             <small>
               {[
                 sourceLabel,
-                isFeedUrl ? 'Feed-URL' : connected ? 'Shopify Markets' : null,
-                lastVerifiedAt ? `kontrolleret ${formatWhen(lastVerifiedAt)}` : null,
+                isFeedUrl ? 'Feed URL' : connected ? 'Shopify Markets' : null,
+                lastVerifiedAt ? `checked ${formatWhen(lastVerifiedAt)}` : null,
               ]
                 .filter(Boolean)
-                .join(' · ') || 'Ingen kilde endnu'}
+                .join(' · ') || 'No source yet'}
             </small>
           </div>
           {status === 'connected' ? (
-            <span className="st">Kilde OK</span>
+            <span className="st">Source OK</span>
           ) : status === 'error' ? (
-            <span className="neg">Kilde fejler</span>
+            <span className="neg">Source failing</span>
           ) : (
-            <span className="pill warn">Ikke forbundet</span>
+            <span className="pill warn">Not connected</span>
           )}
         </div>
 
         {loadError ? (
           <p className="sf-empty neg">{loadError}</p>
         ) : feeds === null ? (
-          <p className="sf-empty">Henter feeds…</p>
+          <p className="sf-empty">Loading feeds…</p>
         ) : groups.length === 0 ? (
           <div className="sf-empty">
-            <p>Shoppen har ingen feeds endnu.</p>
+            <p>This shop has no feeds yet.</p>
             {canCreate && (
               <button type="button" className="wl-btn-primary" onClick={() => setWizardMarket('')}>
-                Opret første feed
+                Create first feed
               </button>
             )}
           </div>
@@ -256,11 +256,11 @@ export function ShopFeedsClient({
                 <tr>
                   <th>Feed</th>
                   <th>Status</th>
-                  <th className="r">Varer i feed</th>
-                  <th className="r">Ekskluderet</th>
-                  <th className="r">Synket</th>
-                  <th className="r">Genereret</th>
-                  <th aria-label="Handlinger" />
+                  <th className="r">Products in feed</th>
+                  <th className="r">Excluded</th>
+                  <th className="r">Synced</th>
+                  <th className="r">Generated</th>
+                  <th aria-label="Actions" />
                 </tr>
               </thead>
               {groups.map((g) => (
@@ -276,7 +276,7 @@ export function ShopFeedsClient({
                     <td className="r">
                       {canCreate && (
                         <button type="button" className="sf-add" onClick={() => setWizardMarket(g.marketId ?? '')}>
-                          + Nyt feed
+                          + New feed
                         </button>
                       )}
                     </td>
@@ -284,7 +284,7 @@ export function ShopFeedsClient({
                   {g.feeds.length === 0 ? (
                     <tr>
                       <td colSpan={7} className="sf-none">
-                        Ingen feeds i {g.title} endnu.
+                        No feeds in {g.title} yet.
                       </td>
                     </tr>
                   ) : (
@@ -298,8 +298,8 @@ export function ShopFeedsClient({
       </section>
       {feeds && feeds.length > 0 && (
         <p className="sf-foot">
-          Ekskluderet er varer, som reglerne under Inkludér / ekskludér tager ud. Synket er sidste
-          hentning fra kilden.
+          Excluded are products removed by the rules under Include / exclude. Synced is the last
+          fetch from the source.
         </p>
       )}
 
@@ -351,7 +351,7 @@ function groupFeeds(feeds: FeedRow[], markets: ShopifyMarket[] | null): Group[] 
         meta: marketMeta(
           m.defaultLocale?.locale,
           m.currency,
-          single ? undefined : `${m.countryCodes.length} lande`
+          single ? undefined : `${m.countryCodes.length} countries`
         ),
         marketId: m.id,
         feeds: inMarket,
@@ -372,7 +372,7 @@ function groupByCountry(feeds: FeedRow[], prefix: string): Group[] {
   }
   return [...by.entries()].map(([country, list]) => ({
     key: `${prefix}:${country}`,
-    title: country ? countryName(country) : 'Uden marked',
+    title: country ? countryName(country) : 'No market',
     country: country || null,
     meta: marketMeta(list[0].market?.locale, list[0].market?.currency),
     marketId: list[0].market?.marketId ?? null,
@@ -383,18 +383,18 @@ function groupByCountry(feeds: FeedRow[], prefix: string): Group[] {
 // ── One feed row ────────────────────────────────────────────────────────────
 
 function FeedStatus({ feed }: { feed: FeedRow }) {
-  if (staleSyncDays(feed.lastSynced) != null) return <span className="neg">Synk fejler</span>
-  if (!feed.feedGenerated) return <span className="st st-off">Ikke genereret</span>
+  if (staleSyncDays(feed.lastSynced) != null) return <span className="neg">Sync failing</span>
+  if (!feed.feedGenerated) return <span className="st st-off">Not generated</span>
   const issues = feed.validationErrors ?? []
   if (feed.validationStatus === 'errors') {
     const n = issues.filter((i) => i.type === 'error').length
-    return <span className="neg">{n ? `${formatNumber(n)} fejl` : 'Fejl'}</span>
+    return <span className="neg">{n ? `${formatNumber(n)} ${n === 1 ? 'error' : 'errors'}` : 'Errors'}</span>
   }
   if (feed.validationStatus === 'warnings') {
     const n = issues.filter((i) => i.type === 'warning').length
-    return <span className="neg">{n ? `${formatNumber(n)} ${n === 1 ? 'advarsel' : 'advarsler'}` : 'Advarsler'}</span>
+    return <span className="neg">{n ? `${formatNumber(n)} ${n === 1 ? 'warning' : 'warnings'}` : 'Warnings'}</span>
   }
-  return <span className="st">Klar</span>
+  return <span className="st">Ready</span>
 }
 
 function FeedTableRow({
@@ -460,16 +460,16 @@ function FeedTableRow({
           formatNumber(feed.excludedCount)
         )}
       </td>
-      <td className={`r${stale != null ? ' neg' : ''}`} title={stale != null ? `${stale} dage gammel` : undefined}>
-        {feed.lastSynced ? formatWhen(feed.lastSynced) : <span className="sf-muted">aldrig</span>}
+      <td className={`r${stale != null ? ' neg' : ''}`} title={stale != null ? `${stale} days old` : undefined}>
+        {feed.lastSynced ? formatWhen(feed.lastSynced) : <span className="sf-muted">never</span>}
       </td>
       <td className="r">{feed.feedGenerated ? formatWhen(feed.feedGenerated) : <span className="sf-muted">—</span>}</td>
       <td className="r sf-act" onClick={stop} onKeyDown={stop}>
         <Link href={href} className="link">
-          Åbn feed
+          Open feed
         </Link>
         <Popover
-          label={`Flere handlinger for ${feed.name}`}
+          label={`More actions for ${feed.name}`}
           align="right"
           triggerClassName="sf-more"
           trigger={<span aria-hidden="true">⋯</span>}
@@ -477,21 +477,21 @@ function FeedTableRow({
           {(close) => (
             <>
               <button type="button" role="menuitem" className="shell-menu-item" onClick={() => { void copyLink(); close() }}>
-                Kopiér feed-link
+                Copy feed link
               </button>
               <button type="button" role="menuitem" className="shell-menu-item" onClick={() => { close(); setDialog('rename') }}>
-                Omdøb
+                Rename
               </button>
               <button type="button" role="menuitem" className="shell-menu-item" onClick={() => { close(); setDialog('describe') }}>
-                Rediger beskrivelse
+                Edit description
               </button>
               <button type="button" role="menuitem" className="shell-menu-item neg" onClick={() => { close(); setDialog('delete') }}>
-                Slet feed
+                Delete feed
               </button>
             </>
           )}
         </Popover>
-        {copied && <span className="sf-copied" role="status">✓ Kopieret</span>}
+        {copied && <span className="sf-copied" role="status">✓ Copied</span>}
         {dialog === 'rename' && (
           <RenameFeedDialog feed={feed} onClose={() => setDialog(null)} onSaved={(u) => { onPatched(u); setDialog(null) }} />
         )}

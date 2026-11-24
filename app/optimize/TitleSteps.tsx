@@ -9,10 +9,10 @@ import Link from 'next/link'
 export type TitleStep = 'buckets' | 'scope' | 'examples' | 'run'
 
 export const TITLE_STEPS: { id: TitleStep; label: string; sub: string }[] = [
-  { id: 'buckets', label: 'Buckets', sub: 'Vælg gruppe' },
-  { id: 'scope', label: 'Scope', sub: 'Vælg varer' },
-  { id: 'examples', label: 'Teach', sub: 'Lær AI’en stilen' },
-  { id: 'run', label: 'Run', sub: 'Kør og godkend' },
+  { id: 'buckets', label: 'Buckets', sub: 'Choose bucket' },
+  { id: 'scope', label: 'Scope', sub: 'Choose products' },
+  { id: 'examples', label: 'Teach', sub: 'Teach the AI the style' },
+  { id: 'run', label: 'Run', sub: 'Run and approve' },
 ]
 
 export function TitleSteps({
@@ -27,7 +27,7 @@ export function TitleSteps({
 }) {
   const at = TITLE_STEPS.findIndex((s) => s.id === current)
   return (
-    <ol className="ts-steps" aria-label="Trin i AI Titles">
+    <ol className="ts-steps" aria-label="Steps in AI Titles">
       {TITLE_STEPS.map((s, i) => {
         const state = i < at ? 'done' : i === at ? 'current' : 'todo'
         const body = (

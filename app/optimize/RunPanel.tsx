@@ -22,7 +22,7 @@ function OutcomeList({ title, outcomes }: { title: string; outcomes: Optimizatio
         className="ff-panel-header"
         style={{ textTransform: 'none', letterSpacing: 0, fontSize: '12px', padding: '10px 14px' }}
       >
-        {title} ({outcomes.length.toLocaleString('da-DK')})
+        {title} ({outcomes.length.toLocaleString('en-GB')})
       </div>
       <div className="divide-y" style={{ borderColor: 'var(--color-border-tertiary)' }}>
         {outcomes.map((o) => {
@@ -33,14 +33,14 @@ function OutcomeList({ title, outcomes }: { title: string; outcomes: Optimizatio
                 <span
                   className={`mt-0.5 shrink-0 ff-badge ${ok ? 'ff-badge-success' : 'ff-badge-warning'}`}
                 >
-                  {ok ? 'OK' : 'TJEK'}
+                  {ok ? 'OK' : 'CHECK'}
                 </span>
                 <div className="min-w-0 flex-1">
                   <div style={{ fontSize: '12px', color: 'var(--color-text-primary)', fontWeight: 500 }}>
-                    {o.proposed_title ?? '(intet svar)'}
+                    {o.proposed_title ?? '(no response)'}
                   </div>
                   <div className="mt-0.5 truncate" style={{ fontSize: '10px', color: 'var(--color-text-tertiary)' }}>
-                    før: {o.original_title}
+                    before: {o.original_title}
                   </div>
                   {!ok && o.validation.issues.length > 0 && (
                     <div className="mt-1" style={{ fontSize: '10px', color: 'var(--color-badge-warning-text)' }}>
@@ -182,26 +182,26 @@ export function RunPanel({ feedId }: { feedId: string }) {
       {/* Method */}
       <div className="ff-panel">
         <div className="ff-panel-header" style={{ textTransform: 'none', letterSpacing: 0, fontSize: '12px', padding: '10px 14px' }}>
-          Metode
+          Method
         </div>
         <div className="p-3.5 flex gap-2.5">
-          {methodBtn('auto', 'Automatisk', 'Gennemprøvet opbygning uden regler. Kræver ingen opsætning.')}
-          {methodBtn('rule_based', 'Regelbaseret', 'Bruger dine regler for egenskaber pr. varetype.')}
+          {methodBtn('auto', 'Automatic', 'Proven structure without rules. Needs no setup.')}
+          {methodBtn('rule_based', 'Rule-based', 'Uses your attribute rules per product type.')}
         </div>
       </div>
 
       {/* Preview (dry run) */}
       <div className="ff-panel">
         <div className="ff-panel-header" style={{ textTransform: 'none', letterSpacing: 0, fontSize: '12px', padding: '10px 14px' }}>
-          Test uden at gemme
+          Test without saving
         </div>
         <div className="p-3.5 space-y-2">
           <p style={{ fontSize: '11px', color: 'var(--color-text-tertiary)' }}>
-            Generér titler for et lille udsnit, og se hvad AI’en laver. Intet bliver gemt, så du kan justere
-            indstillingerne og teste igen. Virker også, før du har tilføjet eksempler.
+            Generate titles for a small sample and see what the AI makes. Nothing is saved, so you can adjust
+            the settings and test again. Also works before you have added examples.
           </p>
           <div className="flex items-center gap-2">
-            <label className="ff-label" style={{ margin: 0 }}>Antal varer</label>
+            <label className="ff-label" style={{ margin: 0 }}>Number of products</label>
             <input
               type="number"
               min={1}
@@ -211,36 +211,36 @@ export function RunPanel({ feedId }: { feedId: string }) {
               className="ff-input w-20"
             />
             <button onClick={handlePreview} disabled={previewing} className="ff-btn-secondary">
-              {previewing ? 'Genererer…' : 'Test'}
+              {previewing ? 'Generating…' : 'Test'}
             </button>
           </div>
         </div>
       </div>
 
-      <OutcomeList title="Testresultater" outcomes={previewResults} />
+      <OutcomeList title="Test results" outcomes={previewResults} />
 
       {/* Run (persist) */}
       <div className="ff-panel">
         <div className="ff-panel-header" style={{ textTransform: 'none', letterSpacing: 0, fontSize: '12px', padding: '10px 14px' }}>
-          Kør og gem
+          Run and save
         </div>
         <div className="p-3.5 space-y-3">
           {loadingOverlap ? (
-            <p style={{ fontSize: '11px', color: 'var(--color-text-tertiary)' }}>Beregner scope…</p>
+            <p style={{ fontSize: '11px', color: 'var(--color-text-tertiary)' }}>Calculating scope…</p>
           ) : overlap ? (
             <p style={{ fontSize: '11px', color: 'var(--color-text-secondary)' }}>
-              <strong>{overlap.inScope.toLocaleString('da-DK')}</strong> varer i scope. Heraf er{' '}
-              <strong>{overlap.alreadyOptimized.toLocaleString('da-DK')}</strong> allerede optimeret af AI
-              {overlap.humanEdited > 0 ? <> (<strong>{overlap.humanEdited.toLocaleString('da-DK')}</strong> rettet i hånden)</> : null}
-              {overlap.needsReview > 0 ? <>, {overlap.needsReview.toLocaleString('da-DK')} venter på godkendelse</> : null}.{' '}
-              <strong>{overlap.notYetOptimized.toLocaleString('da-DK')}</strong> er ikke optimeret endnu.
+              <strong>{overlap.inScope.toLocaleString('en-GB')}</strong> products in scope. Of these,{' '}
+              <strong>{overlap.alreadyOptimized.toLocaleString('en-GB')}</strong> are already optimised by AI
+              {overlap.humanEdited > 0 ? <> (<strong>{overlap.humanEdited.toLocaleString('en-GB')}</strong> edited by hand)</> : null}
+              {overlap.needsReview > 0 ? <>, {overlap.needsReview.toLocaleString('en-GB')} awaiting review</> : null}.{' '}
+              <strong>{overlap.notYetOptimized.toLocaleString('en-GB')}</strong> are not optimised yet.
             </p>
           ) : null}
 
           <div className="space-y-1.5">
             <label className="flex items-center gap-2" style={{ fontSize: '11px', color: 'var(--color-text-secondary)' }}>
               <input type="checkbox" checked={rerun} onChange={(e) => setRerun(e.target.checked)} />
-              Optimér også varer, der allerede har en AI-titel
+              Also optimise products that already have an AI title
             </label>
             <label
               className="flex items-center gap-2"
@@ -252,14 +252,14 @@ export function RunPanel({ feedId }: { feedId: string }) {
                 disabled={!rerun}
                 onChange={(e) => setIncludeHumanEdited(e.target.checked)}
               />
-              Overskriv også titler, der er rettet i hånden{overlap && overlap.humanEdited > 0 ? ` (${overlap.humanEdited.toLocaleString('da-DK')})` : ''} — destruktivt
+              Also overwrite titles edited by hand{overlap && overlap.humanEdited > 0 ? ` (${overlap.humanEdited.toLocaleString('en-GB')})` : ''} — destructive
             </label>
           </div>
 
           {running && (
             <div className="space-y-1">
               <div style={{ fontSize: '11px', color: 'var(--color-text-secondary)' }}>
-                {progress.done.toLocaleString('da-DK')} af {progress.total.toLocaleString('da-DK')} optimeret…
+                {progress.done.toLocaleString('en-GB')} of {progress.total.toLocaleString('en-GB')} optimised…
               </div>
               <div style={{ height: '4px', background: 'var(--color-border-tertiary)', borderRadius: '2px', overflow: 'hidden' }}>
                 <div
@@ -275,12 +275,12 @@ export function RunPanel({ feedId }: { feedId: string }) {
           )}
 
           <button onClick={handleRun} disabled={running || loadingOverlap} className="ff-btn-primary">
-            {running ? 'Kører…' : 'Kør optimering'}
+            {running ? 'Running…' : 'Run optimisation'}
           </button>
         </div>
       </div>
 
-      <OutcomeList title="Resultater" outcomes={runResults} />
+      <OutcomeList title="Results" outcomes={runResults} />
     </div>
   )
 }

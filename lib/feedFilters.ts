@@ -192,32 +192,32 @@ export function applyFeedFilters(
 // ── Why a product is in or out of the feed ──────────────────────────────────
 
 const OP_LABEL: Record<string, string> = {
-  contains: 'indeholder',
-  does_not_contain: 'indeholder ikke',
-  equals: 'er',
-  not_equals: 'er ikke',
-  starts_with: 'starter med',
-  ends_with: 'slutter med',
-  is_empty: 'er tom',
-  is_not_empty: 'er ikke tom',
-  greater_than: 'er over',
-  less_than: 'er under',
+  contains: 'contains',
+  does_not_contain: 'does not contain',
+  equals: 'is',
+  not_equals: 'is not',
+  starts_with: 'starts with',
+  ends_with: 'ends with',
+  is_empty: 'is empty',
+  is_not_empty: 'is not empty',
+  greater_than: 'is over',
+  less_than: 'is under',
 }
 
 // Readable names for the fields the rule editor offers; anything else (a
 // metafield, a custom token) is shown as its key.
 const FIELD_LABEL: Record<string, string> = {
-  title: 'titel',
-  vendor: 'producent',
-  product_type: 'varetype',
+  title: 'title',
+  vendor: 'vendor',
+  product_type: 'product type',
   tags: 'tags',
   status: 'status',
   handle: 'handle',
-  collections: 'kollektioner',
-  'variants[0].price': 'pris',
+  collections: 'collections',
+  'variants[0].price': 'price',
   'variants[0].sku': 'SKU',
-  'variants[0].inventory_quantity': 'lager',
-  'variants[0].barcode': 'stregkode',
+  'variants[0].inventory_quantity': 'stock',
+  'variants[0].barcode': 'barcode',
 }
 
 function fieldLabel(field: string): string {
@@ -241,11 +241,11 @@ export function explainScope(
   filters: FeedFilter[],
   marketUrl: string | null
 ): ScopeExplanation {
-  if (product.status !== 'active') return { inFeed: false, reason: 'Ikke aktiv i shoppen' }
+  if (product.status !== 'active') return { inFeed: false, reason: 'Not active in the shop' }
 
   const includeFilter = filters.find((f) => f.filter_type === 'include')
   if (includeFilter && includeFilter.rules.length > 0 && !matchesFilter(product, includeFilter, marketUrl)) {
-    return { inFeed: false, reason: 'Uden for reglerne for inkludering' }
+    return { inFeed: false, reason: 'Outside the inclusion rules' }
   }
 
   const excludeFilter = filters.find((f) => f.filter_type === 'exclude')
@@ -255,11 +255,11 @@ export function explainScope(
     // so name them all.
     if (excludeFilter.operator === 'OR') {
       const hit = active.find((r) => evalFilterRule(r, product, marketUrl))
-      if (hit) return { inFeed: false, reason: `Regel: ${describeRule(hit)}` }
+      if (hit) return { inFeed: false, reason: `Rule: ${describeRule(hit)}` }
     }
     return {
       inFeed: false,
-      reason: `${active.length === 1 ? 'Regel' : 'Regler'}: ${active.map(describeRule).join(' og ')}`,
+      reason: `${active.length === 1 ? 'Rule' : 'Rules'}: ${active.map(describeRule).join(' and ')}`,
     }
   }
   return { inFeed: true }

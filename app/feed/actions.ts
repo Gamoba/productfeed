@@ -12,10 +12,10 @@ export async function runFeedValidation(
     data: { user },
   } = await supabase.auth.getUser()
 
-  if (!user) return { error: 'Ikke logget ind' }
+  if (!user) return { error: 'Not signed in' }
 
   const owned = await getOwnedFeed(user.id, feedId)
-  if (!owned) return { error: 'Feed ikke fundet' }
+  if (!owned) return { error: 'Feed not found' }
 
   try {
     const result = await validateFeed(feedId)

@@ -24,10 +24,10 @@ type MetaResponse = { total: number; totalPages: number; vendors: string[]; prod
 const PAGE_SIZES = [25, 50, 100, 200] as const
 
 const SORTS = [
-  { value: '', label: 'Sortér: Ældste først' },
-  { value: 'newest', label: 'Sortér: Nyeste først' },
-  { value: 'title_asc', label: 'Sortér: Navn A til Å' },
-  { value: 'title_desc', label: 'Sortér: Navn Å til A' },
+  { value: '', label: 'Sort: Oldest first' },
+  { value: 'newest', label: 'Sort: Newest first' },
+  { value: 'title_asc', label: 'Sort: Name A to Z' },
+  { value: 'title_desc', label: 'Sort: Name Z to A' },
 ] as const
 
 // Feed fields shown first in "Værdier i feedet"; the rest follow in mapping order.
@@ -90,7 +90,7 @@ export function ProductsClient({ feedId, lastSynced: initialLastSynced }: { feed
       })
       .catch((e: unknown) => {
         if (mine !== req.current) return
-        setError(e instanceof Error ? e.message : 'Varerne kunne ikke hentes')
+        setError(e instanceof Error ? e.message : 'The products could not be fetched')
         setResult({ key: listKey, products: [], feed: {} })
       })
   }, [feedId, page, pageSize, search, sort, stock, vendor, productType, reloadKey, listKey])
@@ -175,16 +175,16 @@ export function ProductsClient({ feedId, lastSynced: initialLastSynced }: { feed
         <div>
           <h1>Products</h1>
           <p className="pr-lede">
-            Alt hvad feedet ved om hver vare. Søg og filtrér listen, og klik på en vare for at folde dens
-            felter ud under den.
+            Everything the feed knows about each product. Search and filter the list, and click a product to expand its
+            fields below it.
           </p>
         </div>
         <div className="pr-actions">
           <span className="pr-synced">
-            {sync.running ? 'Synkroniserer…' : lastSynced ? `Synket ${formatWhen(lastSynced)}` : 'Aldrig synket'}
+            {sync.running ? 'Syncing…' : lastSynced ? `Synced ${formatWhen(lastSynced)}` : 'Never synced'}
           </span>
           <button type="button" className="wl-btn-primary" onClick={() => void sync.start()} disabled={sync.running}>
-            Synk igen
+            Sync again
           </button>
         </div>
       </div>
@@ -199,9 +199,9 @@ export function ProductsClient({ feedId, lastSynced: initialLastSynced }: { feed
 
       {neverSynced ? (
         <section className="card pr-empty">
-          <p>Feedet har ingen varer endnu. Hent dem fra shoppen for at komme i gang.</p>
+          <p>The feed has no products yet. Fetch them from the shop to get started.</p>
           <button type="button" className="wl-btn-primary" onClick={() => void sync.start()}>
-            Hent varer
+            Fetch products
           </button>
         </section>
       ) : (
@@ -213,30 +213,30 @@ export function ProductsClient({ feedId, lastSynced: initialLastSynced }: { feed
                 type="search"
                 value={searchInput}
                 onChange={(e) => setSearchInput(e.target.value)}
-                placeholder="Søg på titel, producent, handle eller tags"
-                aria-label="Søg i varer"
+                placeholder="Search by title, vendor, handle or tags"
+                aria-label="Search products"
               />
             </label>
-            <select className="ff-select pr-sel" value={sort} onChange={(e) => onFilter(setSort)(e.target.value)} aria-label="Sortering">
+            <select className="ff-select pr-sel" value={sort} onChange={(e) => onFilter(setSort)(e.target.value)} aria-label="Sort">
               {SORTS.map((s) => (
                 <option key={s.value} value={s.value}>
                   {s.label}
                 </option>
               ))}
             </select>
-            <select className="ff-select pr-sel" value={stock} onChange={(e) => onFilter(setStock)(e.target.value)} aria-label="Lager">
-              <option value="">Lager: Alle</option>
-              <option value="true">Lager: På lager</option>
-              <option value="false">Lager: Ikke på lager</option>
+            <select className="ff-select pr-sel" value={stock} onChange={(e) => onFilter(setStock)(e.target.value)} aria-label="Stock">
+              <option value="">Stock: All</option>
+              <option value="true">Stock: In stock</option>
+              <option value="false">Stock: Out of stock</option>
             </select>
             <select
               className="ff-select pr-sel"
               value={vendor}
               onChange={(e) => onFilter(setVendor)(e.target.value)}
               disabled={!meta?.vendors.length}
-              aria-label="Producent"
+              aria-label="Vendor"
             >
-              <option value="">Producent: Alle</option>
+              <option value="">Vendor: All</option>
               {(meta?.vendors ?? []).map((v) => (
                 <option key={v} value={v}>
                   {v}
@@ -248,9 +248,9 @@ export function ProductsClient({ feedId, lastSynced: initialLastSynced }: { feed
               value={productType}
               onChange={(e) => onFilter(setProductType)(e.target.value)}
               disabled={!meta?.productTypes.length}
-              aria-label="Varetype"
+              aria-label="Product type"
             >
-              <option value="">Type: Alle</option>
+              <option value="">Type: All</option>
               {(meta?.productTypes ?? []).map((v) => (
                 <option key={v} value={v}>
                   {v}
@@ -262,18 +262,18 @@ export function ProductsClient({ feedId, lastSynced: initialLastSynced }: { feed
           <p className="pr-summary">
             {scopeCounts ? (
               <>
-                <span className="st">{formatNumber(scopeCounts.included)} i feedet</span>
+                <span className="st">{formatNumber(scopeCounts.included)} in the feed</span>
                 <span className={scopeCounts.excluded > 0 ? 'neg' : 'pr-muted'}>
-                  {formatNumber(scopeCounts.excluded)} ekskluderet
+                  {formatNumber(scopeCounts.excluded)} excluded
                 </span>
                 {scopeCounts.excluded > 0 && (
                   <Link href={`/feed/${feedId}/filters`} className="link">
-                    Se reglerne
+                    See the rules
                   </Link>
                 )}
               </>
             ) : (
-              <span className="pr-muted">Tæller varer i feedet…</span>
+              <span className="pr-muted">Counting products in the feed…</span>
             )}
           </p>
 
@@ -281,25 +281,25 @@ export function ProductsClient({ feedId, lastSynced: initialLastSynced }: { feed
             <table className="pr-table">
               <thead>
                 <tr>
-                  <th>Vare</th>
+                  <th>Product</th>
                   <th>Status</th>
-                  <th>Titel i feedet</th>
-                  <th className="r">Pris</th>
-                  <th className="r">Lager</th>
-                  <th aria-label="Fold ud" />
+                  <th>Title in the feed</th>
+                  <th className="r">Price</th>
+                  <th className="r">Stock</th>
+                  <th aria-label="Expand" />
                 </tr>
               </thead>
               <tbody>
                 {!result ? (
                   <tr>
                     <td colSpan={6} className="pr-none">
-                      Henter varer…
+                      Fetching products…
                     </td>
                   </tr>
                 ) : products.length === 0 ? (
                   <tr>
                     <td colSpan={6} className="pr-none">
-                      {hasFilter ? 'Ingen varer matcher. Ryd søgning og filtre for at se alle.' : 'Ingen varer på denne side.'}
+                      {hasFilter ? 'No products match. Clear the search and filters to see all.' : 'No products on this page.'}
                     </td>
                   </tr>
                 ) : (
@@ -324,7 +324,7 @@ export function ProductsClient({ feedId, lastSynced: initialLastSynced }: { feed
 
           <div className="pr-pager">
             <label className="pr-size">
-              Vis
+              Show
               <select
                 className="ff-select"
                 value={pageSize}
@@ -336,19 +336,19 @@ export function ProductsClient({ feedId, lastSynced: initialLastSynced }: { feed
                   </option>
                 ))}
               </select>
-              pr. side
+              per page
             </label>
             <span className="pr-muted">
               {products.length > 0
-                ? `Viser ${formatNumber(firstShown)} til ${formatNumber(lastShown)}${total != null ? ` af ${formatNumber(total)}` : ''}`
+                ? `Showing ${formatNumber(firstShown)} to ${formatNumber(lastShown)}${total != null ? ` of ${formatNumber(total)}` : ''}`
                 : ''}
             </span>
             <span className="pr-pagebtns">
               <button type="button" className="ff-btn-secondary" disabled={page <= 1 || loading} onClick={() => { setPage(page - 1); setOpenId(null) }}>
-                Forrige
+                Previous
               </button>
               <button type="button" className="ff-btn-secondary" disabled={!canNext || loading} onClick={() => { setPage(page + 1); setOpenId(null) }}>
-                Næste
+                Next
               </button>
             </span>
           </div>
@@ -364,7 +364,7 @@ function formatPrice(price: string | undefined, currency: string | undefined): s
   if (!price) return '—'
   const n = Number(price)
   const amount = Number.isFinite(n)
-    ? n.toLocaleString('da-DK', { minimumFractionDigits: 2, maximumFractionDigits: 2 })
+    ? n.toLocaleString('en-GB', { minimumFractionDigits: 2, maximumFractionDigits: 2 })
     : price
   return currency ? `${amount} ${currency}` : amount
 }
@@ -376,7 +376,7 @@ function stockOf(p: ShopifyProduct): number | null {
 
 function feedValue(v: string | undefined): string {
   if (v === undefined) return ''
-  if (v === '__AI__') return 'Skrives af AI ved generering'
+  if (v === '__AI__') return 'Written by AI at generation'
   return v
 }
 
@@ -425,7 +425,7 @@ function ProductRow({
               </span>
             )}
             <span>
-              <b>{product.title || 'Uden titel'}</b>
+              <b>{product.title || 'Untitled'}</b>
               <small>{[product.vendor, product.source_id ?? product.id].filter(Boolean).join(' · ')}</small>
             </span>
           </span>
@@ -434,15 +434,15 @@ function ProductRow({
           {!view ? (
             <span className="pr-muted">…</span>
           ) : view.inFeed ? (
-            <span className="st">I feed</span>
+            <span className="st">In feed</span>
           ) : (
             <span className="neg" title={view.reason ?? undefined}>
-              Ekskluderet
+              Excluded
             </span>
           )}
         </td>
         <td className="pr-feedtitle">
-          {!view ? '' : !view.inFeed ? <span className="pr-muted">—</span> : feedTitle || <span className="pr-muted">tom</span>}
+          {!view ? '' : !view.inFeed ? <span className="pr-muted">—</span> : feedTitle || <span className="pr-muted">empty</span>}
         </td>
         <td className="r num">{formatPrice(v0?.price, v0?.currency)}</td>
         <td className={`r num${stock === 0 ? ' neg' : ''}`}>{stock == null ? '—' : formatNumber(stock)}</td>
@@ -484,46 +484,46 @@ function ProductDetail({
 
       <div className="pr-cols">
         <section>
-          <h4>Titel</h4>
+          <h4>Title</h4>
           <dl className="pr-kv">
-            <dt>I shoppen</dt>
-            <dd>{product.title || <span className="pr-muted">tom</span>}</dd>
-            <dt>I feedet</dt>
+            <dt>In the shop</dt>
+            <dd>{product.title || <span className="pr-muted">empty</span>}</dd>
+            <dt>In the feed</dt>
             <dd>
-              <b>{view ? feedValue(fields.title) || <span className="pr-muted">tom</span> : '…'}</b>
+              <b>{view ? feedValue(fields.title) || <span className="pr-muted">empty</span> : '…'}</b>
             </dd>
           </dl>
           {product.variants.length > 1 && (
             <>
-              <h4 className="pr-h4-gap">Varianter ({product.variants.length})</h4>
+              <h4 className="pr-h4-gap">Variants ({product.variants.length})</h4>
               <dl className="pr-kv">
                 {product.variants.slice(0, 8).map((v) => (
                   <Fragment key={v.id}>
                     <dt>{v.title || v.sku || v.id}</dt>
                     <dd>
                       {formatPrice(v.price, v.currency)}
-                      {typeof v.inventory_quantity === 'number' ? ` · ${formatNumber(v.inventory_quantity)} på lager` : ''}
+                      {typeof v.inventory_quantity === 'number' ? ` · ${formatNumber(v.inventory_quantity)} in stock` : ''}
                     </dd>
                   </Fragment>
                 ))}
               </dl>
-              {product.variants.length > 8 && <p className="pr-muted pr-more">og {product.variants.length - 8} flere</p>}
+              {product.variants.length > 8 && <p className="pr-muted pr-more">and {product.variants.length - 8} more</p>}
             </>
           )}
         </section>
 
         <section>
-          <h4>Værdier i feedet</h4>
+          <h4>Values in the feed</h4>
           {!view ? (
             <p className="pr-muted">…</p>
           ) : ordered.length === 0 ? (
-            <p className="pr-muted">Ingen felter er mappet endnu.</p>
+            <p className="pr-muted">No fields are mapped yet.</p>
           ) : (
             <dl className="pr-kv">
               {ordered.map((f) => (
                 <Fragment key={f}>
                   <dt>{f}</dt>
-                  <dd>{feedValue(fields[f]) || <span className="pr-muted">tom</span>}</dd>
+                  <dd>{feedValue(fields[f]) || <span className="pr-muted">empty</span>}</dd>
                 </Fragment>
               ))}
             </dl>
@@ -531,9 +531,9 @@ function ProductDetail({
         </section>
 
         <section>
-          <h4>Metafelter fra shoppen</h4>
+          <h4>Metafields from the shop</h4>
           {product.metafields.length === 0 ? (
-            <p className="pr-muted">Varen har ingen metafelter.</p>
+            <p className="pr-muted">The product has no metafields.</p>
           ) : (
             <dl className="pr-kv">
               {product.metafields.map((mf) => {
@@ -541,7 +541,7 @@ function ProductDetail({
                 return (
                   <Fragment key={key}>
                     <dt title={key}>{metafieldNames.get(key) ?? key}</dt>
-                    <dd>{mf.value || <span className="pr-muted">tom</span>}</dd>
+                    <dd>{mf.value || <span className="pr-muted">empty</span>}</dd>
                   </Fragment>
                 )
               })}
@@ -552,15 +552,15 @@ function ProductDetail({
 
       <div className="pr-d-actions">
         <Link href={`/feed/${feedId}/mapping`} className="wl-btn-primary">
-          Åbn i mapping
+          Open in mapping
         </Link>
         {view && !view.inFeed && (
           <Link href={`/feed/${feedId}/filters`} className="wl-btn-secondary">
-            Se reglerne
+            See the rules
           </Link>
         )}
         <Link href={`/feed/${feedId}/google-ads`} className="link pr-d-perf">
-          Se varens tal under Performance
+          See the product’s figures under Performance
         </Link>
       </div>
     </div>

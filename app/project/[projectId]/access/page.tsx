@@ -20,8 +20,8 @@ export default async function ManageAccessPage({ params }: { params: Promise<{ p
   return (
     <PlaceholderPage
       title="Manage access"
-      lede={`Hvem kan logge ind på ${project.name}. Gælder også kunder.`}
-      contents={["Brugere på shoppen med navn, rolle og status", "Bureauets brugere, den samme liste som Agency users"]}
+      lede={`Who can sign in to ${project.name}. This includes customers.`}
+      contents={["Users on the shop with name, role and status", "The agency's users, the same list as Agency users"]}
     />
   )
 }

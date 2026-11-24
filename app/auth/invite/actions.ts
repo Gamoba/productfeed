@@ -11,10 +11,10 @@ export async function acceptInvite(input: {
   password: string
 }): Promise<{ error?: string }> {
   if (typeof input.password !== 'string' || input.password.length < 8) {
-    return { error: 'Adgangskoden skal være mindst 8 tegn.' }
+    return { error: 'The password must be at least 8 characters.' }
   }
   if (!input.accessToken || !input.refreshToken) {
-    return { error: 'Linket mangler oplysninger. Bed om et nyt.' }
+    return { error: 'The link is missing details. Ask for a new one.' }
   }
 
   const supabase = await createSupabaseServerClient()
@@ -22,7 +22,7 @@ export async function acceptInvite(input: {
     access_token: input.accessToken,
     refresh_token: input.refreshToken,
   })
-  if (sessionError) return { error: 'Linket er udløbet eller allerede brugt. Bed om et nyt.' }
+  if (sessionError) return { error: 'The link has expired or has already been used. Ask for a new one.' }
 
   const { error } = await supabase.auth.updateUser({ password: input.password })
   if (error) return { error: error.message }

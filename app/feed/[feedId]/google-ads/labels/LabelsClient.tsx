@@ -61,18 +61,18 @@ type Props = {
 const METRIC_LABEL: Record<BucketMetric, string> = {
   roas: 'ROAS',
   poas: 'POAS',
-  conversions: 'Konverteringer (kontoens standard)',
-  roas_conversions: 'Konverteringer (omsætning)',
-  poas_conversions: 'Konverteringer (bruttoprofit)',
-  conversions_value: 'Omsætning',
-  cost: 'Forbrug',
-  clicks: 'Klik',
-  impressions: 'Visninger',
-  profit_after_ad_spend: 'Profit minus forbrug',
-  cogs_margin: 'Margin (kostpris)',
-  inventory_quantity: 'Lager (stk.)',
-  stock_coverage: 'Lagerdækning',
-  days_of_stock: 'Dages lager',
+  conversions: 'Conversions (account default)',
+  roas_conversions: 'Conversions (revenue)',
+  poas_conversions: 'Conversions (gross profit)',
+  conversions_value: 'Revenue',
+  cost: 'Spend',
+  clicks: 'Clicks',
+  impressions: 'Impressions',
+  profit_after_ad_spend: 'Profit minus spend',
+  cogs_margin: 'Margin (cost per item)',
+  inventory_quantity: 'Stock (units)',
+  stock_coverage: 'Stock coverage',
+  days_of_stock: 'Days of stock',
 }
 
 const OPERATORS: { value: BucketOperator; label: string; needsValue: boolean }[] = [
@@ -82,14 +82,14 @@ const OPERATORS: { value: BucketOperator; label: string; needsValue: boolean }[]
   { value: 'lte', label: '≤', needsValue: true },
   { value: 'eq', label: '=', needsValue: true },
   { value: 'neq', label: '≠', needsValue: true },
-  { value: 'is_empty', label: 'har ingen værdi', needsValue: false },
-  { value: 'is_not_empty', label: 'har en værdi', needsValue: false },
+  { value: 'is_empty', label: 'has no value', needsValue: false },
+  { value: 'is_not_empty', label: 'has a value', needsValue: false },
 ]
 
 const WINDOWS = [7, 14, 30, 90, 180, 365]
 const SLOTS = [0, 1, 2, 3, 4]
 const DOT = ['var(--hi)', '#101312', 'var(--series-2)', 'var(--bad)', 'var(--series-3)', 'var(--series-4)']
-const LEVEL_LABEL: Record<BucketLevel, string> = { product: 'Pr. vare (varianter samlet)', variant: 'Pr. variant' }
+const LEVEL_LABEL: Record<BucketLevel, string> = { product: 'Per product (variants combined)', variant: 'Per variant' }
 
 function slugify(s: string): string {
   return s
@@ -149,7 +149,7 @@ export function LabelsClient(props: Props) {
     const res = await fetch(url, init)
     const json = await res.json().catch(() => ({}))
     if (!res.ok) {
-      setError((json as { error?: string }).error ?? 'Noget gik galt')
+      setError((json as { error?: string }).error ?? 'Something went wrong')
       return null
     }
     return json as Record<string, unknown>
@@ -172,8 +172,8 @@ export function LabelsClient(props: Props) {
       const per = r.labels ?? []
       setNote(
         per.length === 1
-          ? `${per[0].name}: ${formatNumber(per[0].assigned)} af ${formatNumber(per[0].entities)} har fået et label · ${formatNumber(per[0].moved)} skiftede værdi.`
-          : `${per.length} labels genberegnet · ${formatNumber(per.reduce((n, l) => n + l.moved, 0))} skiftede værdi.`
+          ? `${per[0].name}: ${formatNumber(per[0].assigned)} of ${formatNumber(per[0].entities)} labelled · ${formatNumber(per[0].moved)} changed value.`
+          : `${per.length} labels recalculated · ${formatNumber(per.reduce((n, l) => n + l.moved, 0))} changed value.`
       )
       setWarnings([...(r.warnings ?? []), ...per.flatMap((l) => l.warnings.map((w) => `${l.name}: ${w}`))])
     }
@@ -199,7 +199,7 @@ export function LabelsClient(props: Props) {
     if (before.level !== after.level || before.window_days !== after.window_days) {
       await recompute(before.id)
     } else {
-      setNote('Gemt. Intet ved det, der måles, er ændret, så der er ikke genberegnet.')
+      setNote('Saved. Nothing about what is measured has changed, so nothing was recalculated.')
       router.refresh()
     }
   }
@@ -222,7 +222,7 @@ export function LabelsClient(props: Props) {
   }
 
   async function removeLabel(view: LabelView) {
-    if (!confirm(`Slet labelet “${view.label.name}” og dets buckets? Varerne mister værdien for dette label.`)) return
+    if (!confirm(`Delete the label “${view.label.name}” and its buckets? Products lose their value for this label.`)) return
     setBusy(view.label.id)
     setError(null)
     const ok = await call(`/api/google-ads/${feedId}/labels?id=${view.label.id}`, { method: 'DELETE' })
@@ -254,7 +254,7 @@ export function LabelsClient(props: Props) {
       rulesKey(b.rules) !== rulesKey(after.rules)
     if (moves) await recompute(b.label_id)
     else {
-      setNote('Gemt. Ingen betingelse er ændret, så der er ikke genberegnet.')
+      setNote('Saved. No condition has changed, so nothing was recalculated.')
       router.refresh()
     }
   }
@@ -289,7 +289,7 @@ export function LabelsClient(props: Props) {
   }
 
   async function removeBucket(b: Bucket) {
-    if (!confirm(`Slet bucketen “${b.name}”? Varerne i den går videre til de næste buckets.`)) return
+    if (!confirm(`Delete the bucket “${b.name}”? Its products move on to the next buckets.`)) return
     setError(null)
     setPendingDelete((s) => new Set(s).add(b.id))
     const ok = await call(`/api/google-ads/${feedId}/buckets?id=${b.id}`, { method: 'DELETE' })
@@ -312,10 +312,10 @@ export function LabelsClient(props: Props) {
       <div className="lb">
         <Head />
         <section className="card lb-empty">
-          <h3>Feedet er ikke koblet til Google Ads</h3>
-          <p>Labels deler varerne efter, hvordan de klarer sig, så feedet skal have en Google Ads-konto og mindst én synkronisering først.</p>
+          <h3>This feed is not connected to Google Ads</h3>
+          <p>Labels split products by how they perform, so the feed needs a Google Ads account and at least one sync first.</p>
           <Link href={`/feed/${feedId}/google-ads`} className="wl-btn-primary">
-            Gå til Performance
+            Go to Performance
           </Link>
         </section>
       </div>
@@ -346,7 +346,7 @@ export function LabelsClient(props: Props) {
         actions={
           labels.length > 0 && (
             <button onClick={() => recompute()} disabled={busy === 'recompute'} className="wl-btn-primary">
-              {busy === 'recompute' ? 'Genberegner…' : 'Genberegn alle'}
+              {busy === 'recompute' ? 'Recalculating…' : 'Recalculate all'}
             </button>
           )
         }
@@ -373,7 +373,7 @@ export function LabelsClient(props: Props) {
                     setSelBucketId(null)
                   } else setNewLabel({ slot: s, name: '' })
                 }}
-                title={v ? `custom_label_${s}` : `custom_label_${s} er ledig. Klik for at lave et label her.`}
+                title={v ? `custom_label_${s}` : `custom_label_${s} is free. Click to create a label here.`}
               >
                 {s}
                 {v ? ` · ${v.label.name}` : ''}
@@ -391,7 +391,7 @@ export function LabelsClient(props: Props) {
                 setSelLabelId(v.label.id)
                 setSelBucketId(null)
               }}
-              title="Uden slot: beregnes, men har ingen plads i feedet"
+              title="No slot: calculated, but has no place in the feed"
             >
               – · {v.label.name}
             </button>
@@ -408,20 +408,20 @@ export function LabelsClient(props: Props) {
       ))}
       {sameAction && (
         <p className="note warn">
-          Omsætning og bruttoprofit bruger samme konverteringshandling ({roasActions.join(', ')}), så POAS er lig ROAS.
-          Ret det på Performance-siden.
+          Revenue and gross profit use the same conversion action ({roasActions.join(', ')}), so POAS equals ROAS.
+          Fix it on the Performance page.
         </p>
       )}
 
       {newLabel ? (
         <section className="card lb-new">
-          <h3>Nyt label{newLabel.slot !== null ? ` i custom_label_${newLabel.slot}` : ''}</h3>
+          <h3>New label{newLabel.slot !== null ? ` in custom_label_${newLabel.slot}` : ''}</h3>
           <div className="lb-row">
             <input
               autoFocus
               className="ff-input"
               value={newLabel.name}
-              placeholder="fx Performance"
+              placeholder="e.g. Performance"
               onChange={(e) => setNewLabel({ ...newLabel, name: e.target.value })}
               onKeyDown={(e) => {
                 if (e.key === 'Enter') void addLabel()
@@ -429,18 +429,18 @@ export function LabelsClient(props: Props) {
               }}
             />
             <button className="wl-btn-primary" onClick={() => void addLabel()} disabled={busy === 'add-label' || !newLabel.name.trim()}>
-              {busy === 'add-label' ? 'Opretter…' : 'Opret label'}
+              {busy === 'add-label' ? 'Creating…' : 'Create label'}
             </button>
             <button className="wl-btn-secondary" onClick={() => setNewLabel(null)}>
-              Annullér
+              Cancel
             </button>
           </div>
-          <p className="lb-muted">Navnet er til denne side. Værdierne, Google får, sætter du på hver bucket.</p>
+          <p className="lb-muted">The name is for this page. You set the values Google receives on each bucket.</p>
         </section>
       ) : !current ? (
         <section className="card lb-empty">
-          <h3>Ingen labels endnu</h3>
-          <p>Vælg en ledig plads ovenfor (0 til 4) for at lave dit første label, fx Performance.</p>
+          <h3>No labels yet</h3>
+          <p>Choose a free slot above (0 to 4) to create your first label, e.g. Performance.</p>
         </section>
       ) : (
         <LabelEditor
@@ -467,7 +467,7 @@ export function LabelsClient(props: Props) {
           onCompose={(fallback) =>
             setCompose({
               labelId: current.label.id,
-              name: fallback ? 'Alt andet' : '',
+              name: fallback ? 'Everything else' : '',
               value: fallback ? 'other' : '',
               touched: fallback,
               fallback,
@@ -479,7 +479,7 @@ export function LabelsClient(props: Props) {
       )}
 
       <p className="lb-muted lb-foot">
-        Labels beregnes og vises her. Intet skrives til feedet eller sendes til Merchant Center endnu.
+        Labels are calculated and shown here. Nothing is written to the feed or sent to Merchant Center yet.
       </p>
     </div>
   )
@@ -491,7 +491,7 @@ function Head({ actions }: { actions?: React.ReactNode }) {
       <div>
         <h1>Labels</h1>
         <p className="lb-lede">
-          Giv varerne et label ud fra, hvordan de klarer sig. Brug det til at dele kampagner og budget i Google Ads.
+          Label your products by how they perform. Use it to split campaigns and budget in Google Ads.
         </p>
       </div>
       {actions && <div className="lb-actions">{actions}</div>}
@@ -563,16 +563,16 @@ function LabelEditor({
             value={edited.name}
             onChange={(e) => onPatch({ name: e.target.value })}
             onKeyDown={(e) => e.key === 'Enter' && dirty && edited.name.trim() && onSave()}
-            aria-label="Labelets navn"
+            aria-label="Label name"
             className="wl-inline-edit lb-name"
           />
           <select
             className="ff-select lb-slot"
             value={edited.slot ?? ''}
             onChange={(e) => onPatch({ slot: e.target.value === '' ? null : Number(e.target.value) })}
-            aria-label="Plads i feedet"
+            aria-label="Slot in the feed"
           >
-            <option value="">Uden slot</option>
+            <option value="">No slot</option>
             {SLOTS.map((n) => (
               <option key={n} value={n} disabled={takenSlots.has(n) && edited.slot !== n}>
                 custom_label_{n}
@@ -580,24 +580,24 @@ function LabelEditor({
             ))}
           </select>
           <span className="lb-spacer" />
-          <span className="lb-muted">{formatNumber(assigned)} varer har et label</span>
+          <span className="lb-muted">{formatNumber(assigned)} {assigned === 1 ? 'product has' : 'products have'} a label</span>
           {dirty && (
             <button onClick={onSave} disabled={busy === label.id} className="wl-btn-primary">
-              {busy === label.id ? 'Gemmer…' : 'Gem'}
+              {busy === label.id ? 'Saving…' : 'Save'}
             </button>
           )}
           <button onClick={onRecompute} disabled={recomputing} className="wl-btn-secondary">
-            {recomputing ? 'Genberegner…' : 'Genberegn'}
+            {recomputing ? 'Recalculating…' : 'Recalculate'}
           </button>
           <button onClick={onDelete} disabled={busy === label.id} className="wl-btn-secondary lb-danger">
-            Slet label
+            Delete label
           </button>
         </div>
 
         <div className="lb-row lb-wrap lb-measure">
           <div>
-            <span className="lb-k">Lookback-vindue</span>
-            <div className="lb-pills" role="group" aria-label="Lookback-vindue">
+            <span className="lb-k">Lookback window</span>
+            <div className="lb-pills" role="group" aria-label="Lookback window">
               {WINDOWS.map((w) => (
                 <button
                   key={w}
@@ -611,31 +611,31 @@ function LabelEditor({
             </div>
           </div>
           <div>
-            <span className="lb-k">Niveau</span>
+            <span className="lb-k">Level</span>
             <p className="lb-level">
               {LEVEL_LABEL[feedMode]} ·{' '}
               <Link href={`/feed/${feedId}/settings`} className="link">
-                følger feedets opbygning
+                follows the feed&apos;s structure
               </Link>
             </p>
           </div>
         </div>
         <p className="lb-muted lb-small">
-          Et kort vindue reagerer hurtigt i en sæson. Et langt vindue giver flere varer nok klik til at blive dømt.
+          A short window reacts quickly within a season. A long window gives more products enough clicks to be judged.
         </p>
         {levelDiffers && (
           <p className="note warn">
-            Labelet er beregnet {LEVEL_LABEL[label.level].toLowerCase()}, men feedet er {LEVEL_LABEL[feedMode].toLowerCase()}. Gem
-            labelet for at følge feedet.
+            The label is calculated {LEVEL_LABEL[label.level].toLowerCase()}, but the feed is {LEVEL_LABEL[feedMode].toLowerCase()}. Save
+            the label to follow the feed.
           </p>
         )}
         {(stale.never || stale.dataNewer || stale.settingsNewer) && (
           <p className="note warn">
             {stale.never
-              ? 'Aldrig beregnet. Ingen varer har en værdi for dette label endnu.'
+              ? 'Never calculated. No products have a value for this label yet.'
               : stale.settingsNewer
-                ? 'Google Ads-indstillingerne er ændret siden beregningen. Genberegn, hvis omsætning eller bruttoprofit var blandt ændringerne.'
-                : 'Der er hentet nye Google Ads-tal siden beregningen. Genberegn for at bruge dem.'}
+                ? 'The Google Ads settings have changed since the calculation. Recalculate if revenue or gross profit was among the changes.'
+                : 'New Google Ads figures have been fetched since the calculation. Recalculate to use them.'}
           </p>
         )}
       </section>
@@ -644,7 +644,7 @@ function LabelEditor({
         <section className="card lb-buckets">
           <div className="lb-card-h">
             <h3>Buckets</h3>
-            <small>Tjekkes oppefra. Første match vinder.</small>
+            <small>Checked from the top. First match wins.</small>
           </div>
           <ul>
             {buckets.map((b, i) => {
@@ -663,11 +663,11 @@ function LabelEditor({
                     <span className="lb-prio">{b.is_fallback ? '·' : i + 1}</span>
                     <span className="lb-bt">
                       <b>{e.name}</b>
-                      <small>{ghost ? 'Opretter…' : e.value}</small>
+                      <small>{ghost ? 'Creating…' : e.value}</small>
                     </span>
                     <span className="lb-bc num">
                       <b>{formatNumber(counts[b.id] ?? 0)}</b>
-                      <small>varer</small>
+                      <small>{(counts[b.id] ?? 0) === 1 ? 'product' : 'products'}</small>
                     </span>
                     <span className="lb-dot" style={{ background: DOT[i % DOT.length] }} />
                   </button>
@@ -682,7 +682,7 @@ function LabelEditor({
                 autoFocus
                 className="ff-input"
                 value={compose.name}
-                placeholder={compose.fallback ? 'Navn' : 'Navn, fx Highly profitable'}
+                placeholder={compose.fallback ? 'Name' : 'Name, e.g. Highly profitable'}
                 onChange={(e) =>
                   onComposeChange({ ...compose, name: e.target.value, value: compose.touched ? compose.value : slugify(e.target.value) })
                 }
@@ -691,7 +691,7 @@ function LabelEditor({
               <input
                 className="ff-input"
                 value={compose.value}
-                placeholder="Værdi i feedet, fx highly_profitable"
+                placeholder="Value in the feed, e.g. highly_profitable"
                 onChange={(e) => onComposeChange({ ...compose, value: e.target.value, touched: true })}
                 onKeyDown={(e) => {
                   if (e.key === 'Enter' && compose.name.trim() && compose.value.trim()) onComposeCreate()
@@ -700,25 +700,25 @@ function LabelEditor({
               />
               <div className="lb-row">
                 <button className="wl-btn-primary" onClick={onComposeCreate} disabled={!compose.name.trim() || !compose.value.trim()}>
-                  Opret
+                  Create
                 </button>
                 <button className="wl-btn-secondary" onClick={() => onComposeChange(null)}>
-                  Annullér
+                  Cancel
                 </button>
               </div>
               <p className="lb-muted lb-small">
                 {compose.fallback
-                  ? 'Fallback tager alt, ingen tidligere bucket matchede, og gælder, så snart den findes.'
-                  : 'Værdien er teksten, Google får. Hold den kort og stabil. Betingelserne sætter du bagefter.'}
+                  ? 'The fallback takes everything no earlier bucket matched, and applies as soon as it exists.'
+                  : 'The value is the text Google receives. Keep it short and stable. You set the conditions afterwards.'}
               </p>
             </div>
           ) : (
             <div className="lb-addrow">
               <button type="button" className="lb-add" onClick={() => onCompose(false)}>
-                + Ny bucket
+                + New bucket
               </button>
               {!hasFallback && (
-                <button type="button" className="lb-add" onClick={() => onCompose(true)} title="Tager alt, ingen tidligere bucket matchede">
+                <button type="button" className="lb-add" onClick={() => onCompose(true)} title="Takes everything no earlier bucket matched">
                   + Fallback
                 </button>
               )}
@@ -741,7 +741,7 @@ function LabelEditor({
             />
           ) : (
             <section className="card lb-empty">
-              <p>Labelet har ingen buckets endnu. Lav den første til venstre.</p>
+              <p>This label has no buckets yet. Create the first one on the left.</p>
             </section>
           )}
           {selected && table && <MembersCard table={table} labelId={label.id} bucket={selected} />}
@@ -781,26 +781,26 @@ function BucketEditor({
             value={bucket.name}
             onChange={(e) => onPatch({ name: e.target.value })}
             onKeyDown={(e) => e.key === 'Enter' && dirty && bucket.name.trim() && onSave()}
-            aria-label="Bucketens navn"
+            aria-label="Bucket name"
             className="wl-inline-edit lb-bname"
           />
           <small>
-            {bucket.is_fallback ? 'Fallback: alt, ingen tidligere bucket matchede.' : 'Varer der matcher alle linjer, får værdien.'}
+            {bucket.is_fallback ? 'Fallback: everything no earlier bucket matched.' : 'Products that match every line get the value.'}
           </small>
         </div>
         <label className="lb-field">
-          <span>Værdi i feedet</span>
+          <span>Value in the feed</span>
           <input className="ff-input" value={bucket.value} onChange={(e) => onPatch({ value: e.target.value })} />
         </label>
         {!bucket.is_fallback && (
           <label className="lb-field lb-prio-f">
-            <span>Rækkefølge</span>
+            <span>Order</span>
             <input
               type="number"
               className="ff-input"
               value={bucket.priority}
               onChange={(e) => onPatch({ priority: Number(e.target.value) })}
-              title="Lavere tjekkes først"
+              title="Lower is checked first"
             />
           </label>
         )}
@@ -808,22 +808,22 @@ function BucketEditor({
 
       {!bucket.is_fallback && (
         <div className="lb-rules">
-          {rules.length === 0 && <p className="lb-muted lb-small">Ingen betingelser endnu. Intet får dette label, før du tilføjer en og gemmer.</p>}
+          {rules.length === 0 && <p className="lb-muted lb-small">No conditions yet. Nothing gets this label until you add one and save.</p>}
           {rules.map((rule, i) => {
             const op = OPERATORS.find((o) => o.value === rule.operator)
             return (
               <div className="lb-rule" key={i}>
                 {i === 0 ? (
-                  <span className="lb-kw">HVIS</span>
+                  <span className="lb-kw">IF</span>
                 ) : (
                   <select
                     className="ff-select lb-join"
                     value={bucket.match_type}
                     onChange={(e) => onPatch({ match_type: e.target.value as 'ALL' | 'ANY' })}
-                    title="Gælder alle betingelser i bucketen"
+                    title="Applies to every condition in the bucket"
                   >
-                    <option value="ALL">OG</option>
-                    <option value="ANY">ELLER</option>
+                    <option value="ALL">AND</option>
+                    <option value="ANY">OR</option>
                   </select>
                 )}
                 <select
@@ -866,7 +866,7 @@ function BucketEditor({
                 <button
                   type="button"
                   className="lb-x"
-                  aria-label="Fjern betingelse"
+                  aria-label="Remove condition"
                   onClick={() => onPatch({ rules: rules.filter((_, j) => j !== i) })}
                 >
                   ×
@@ -880,28 +880,28 @@ function BucketEditor({
               className="lb-add-inline"
               onClick={() => onPatch({ rules: [...rules, { metric: 'clicks', operator: 'gte', value: 25 }] })}
             >
-              + Betingelse
+              + Condition
             </button>
             <span className="lb-spacer" />
-            <span className="lb-muted lb-small">Regnes på de sidste {windowDays} dage</span>
+            <span className="lb-muted lb-small">Calculated over the last {windowDays} days</span>
           </div>
         </div>
       )}
 
       <div className="lb-row lb-wrap lb-bfoot">
         <span className="num lb-share">
-          <b>{formatNumber(count)}</b> varer · {share} %
+          <b>{formatNumber(count)}</b> {count === 1 ? 'product' : 'products'} · {share}%
         </span>
         <span className="lb-bar" aria-hidden="true">
           <i style={{ width: `${share}%` }} />
         </span>
         <span className="lb-spacer" />
         <button onClick={onDelete} disabled={busy} className="wl-btn-secondary lb-danger">
-          Slet bucket
+          Delete bucket
         </button>
         {dirty && (
           <button onClick={onSave} disabled={busy} className="wl-btn-primary">
-            {busy ? 'Gemmer…' : 'Gem bucket'}
+            {busy ? 'Saving…' : 'Save bucket'}
           </button>
         )}
       </div>
@@ -914,18 +914,18 @@ function MembersCard({ table, labelId, bucket }: { table: PreviewTable; labelId:
   return (
     <section className="card flush">
       <div className="lb-card-h lb-pad">
-        <h3>Varer i {bucket.name}</h3>
-        <small>Alle får værdien {bucket.value}, som den var ved sidste beregning.</small>
+        <h3>Products in {bucket.name}</h3>
+        <small>All get the value {bucket.value}, as of the last calculation.</small>
       </div>
       {rows.length === 0 ? (
-        <p className="lb-muted lb-small lb-pad">Ingen varer i denne bucket ved sidste beregning.</p>
+        <p className="lb-muted lb-small lb-pad">No products in this bucket at the last calculation.</p>
       ) : (
         <div className="lb-tablewrap">
           <table className="lb-table">
             <thead>
               <tr>
-                <th>{table.level === 'product' ? 'Vare-id' : 'Item-id'}</th>
-                <th>Titel</th>
+                <th>{table.level === 'product' ? 'Product ID' : 'Item ID'}</th>
+                <th>Title</th>
               </tr>
             </thead>
             <tbody>
@@ -940,7 +940,7 @@ function MembersCard({ table, labelId, bucket }: { table: PreviewTable; labelId:
         </div>
       )}
       {table.total > table.rows.length && (
-        <p className="lb-muted lb-small lb-pad">Ud af de første {formatNumber(table.rows.length)} af {formatNumber(table.total)} varer med labels.</p>
+        <p className="lb-muted lb-small lb-pad">Out of the first {formatNumber(table.rows.length)} of {formatNumber(table.total)} labelled products.</p>
       )}
     </section>
   )

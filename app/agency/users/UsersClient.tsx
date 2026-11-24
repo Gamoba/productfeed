@@ -10,9 +10,9 @@ import { formatNumber, formatWhen } from '@/lib/formatDa'
 import './users.css'
 
 const ROLE_HINT: Record<AccountRole, string> = {
-  owner: 'Alt, også at gøre andre til ejer',
-  admin: 'Invitere, ændre roller og fjerne brugere',
-  member: 'Arbejde i shops og feeds',
+  owner: 'Everything, including making others owner',
+  admin: 'Invite, change roles and remove users',
+  member: 'Work in shops and feeds',
 }
 
 export function UsersClient({ initial }: { initial: AccountUsers }) {
@@ -47,7 +47,7 @@ export function UsersClient({ initial }: { initial: AccountUsers }) {
       })
       const json = (await res.json().catch(() => ({}))) as Record<string, unknown>
       if (!res.ok) {
-        setError((json.error as string) ?? 'Det lykkedes ikke')
+        setError((json.error as string) ?? 'That did not work')
         return null
       }
       return json
@@ -84,35 +84,35 @@ export function UsersClient({ initial }: { initial: AccountUsers }) {
         <div>
           <h1>Agency users</h1>
           <p className="au-lede">
-            Hvem på bureauet har adgang til kunderne. Alle her ser de samme shops og feeds i {account.name}.
+            Who at the agency has access to the customers. Everyone here sees the same shops and feeds in {account.name}.
           </p>
         </div>
         {manage && (
           <button type="button" className="wl-btn-primary" onClick={() => setInviting(true)}>
-            <Icon name="plus" size={14} /> Invitér bruger
+            <Icon name="plus" size={14} /> Invite user
           </button>
         )}
       </header>
 
       <section className="card au-stats">
         <div>
-          <span>Brugere</span>
+          <span>Users</span>
           <strong className="num">
             {formatNumber(members.length)}
             {account.seatLimit !== null && <small> / {formatNumber(account.seatLimit)}</small>}
           </strong>
           <small className={account.seatLimit !== null && members.length >= account.seatLimit ? 'neg' : undefined}>
             {account.seatLimit === null
-              ? 'Ingen grænse på planen'
+              ? 'No limit on the plan'
               : members.length >= account.seatLimit
-                ? 'Alle pladser er brugt'
-                : `Planen giver ${formatNumber(account.seatLimit)} pladser`}
+                ? 'All seats are used'
+                : `The plan includes ${formatNumber(account.seatLimit)} seats`}
           </small>
         </div>
         <div>
-          <span>Afventende invitationer</span>
+          <span>Pending invitations</span>
           <strong className="num">{formatNumber(pending.length)}</strong>
-          <small>{pending.length === 0 ? 'Ingen lige nu' : 'Har ikke logget ind endnu'}</small>
+          <small>{pending.length === 0 ? 'None right now' : 'Not signed in yet'}</small>
         </div>
       </section>
 
@@ -123,11 +123,11 @@ export function UsersClient({ initial }: { initial: AccountUsers }) {
           <table className="au-table">
             <thead>
               <tr>
-                <th>Navn</th>
-                <th>E-mail</th>
-                <th>Rolle</th>
+                <th>Name</th>
+                <th>Email</th>
+                <th>Role</th>
                 <th>Status</th>
-                {manage && <th className="r" aria-label="Handlinger" />}
+                {manage && <th className="r" aria-label="Actions" />}
               </tr>
             </thead>
             <tbody>
@@ -139,7 +139,7 @@ export function UsersClient({ initial }: { initial: AccountUsers }) {
                   <tr key={m.userId}>
                     <td>
                       <b className="au-name">{m.name || m.email.split('@')[0]}</b>
-                      {isMe && <span className="au-you">dig</span>}
+                      {isMe && <span className="au-you">you</span>}
                     </td>
                     <td className="au-muted">{m.email}</td>
                     <td>
@@ -149,7 +149,7 @@ export function UsersClient({ initial }: { initial: AccountUsers }) {
                           value={m.role}
                           disabled={busy === m.userId}
                           onChange={(e) => setRole(m, e.target.value as AccountRole)}
-                          aria-label={`Rolle for ${m.email}`}
+                          aria-label={`Role for ${m.email}`}
                         >
                           {roles.map((r) => (
                             <option key={r} value={r}>
@@ -163,11 +163,11 @@ export function UsersClient({ initial }: { initial: AccountUsers }) {
                     </td>
                     <td>
                       {m.lastSignInAt ? (
-                        <span className="st" title={`Sidst logget ind ${formatWhen(m.lastSignInAt)}`}>
-                          Aktiv
+                        <span className="st" title={`Last signed in ${formatWhen(m.lastSignInAt)}`}>
+                          Active
                         </span>
                       ) : (
-                        <span className="pill ai">Inviteret</span>
+                        <span className="pill ai">Invited</span>
                       )}
                     </td>
                     {manage && (
@@ -175,12 +175,12 @@ export function UsersClient({ initial }: { initial: AccountUsers }) {
                         <span className="au-acts">
                           {editable && confirmRemove === m.userId ? (
                             <>
-                              <span className="au-muted">Fjern adgang?</span>
+                              <span className="au-muted">Remove access?</span>
                               <button type="button" className="au-act neg" onClick={() => remove(m)}>
-                                Fjern
+                                Remove
                               </button>
                               <button type="button" className="au-act" onClick={() => setConfirmRemove(null)}>
-                                Annullér
+                                Cancel
                               </button>
                             </>
                           ) : (
@@ -193,7 +193,7 @@ export function UsersClient({ initial }: { initial: AccountUsers }) {
                                     onClick={() => newLink(m)}
                                     disabled={busy === m.userId}
                                   >
-                                    Nyt link
+                                    New link
                                   </button>
                                 )}
                                 <button
@@ -202,7 +202,7 @@ export function UsersClient({ initial }: { initial: AccountUsers }) {
                                   onClick={() => setConfirmRemove(m.userId)}
                                   disabled={busy === m.userId}
                                 >
-                                  Fjern
+                                  Remove
                                 </button>
                               </>
                             )
@@ -224,7 +224,7 @@ export function UsersClient({ initial }: { initial: AccountUsers }) {
             <b>{ROLE_LABEL[r]}:</b> {ROLE_HINT[r]}.
           </p>
         ))}
-        {!manage && <p>Kun ejere og admins kan invitere og ændre brugere.</p>}
+        {!manage && <p>Only owners and admins can invite and change users.</p>}
       </div>
 
       {inviting && (
@@ -296,7 +296,7 @@ function InviteDialog({
       })
       const json = await res.json()
       if (!res.ok) {
-        setError(json.error ?? 'Invitationen kunne ikke oprettes')
+        setError(json.error ?? 'The invitation could not be created')
         return
       }
       const r = json as InviteResult
@@ -310,12 +310,12 @@ function InviteDialog({
 
   if (added) {
     return (
-      <Dialog title="Brugeren er tilføjet" onClose={() => onDone({ kind: 'added', email: added })}>
+      <Dialog title="User added" onClose={() => onDone({ kind: 'added', email: added })}>
         <div className="au-dlg-body">
-          <p>{added} har allerede et login og ser kontoen næste gang, de logger ind. Der er ikke brug for et link.</p>
+          <p>{added} already has a login and will see the account next time they sign in. No link is needed.</p>
           <div className="au-dlg-foot">
             <button type="button" className="wl-btn-primary" onClick={() => onDone({ kind: 'added', email: added })}>
-              Luk
+              Close
             </button>
           </div>
         </div>
@@ -324,10 +324,10 @@ function InviteDialog({
   }
 
   return (
-    <Dialog title="Invitér bruger" onClose={onClose}>
+    <Dialog title="Invite user" onClose={onClose}>
       <form className="au-dlg-body" onSubmit={submit}>
         <label className="au-field">
-          <span>E-mail</span>
+          <span>Email</span>
           <input
             type="email"
             className="au-sel"
@@ -338,11 +338,11 @@ function InviteDialog({
           />
         </label>
         <label className="au-field">
-          <span>Navn (valgfrit)</span>
+          <span>Name (optional)</span>
           <input className="au-sel" value={name} onChange={(e) => setName(e.target.value)} />
         </label>
         <label className="au-field">
-          <span>Rolle</span>
+          <span>Role</span>
           <select className="au-sel" value={role} onChange={(e) => setRole(e.target.value as AccountRole)}>
             {roles.map((r) => (
               <option key={r} value={r}>
@@ -352,16 +352,16 @@ function InviteDialog({
           </select>
         </label>
         <p className="au-muted">
-          Du får et link, som du selv sender. Med det vælger brugeren en adgangskode. Har e-mailen allerede et login,
-          tilføjes brugeren med det samme.
+          You get a link to send yourself. With it, the user chooses a password. If the email already has a login,
+          the user is added straight away.
         </p>
         {error && <p className="note warn">{error}</p>}
         <div className="au-dlg-foot">
           <button type="button" className="wl-btn-secondary" onClick={onClose}>
-            Annullér
+            Cancel
           </button>
           <button type="submit" className="wl-btn-primary" disabled={busy || !email.trim()}>
-            {busy ? 'Opretter…' : 'Invitér'}
+            {busy ? 'Creating…' : 'Invite'}
           </button>
         </div>
       </form>
@@ -372,19 +372,19 @@ function InviteDialog({
 function LinkDialog({ email, link, onClose }: { email: string; link: string; onClose: () => void }) {
   const [copied, setCopied] = useState(false)
   return (
-    <Dialog title="Send linket til brugeren" onClose={onClose}>
+    <Dialog title="Send the link to the user" onClose={onClose}>
       <div className="au-dlg-body">
         <p>
-          Send linket til <b>{email}</b>. Det virker én gang og udløber efter et døgn. Udløber det, laver du et nyt fra
-          listen.
+          Send the link to <b>{email}</b>. It works once and expires after 24 hours. If it expires, create a new one from
+          the list.
         </p>
         <div className="au-url">
           <Icon name="link" size={14} />
-          <input readOnly value={link} onFocus={(e) => e.currentTarget.select()} aria-label="Invitationslink" />
+          <input readOnly value={link} onFocus={(e) => e.currentTarget.select()} aria-label="Invitation link" />
         </div>
         <div className="au-dlg-foot">
           <button type="button" className="wl-btn-secondary" onClick={onClose}>
-            Luk
+            Close
           </button>
           <button
             type="button"
@@ -394,7 +394,7 @@ function LinkDialog({ email, link, onClose }: { email: string; link: string; onC
               setCopied(true)
             }}
           >
-            {copied ? '✓ Kopieret' : 'Kopiér link'}
+            {copied ? '✓ Copied' : 'Copy link'}
           </button>
         </div>
       </div>

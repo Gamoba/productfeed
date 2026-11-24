@@ -127,7 +127,7 @@ export function BucketRunTab({
 
       {noMembers && (
         <p style={{ fontSize: '13px', color: 'var(--ink-muted)' }}>
-          Bucketen har ingen varer endnu. Vælg dem under Scope først.
+          The bucket has no products yet. Choose them under Scope first.
         </p>
       )}
 
@@ -136,30 +136,30 @@ export function BucketRunTab({
       <div className="space-y-1.5">
         <div className="wl-eyebrow" style={{ color: 'var(--accent-ink)' }}>Run</div>
         <h2 style={{ fontSize: '26px', fontWeight: 500, letterSpacing: '-0.02em', lineHeight: 1.1, color: 'var(--ink)' }}>
-          Kør optimering
+          Run optimisation
         </h2>
         <p style={{ fontSize: '13px', color: 'var(--ink-muted)' }}>
-          Generér og gem AI-titler for bucketens varer. Brug knappen i bjælken nederst.
+          Generate and save AI titles for the bucket’s products. Use the button in the bar at the bottom.
         </p>
       </div>
 
       {/* Numbers as context */}
       {loadingSummary ? (
-        <p style={{ fontSize: '13px', color: 'var(--ink-muted)' }}>Henter…</p>
+        <p style={{ fontSize: '13px', color: 'var(--ink-muted)' }}>Loading…</p>
       ) : summary ? (
         <div className="wl-card" style={{ overflow: 'hidden' }}>
           <div className="grid grid-cols-3">
-            <Stat first label="I bucketen" value={summary.inScope} />
-            <Stat label="Optimeret" value={summary.alreadyOptimized} />
-            <Stat label="Ikke endnu" value={summary.notYetOptimized} />
+            <Stat first label="In the bucket" value={summary.inScope} />
+            <Stat label="Optimised" value={summary.alreadyOptimized} />
+            <Stat label="Not yet" value={summary.notYetOptimized} />
           </div>
           {(summary.humanEdited > 0 || summary.needsReview > 0) && (
             <div
               className="flex flex-wrap gap-x-6 gap-y-1"
               style={{ padding: '12px 18px', borderTop: '1px solid var(--hairline)', fontSize: '12px', color: 'var(--ink-muted)' }}
             >
-              {summary.humanEdited > 0 && <span>{summary.humanEdited.toLocaleString('da-DK')} rettet i hånden</span>}
-              {summary.needsReview > 0 && <span>{summary.needsReview.toLocaleString('da-DK')} venter på godkendelse</span>}
+              {summary.humanEdited > 0 && <span>{summary.humanEdited.toLocaleString('en-GB')} edited by hand</span>}
+              {summary.needsReview > 0 && <span>{summary.needsReview.toLocaleString('en-GB')} awaiting review</span>}
             </div>
           )}
         </div>
@@ -169,7 +169,7 @@ export function BucketRunTab({
       {running && (
         <div className="space-y-1.5">
           <div style={{ fontSize: '12px', color: 'var(--ink-secondary)' }}>
-            {progress.done.toLocaleString('da-DK')} af {progress.total.toLocaleString('da-DK')} optimeret…
+            {progress.done.toLocaleString('en-GB')} of {progress.total.toLocaleString('en-GB')} optimised…
           </div>
           <div style={{ height: '6px', background: 'var(--bg-surface)', border: '1px solid var(--hairline)', borderRadius: '999px', overflow: 'hidden' }}>
             <div style={{ height: '100%', width: progress.total ? `${(progress.done / progress.total) * 100}%` : '0%', background: 'var(--accent-ink)', transition: 'width 0.2s' }} />
@@ -179,18 +179,18 @@ export function BucketRunTab({
 
       {/* Options */}
       <div className="wl-card" style={{ padding: '16px' }}>
-        <div className="wl-eyebrow" style={{ marginBottom: '12px' }}>Valg</div>
+        <div className="wl-eyebrow" style={{ marginBottom: '12px' }}>Options</div>
         <div className="space-y-3">
           <label className="flex items-center gap-2.5" style={{ fontSize: '13px', color: 'var(--ink-secondary)' }}>
             <input type="checkbox" checked={rerun} onChange={(e) => setRerun(e.target.checked)} />
-            Optimér også varer, der allerede har en AI-titel
+            Also optimise products that already have an AI title
           </label>
           <label
             className="flex items-center gap-2.5"
             style={{ fontSize: '13px', color: rerun ? 'var(--ink-secondary)' : 'var(--ink-muted)', paddingLeft: '22px' }}
           >
             <input type="checkbox" checked={includeHumanEdited} disabled={!rerun} onChange={(e) => setIncludeHumanEdited(e.target.checked)} />
-            Overskriv også titler, der er rettet i hånden{summary && summary.humanEdited > 0 ? ` (${summary.humanEdited.toLocaleString('da-DK')})` : ''} — destruktivt
+            Also overwrite titles edited by hand{summary && summary.humanEdited > 0 ? ` (${summary.humanEdited.toLocaleString('en-GB')})` : ''} — destructive
           </label>
         </div>
       </div>
@@ -206,7 +206,7 @@ function Stat({ label, value, first }: { label: string; value: number; first?: b
         className="mt-2"
         style={{ fontSize: '26px', fontWeight: 500, letterSpacing: '-0.02em', lineHeight: 1.05, color: 'var(--ink)' }}
       >
-        {value.toLocaleString('da-DK')}
+        {value.toLocaleString('en-GB')}
       </p>
     </div>
   )

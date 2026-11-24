@@ -22,7 +22,7 @@ export async function getFeedMetafields(
   if (!user) return { error: 'Unauthorized' }
 
   const owned = await getOwnedFeed(user.id, feedId)
-  if (!owned) return { error: 'Feed ikke fundet' }
+  if (!owned) return { error: 'Feed not found' }
 
   return { data: await getFeedMetafieldsLib(feedId) }
 }
@@ -39,7 +39,7 @@ export async function saveFilters(
   if (!user) return { error: 'Unauthorized' }
 
   const owned = await getOwnedFeed(user.id, feedId)
-  if (!owned) return { error: 'Feed ikke fundet' }
+  if (!owned) return { error: 'Feed not found' }
 
   const db = adminDb()
   const { data: prevRows } = await db.from('feed_filters').select('filter_type, operator, rules').eq('feed_id', feedId)
@@ -57,20 +57,20 @@ export async function saveFilters(
   const text = (rules: FilterRule[] | null | undefined) =>
     (rules ?? []).map((r) => r as FeedFilterRule).filter(isActiveRule).map(describeRule)
   for (const [type, cfg, word] of [
-    ['include', include, 'Inkludér'],
-    ['exclude', exclude, 'Ekskludér'],
+    ['include', include, 'Include'],
+    ['exclude', exclude, 'Exclude'],
   ] as const) {
     const p = ((prevRows ?? []) as { filter_type: string; operator: string; rules: FilterRule[] }[]).find((r) => r.filter_type === type)
     const before = text(p?.rules)
     const after = text(cfg.rules)
     for (const r of after.filter((x) => !before.includes(x))) {
-      await logActivity(db, { user, feedId, area: 'Inkludér / ekskludér', action: `${word}-regel tilføjet`, after: r })
+      await logActivity(db, { user, feedId, area: 'Include / exclude', action: `${word} rule added`, after: r })
     }
     for (const r of before.filter((x) => !after.includes(x))) {
-      await logActivity(db, { user, feedId, area: 'Inkludér / ekskludér', action: `${word}-regel fjernet`, before: r })
+      await logActivity(db, { user, feedId, area: 'Include / exclude', action: `${word} rule removed`, before: r })
     }
     if (p && p.operator !== cfg.operator && after.length > 1) {
-      await logActivity(db, { user, feedId, area: 'Inkludér / ekskludér', action: `${word}: kobling ændret`, before: p.operator === 'AND' ? 'Alle regler' : 'Én af reglerne', after: cfg.operator === 'AND' ? 'Alle regler' : 'Én af reglerne' })
+      await logActivity(db, { user, feedId, area: 'Include / exclude', action: `${word}: rule logic changed`, before: p.operator === 'AND' ? 'All rules' : 'Any one rule', after: cfg.operator === 'AND' ? 'All rules' : 'Any one rule' })
     }
   }
   return {}

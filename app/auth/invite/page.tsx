@@ -25,7 +25,7 @@ export default function InvitePage() {
     // Keep the tokens out of the address bar and history.
     window.history.replaceState(null, '', window.location.pathname)
     /* eslint-disable react-hooks/set-state-in-effect -- one-time read of the URL hash */
-    if (p.get('error')) setLinkError(p.get('error_description') ?? 'Linket virker ikke.')
+    if (p.get('error')) setLinkError(p.get('error_description') ?? 'The link does not work.')
     setTokens(accessToken && refreshToken ? { accessToken, refreshToken } : 'none')
     /* eslint-enable react-hooks/set-state-in-effect */
   }, [])
@@ -34,7 +34,7 @@ export default function InvitePage() {
     e.preventDefault()
     if (!tokens || tokens === 'none') return
     if (password !== repeat) {
-      setError('De to adgangskoder er ikke ens.')
+      setError('The two passwords do not match.')
       return
     }
     setBusy(true)
@@ -53,24 +53,24 @@ export default function InvitePage() {
       <div className="iv-card card">
         <span className="iv-brand">FeedFlow</span>
         {tokens === null ? (
-          <p className="iv-muted">Åbner invitationen…</p>
+          <p className="iv-muted">Opening the invitation…</p>
         ) : tokens === 'none' ? (
           <>
-            <h1>Linket virker ikke</h1>
+            <h1>The link does not work</h1>
             <p className="iv-muted">
-              {linkError ?? 'Invitationen er udløbet eller allerede brugt.'} Bed den, der inviterede dig, om et nyt link
+              {linkError ?? 'The invitation has expired or has already been used.'} Ask the person who invited you for a new link
               under Agency users.
             </p>
             <a href="/login" className="link">
-              Gå til log ind
+              Go to sign in
             </a>
           </>
         ) : (
           <form onSubmit={submit} className="iv-form">
-            <h1>Velkommen</h1>
-            <p className="iv-muted">Vælg en adgangskode. Du logger ind med din e-mail og den fremover.</p>
+            <h1>Welcome</h1>
+            <p className="iv-muted">Choose a password. From now on you sign in with your email and this password.</p>
             <label>
-              <span>Adgangskode</span>
+              <span>Password</span>
               <input
                 type="password"
                 autoComplete="new-password"
@@ -81,7 +81,7 @@ export default function InvitePage() {
               />
             </label>
             <label>
-              <span>Gentag adgangskode</span>
+              <span>Repeat password</span>
               <input
                 type="password"
                 autoComplete="new-password"
@@ -93,7 +93,7 @@ export default function InvitePage() {
             </label>
             {error && <p className="note warn">{error}</p>}
             <button type="submit" className="wl-btn-primary" disabled={busy}>
-              {busy ? 'Gemmer…' : 'Gem og fortsæt'}
+              {busy ? 'Saving…' : 'Save and continue'}
             </button>
           </form>
         )}

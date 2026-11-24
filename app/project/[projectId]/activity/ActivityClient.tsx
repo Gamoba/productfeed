@@ -5,8 +5,8 @@ import type { ActivityRow } from '@/lib/activity'
 import { formatNumber } from '@/lib/formatDa'
 import './activity.css'
 
-const fmt = new Intl.DateTimeFormat('da-DK', { day: 'numeric', month: 'short', hour: '2-digit', minute: '2-digit' })
-const fmtDay = new Intl.DateTimeFormat('da-DK', { day: 'numeric', month: 'short', year: 'numeric' })
+const fmt = new Intl.DateTimeFormat('en-GB', { day: 'numeric', month: 'short', hour: '2-digit', minute: '2-digit' })
+const fmtDay = new Intl.DateTimeFormat('en-GB', { day: 'numeric', month: 'short', year: 'numeric' })
 
 export function ActivityClient({ rows, available, limit }: { rows: ActivityRow[]; available: boolean; limit: number }) {
   const [where, setWhere] = useState('all')
@@ -14,7 +14,7 @@ export function ActivityClient({ rows, available, limit }: { rows: ActivityRow[]
   const [who, setWho] = useState('all')
 
   const opts = useMemo(() => {
-    const uniq = (f: (r: ActivityRow) => string) => [...new Set(rows.map(f))].sort((a, b) => a.localeCompare(b, 'da'))
+    const uniq = (f: (r: ActivityRow) => string) => [...new Set(rows.map(f))].sort((a, b) => a.localeCompare(b, 'en'))
     return { where: uniq((r) => r.where), area: uniq((r) => r.area), who: uniq((r) => r.actor) }
   }, [rows])
 
@@ -23,31 +23,31 @@ export function ActivityClient({ rows, available, limit }: { rows: ActivityRow[]
   )
   const filtered = where !== 'all' || area !== 'all' || who !== 'all'
   const span =
-    rows.length > 0 ? `${fmtDay.format(new Date(rows[rows.length - 1].at))} til ${fmtDay.format(new Date(rows[0].at))}` : null
+    rows.length > 0 ? `${fmtDay.format(new Date(rows[rows.length - 1].at))} to ${fmtDay.format(new Date(rows[0].at))}` : null
 
   return (
     <div className="al">
       <header className="al-head">
         <div>
           <h1>Activity log</h1>
-          <p className="al-lede">Hvem har ændret hvad, og hvornår. Hver linje viser værdien før og efter.</p>
+          <p className="al-lede">Who changed what, and when. Each line shows the value before and after.</p>
         </div>
       </header>
 
       {!available ? (
         <section className="card al-empty">
-          <h3>Loggen er ikke slået til endnu</h3>
-          <p>Den kræver databaseændringen for aktivitetsloggen (migration 056). Når den er kørt, logges ændringer herfra.</p>
+          <h3>The log is not switched on yet</h3>
+          <p>It needs the activity log database change (migration 056). Once that has run, changes are logged from then on.</p>
         </section>
       ) : (
         <>
           <div className="al-tools">
-            <Select label="Hvor" value={where} onChange={setWhere} all="Alle steder" options={opts.where} />
-            <Select label="Hændelse" value={area} onChange={setArea} all="Alle hændelser" options={opts.area} />
-            <Select label="Bruger" value={who} onChange={setWho} all="Alle brugere" options={opts.who} />
+            <Select label="Where" value={where} onChange={setWhere} all="All places" options={opts.where} />
+            <Select label="Event" value={area} onChange={setArea} all="All events" options={opts.area} />
+            <Select label="User" value={who} onChange={setWho} all="All users" options={opts.who} />
             <span className="al-count">
               {span && <>{span} · </>}
-              {formatNumber(shown.length)} {shown.length === 1 ? 'hændelse' : 'hændelser'}
+              {formatNumber(shown.length)} {shown.length === 1 ? 'event' : 'events'}
             </span>
           </div>
 
@@ -56,17 +56,17 @@ export function ActivityClient({ rows, available, limit }: { rows: ActivityRow[]
               <table className="al-table">
                 <thead>
                   <tr>
-                    <th>Tidspunkt</th>
-                    <th>Bruger</th>
-                    <th>Hvor</th>
-                    <th>Hvad</th>
-                    <th>Før</th>
-                    <th>Efter</th>
+                    <th>Time</th>
+                    <th>User</th>
+                    <th>Where</th>
+                    <th>What</th>
+                    <th>Before</th>
+                    <th>After</th>
                   </tr>
                 </thead>
                 <tbody>
                   {shown.map((r) => {
-                    const failed = /fejlede/i.test(r.action)
+                    const failed = /fejlede|failed/i.test(r.action)
                     return (
                       <tr key={r.id}>
                         <td className="al-when num">{fmt.format(new Date(r.at))}</td>
@@ -89,15 +89,15 @@ export function ActivityClient({ rows, available, limit }: { rows: ActivityRow[]
             {shown.length === 0 && (
               <p className="al-none">
                 {rows.length === 0
-                  ? 'Ingen ændringer endnu. Når nogen gemmer noget i shoppen eller dens feeds, står det her.'
-                  : 'Ingen hændelser med de valg. Vælg Alle for at se hele loggen.'}
+                  ? 'No changes yet. When someone saves something in the shop or its feeds, it shows up here.'
+                  : 'No events match those filters. Choose All to see the whole log.'}
               </p>
             )}
           </section>
 
           <p className="al-foot">
-            {rows.length >= limit && !filtered ? `Viser de seneste ${formatNumber(limit)} hændelser. ` : ''}
-            Automatiske kørsler logges kun, når de fejler. Hændelser om brugere gælder hele kontoen og vises i alle shops.
+            {rows.length >= limit && !filtered ? `Showing the latest ${formatNumber(limit)} events. ` : ''}
+            Automatic runs are only logged when they fail. Events about users apply to the whole account and show in every shop.
           </p>
         </>
       )}

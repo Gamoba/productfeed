@@ -71,7 +71,7 @@ export function FiltersClient({
         })
         .catch((e: unknown) => {
           if (e instanceof DOMException && e.name === 'AbortError') return
-          setPreviewError(e instanceof Error ? e.message : 'Previewet kunne ikke beregnes')
+          setPreviewError(e instanceof Error ? e.message : 'The preview could not be calculated')
         })
     }, PREVIEW_DEBOUNCE_MS)
     return () => clearTimeout(t)
@@ -106,24 +106,24 @@ export function FiltersClient({
     <div className="fl">
       <div className="fl-head">
         <div>
-          <h1>Inkludér og ekskludér produkter</h1>
+          <h1>Include and exclude products</h1>
           <p className="fl-lede">
-            Bestem hvilke varer der kommer med i feedet. Vælg øverst, om du arbejder med de inkluderede eller
-            de ekskluderede, og se i previewet, hvor hver vare lander. Intet ændres, før du gemmer.
+            Decide which products go into the feed. Choose at the top whether you are working with the included or
+            the excluded products, and see in the preview where each product lands. Nothing changes until you save.
           </p>
         </div>
         <div className="fl-actions">
-          {dirty && !isPending && <span className="fl-dirty">Ikke gemt</span>}
+          {dirty && !isPending && <span className="fl-dirty">Not saved</span>}
           <button type="button" className="wl-btn-primary" onClick={() => save()} disabled={isPending || !dirty}>
-            {isPending ? 'Gemmer…' : justSaved ? '✓ Gemt' : 'Gem'}
+            {isPending ? 'Saving…' : justSaved ? '✓ Saved' : 'Save'}
           </button>
         </div>
       </div>
 
-      {saveError && <p className="note warn">Reglerne kunne ikke gemmes: {saveError}</p>}
+      {saveError && <p className="note warn">The rules could not be saved: {saveError}</p>}
 
       <div className="fl-sidebar">
-        <div className="fl-seg" role="tablist" aria-label="Vælg side">
+        <div className="fl-seg" role="tablist" aria-label="Choose side">
           {(['include', 'exclude'] as const).map((s) => (
             <button
               key={s}
@@ -132,41 +132,41 @@ export function FiltersClient({
               aria-selected={side === s}
               onClick={() => setSide(s)}
             >
-              {s === 'include' ? 'Inkluderede produkter' : 'Ekskluderede produkter'}
+              {s === 'include' ? 'Included products' : 'Excluded products'}
               <b className="num">{data ? formatNumber(s === 'include' ? data.included : data.excluded) : '…'}</b>
             </button>
           ))}
         </div>
-        <span className="fl-total">{data ? `${formatNumber(data.total)} aktive varer i shoppen` : 'Tæller varer…'}</span>
+        <span className="fl-total">{data ? `${formatNumber(data.total)} active products in the shop` : 'Counting products…'}</span>
       </div>
 
       <div className="fl-grid">
         <section className="card">
           <div className="fl-card-h">
-            <h3>{side === 'include' ? 'Regler for inkludering' : 'Regler for ekskludering'}</h3>
+            <h3>{side === 'include' ? 'Inclusion rules' : 'Exclusion rules'}</h3>
             <small>
               {side === 'include'
-                ? 'Kun varer der matcher, kommer med. Ingen regler betyder, at alle aktive varer kommer med.'
-                : 'Varer der matcher, tages ud af feedet. Tjekkes efter inkluderingen.'}
+                ? 'Only matching products are included. No rules means all active products are included.'
+                : 'Matching products are taken out of the feed. Checked after inclusion.'}
             </small>
           </div>
 
           {config.rules.length === 0 ? (
-            <p className="fl-empty">Ingen regler endnu.</p>
+            <p className="fl-empty">No rules yet.</p>
           ) : (
             <div className="fl-rules">
               {config.rules.map((rule, i) => (
                 <div className="fl-rule" key={i}>
                   {i === 0 ? (
-                    <span className="fl-kw">HVIS</span>
+                    <span className="fl-kw">IF</span>
                   ) : (
                     <button
                       type="button"
                       className="fl-kw fl-kw-btn"
-                      title="Skift mellem OG og ELLER for alle regler"
+                      title="Switch between AND and OR for all rules"
                       onClick={() => setConfig((c) => ({ ...c, operator: c.operator === 'AND' ? 'OR' : 'AND' }))}
                     >
-                      {config.operator === 'AND' ? 'OG' : 'ELLER'}
+                      {config.operator === 'AND' ? 'AND' : 'OR'}
                     </button>
                   )}
                   <div className="fl-rule-body">
@@ -188,13 +188,13 @@ export function FiltersClient({
             className="fl-add"
             onClick={() => setConfig((c) => ({ ...c, rules: [...c.rules, defaultRule()] }))}
           >
-            + Tilføj regel
+            + Add rule
           </button>
 
           {(ruleStats?.length ?? 0) > 0 && (
             <div className={`fl-stats${stale ? ' is-stale' : ''}`}>
               <p className="fl-label">
-                {side === 'include' ? 'Så mange varer holder hver regel ude' : 'Så mange varer tager hver regel ud'}
+                {side === 'include' ? 'Products each rule keeps out' : 'Products each rule takes out'}
               </p>
               <dl>
                 {ruleStats!.map((r, i) => (
@@ -206,16 +206,16 @@ export function FiltersClient({
               </dl>
               {config.operator === 'AND' && config.rules.length > 1 && (
                 <p className="fl-muted fl-small">
-                  Reglerne gælder samlet (OG), så tallene her er for hver regel alene.
+                  The rules apply together (AND), so the numbers here are for each rule on its own.
                 </p>
               )}
             </div>
           )}
           {otherCount > 0 && (
             <p className="fl-muted fl-small">
-              Der er også {otherCount} {otherCount === 1 ? 'regel' : 'regler'} for{' '}
+              There {otherCount === 1 ? 'is' : 'are'} also {otherCount} {otherCount === 1 ? 'rule' : 'rules'} for{' '}
               <button type="button" className="fl-link" onClick={() => setSide(side === 'include' ? 'exclude' : 'include')}>
-                {side === 'include' ? 'ekskludering' : 'inkludering'}
+                {side === 'include' ? 'exclusion' : 'inclusion'}
               </button>
               .
             </p>
@@ -225,7 +225,7 @@ export function FiltersClient({
         <section className="card">
           <div className="fl-card-h">
             <h3>Preview</h3>
-            <small>Søg en vare frem og se, om den bliver {side === 'include' ? 'inkluderet' : 'ekskluderet'}, og hvorfor.</small>
+            <small>Search for a product and see whether it is {side === 'include' ? 'included' : 'excluded'}, and why.</small>
           </div>
           <label className="fl-search">
             <Icon name="search" size={14} />
@@ -233,24 +233,24 @@ export function FiltersClient({
               type="search"
               value={search}
               onChange={(e) => setSearch(e.target.value)}
-              placeholder="Søg på titel, producent eller id"
-              aria-label="Søg i previewet"
+              placeholder="Search by title, vendor or ID"
+              aria-label="Search the preview"
             />
           </label>
 
           {previewError ? (
             <p className="note warn">{previewError}</p>
           ) : !data ? (
-            <p className="fl-muted fl-small">Regner på reglerne… Første gang kan tage lidt tid på en stor shop.</p>
+            <p className="fl-muted fl-small">Working out the rules… The first time can take a while on a large shop.</p>
           ) : (
             <div className={stale ? 'is-stale' : undefined} aria-busy={stale}>
               {data.products.length === 0 ? (
                 <p className="fl-muted fl-small fl-none">
                   {search.trim()
-                    ? 'Ingen varer matcher søgningen på denne side.'
+                    ? 'No products on this side match the search.'
                     : side === 'include'
-                      ? 'Ingen varer kommer med i feedet med disse regler.'
-                      : 'Ingen varer bliver ekskluderet med disse regler.'}
+                      ? 'No products are included in the feed with these rules.'
+                      : 'No products are excluded with these rules.'}
                 </p>
               ) : (
                 <ul className="fl-list">
@@ -267,11 +267,11 @@ export function FiltersClient({
                       <span className="fl-p">
                         <b>{p.title}</b>
                         <small>
-                          {[p.vendor, p.id, p.stock != null ? `lager ${formatNumber(p.stock)}` : null].filter(Boolean).join(' · ')}
+                          {[p.vendor, p.id, p.stock != null ? `stock ${formatNumber(p.stock)}` : null].filter(Boolean).join(' · ')}
                         </small>
                       </span>
                       <span className="fl-state">
-                        {p.inFeed ? <span className="st">Inkluderet</span> : <span className="neg">Ekskluderet</span>}
+                        {p.inFeed ? <span className="st">Included</span> : <span className="neg">Excluded</span>}
                         {p.reason && <small>{p.reason}</small>}
                       </span>
                     </li>
@@ -279,9 +279,9 @@ export function FiltersClient({
                 </ul>
               )}
               <p className="fl-muted fl-small">
-                Viser {formatNumber(data.products.length)} af {formatNumber(data.matching)}{' '}
-                {side === 'include' ? 'inkluderede' : 'ekskluderede'} varer
-                {search.trim() ? ' der matcher søgningen' : ''}.
+                Showing {formatNumber(data.products.length)} of {formatNumber(data.matching)}{' '}
+                {side === 'include' ? 'included' : 'excluded'} products
+                {search.trim() ? ' matching the search' : ''}.
               </p>
             </div>
           )}
@@ -289,9 +289,9 @@ export function FiltersClient({
       </div>
 
       <div className="fl-step">
-        <span>Trin 2 af 5 i opsætningen af feedet</span>
+        <span>Step 2 of 5 in setting up the feed</span>
         <Link href={`/feed/${feedId}/mapping`} className="wl-btn-secondary">
-          Tilbage til Mapping
+          Back to Mapping
         </Link>
         <button
           type="button"
@@ -299,7 +299,7 @@ export function FiltersClient({
           disabled={isPending}
           onClick={() => (dirty ? save(() => router.push(`/feed/${feedId}/optimize`)) : router.push(`/feed/${feedId}/optimize`))}
         >
-          {dirty ? 'Gem og videre til AI Titles' : 'Videre til AI Titles'}
+          {dirty ? 'Save and continue to AI Titles' : 'Continue to AI Titles'}
         </button>
       </div>
     </div>

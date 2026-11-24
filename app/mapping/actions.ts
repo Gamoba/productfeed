@@ -79,7 +79,7 @@ export async function saveMappings(
         user,
         feedId,
         area: 'Mapping',
-        action: !after ? `Felt ${e.google_field} fjernet` : !before ? `Felt ${e.google_field} mappet` : `Felt ${e.google_field} ændret`,
+        action: !after ? `Field ${e.google_field} removed` : !before ? `Field ${e.google_field} mapped` : `Field ${e.google_field} changed`,
         before,
         after,
       })

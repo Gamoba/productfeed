@@ -47,6 +47,6 @@ export async function signUp(prevState: AuthState): Promise<AuthState> {
   return {
     ...prevState,
     mode: 'login',
-    error: 'Registrering er lukket. Kontakt administratoren for at få oprettet en konto.',
+    error: 'Sign-up is closed. Contact the administrator to get an account.',
   }
 }

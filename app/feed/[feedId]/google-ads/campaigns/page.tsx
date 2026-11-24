@@ -52,9 +52,9 @@ export default async function CampaignsPage({
   if (!settings?.customer_id) {
     return (
       <Empty
-        title="Feedet er ikke koblet til Google Ads"
-        body="Kampagnetallene kommer fra samme synkronisering som Performance, så feedet skal have en forbindelse og mindst én hentning først."
-        action={{ href: `/feed/${feedId}/google-ads`, label: 'Gå til Performance' }}
+        title="This feed is not connected to Google Ads"
+        body="Campaign figures come from the same sync as Performance, so the feed needs a connection and at least one sync first."
+        action={{ href: `/feed/${feedId}/google-ads`, label: 'Go to Performance' }}
       />
     )
   }
