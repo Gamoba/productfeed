@@ -15,6 +15,8 @@ export type Actor = Pick<User, 'id' | 'email' | 'user_metadata'> | null
 export type ActivityInput = {
   /** null = the system (scheduled runs). */
   user: Actor
+  /** Made through an assistant: shown as "Name via Claude". */
+  via?: string
   area: string
   action: string
   before?: string | number | null
@@ -86,7 +88,7 @@ export async function logActivity(db: SupabaseClient, input: ActivityInput): Pro
       feed_id: input.feedId ?? null,
       feed_label: label,
       user_id: input.user?.id ?? null,
-      actor: actorName(input.user),
+      actor: input.via ? `${actorName(input.user)} via ${input.via}` : actorName(input.user),
       area: input.area,
       action: clip(input.action) ?? input.area,
       before: clip(input.before),
