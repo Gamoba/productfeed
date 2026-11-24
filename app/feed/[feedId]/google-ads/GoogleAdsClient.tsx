@@ -221,7 +221,7 @@ type SortKey =
   | 'dRoasAbs'
 
 const describeActions = (list: string[]): string =>
-  list.length === 0 ? 'not selected' : list.map((a) => `«${a}»`).join(' + ')
+  list.length === 0 ? 'ikke valgt' : list.map((a) => `«${a}»`).join(' + ')
 
 function compare(a: number | null, b: number | null, dir: 1 | -1): number {
   if (a === null && b === null) return 0
@@ -453,7 +453,7 @@ export function GoogleAdsClient({
       const res = await fetch(`/api/google-ads/${feedId}/sync`, { method: 'POST' })
       const json = await res.json()
       if (!res.ok) {
-        setSyncError(json.error ?? 'Sync failed')
+        setSyncError(json.error ?? 'Tallene kunne ikke hentes')
         return
       }
       const warnings: string[] = json.result?.warnings ?? []
@@ -464,7 +464,7 @@ export function GoogleAdsClient({
       setVariantStock({})
       router.refresh()
     } catch {
-      setSyncError('Could not reach the server')
+      setSyncError('Kunne ikke få kontakt til serveren')
     } finally {
       setSyncing(false)
     }
@@ -692,11 +692,11 @@ export function GoogleAdsClient({
                 style={{ background: 'var(--accent-amber)', marginTop: '5px' }}
               />
               <p style={{ fontSize: '12px', color: 'var(--ink-secondary)', lineHeight: 1.5 }}>
-                Change figures are hidden: the comparison period {comparison.from} →{' '}
-                {comparison.to} is only {comparison.coveredDays} day
-                {comparison.coveredDays === 1 ? '' : 's'} deep in the archive, so every metric
-                would appear to have grown. Pick a shorter window, or raise the sync window in
-                Settings and refetch.
+                Ændringstallene er skjult: sammenligningsperioden {comparison.from} →{' '}
+                {comparison.to} dækker kun {comparison.coveredDays}{' '}
+                {comparison.coveredDays === 1 ? 'dag' : 'dage'} i arkivet, så alle tal ville se
+                ud til at være vokset. Vælg en kortere periode, eller øg synkroniseringsperioden
+                under Settings, og hent tallene igen.
               </p>
             </div>
           </div>
@@ -740,7 +740,7 @@ export function GoogleAdsClient({
                     // with VAT in the name — and the other one is the setting
                     // that actually moves break-even. Ticking this and watching
                     // break-even sit still read as a broken feature.
-                    title={`Changes how the Margin column is DISPLAYED, nothing else. Margin is normally taken on prices net of ${vat.rate}% VAT, the basis Shopify's cost per item is on; this shows it on gross prices for reconciling against Shopify. Break-even is unaffected — it always uses the net margin.`}
+                    title={`Ændrer kun, hvordan Margin-kolonnen VISES, intet andet. Margin beregnes normalt på priser ekskl. ${vat.rate?.toLocaleString('da-DK')} % moms, samme grundlag som Shopifys kostpris (Cost per item); her vises den på bruttopriser, så den kan afstemmes med Shopify. Break-even påvirkes ikke — den bruger altid nettomarginen.`}
                   >
                     <input
                       type="checkbox"
@@ -781,7 +781,7 @@ export function GoogleAdsClient({
                       gap: '6px',
                       whiteSpace: 'nowrap',
                     }}
-                    title={`Adds change columns against ${comparison.from} → ${comparison.to}, the equal-length period immediately before this one.`}
+                    title={`Tilføjer ændringskolonner mod ${comparison.from} → ${comparison.to}, den lige så lange periode umiddelbart før denne.`}
                   >
                     <input
                       type="checkbox"
@@ -870,7 +870,7 @@ export function GoogleAdsClient({
                           reading a number is looking. */}
                       {uplift === null && (
                         <span
-                          title="Unverified: nobody has said whether Google's conversion value includes VAT, so this assumes it does not — which makes it too low if it does. Set it in the notes below the table."
+                          title="Ikke bekræftet: ingen har angivet, om Googles konverteringsværdi er inkl. moms, så her antages det, at den ikke er — hvilket gør break-even for lav, hvis den er. Angiv det i noterne under tabellen."
                           style={{ color: 'var(--accent-amber)', marginLeft: '4px' }}
                         >
                           *
@@ -1079,39 +1079,40 @@ export function GoogleAdsClient({
         {connected && rows.length > 0 && (
           <div className="space-y-1.5" style={{ fontSize: '12px', color: 'var(--ink-muted)' }}>
             <p>
-              Revenue = {describeActions(activeActions.roas)} · Gross profit ={' '}
+              Omsætning = {describeActions(activeActions.roas)} · Bruttoprofit ={' '}
               {describeActions(activeActions.poas)}
             </p>
             <p>
-              Only cost Google can attribute to a product is included. Performance Max
-              spend on non-shopping placements is not counted, so these figures are lower
-              than the account&apos;s total cost.
+              Kun forbrug, som Google kan henføre til en vare, er med. Performance Max-forbrug
+              på placeringer uden for Shopping tælles ikke med, så tallene her er lavere end
+              kontoens samlede forbrug.
             </p>
             <p>
-              Margin is list price minus Shopify&apos;s cost per item — gross margin, before
-              shipping, fees and returns. Known for {marginCoverage.withMargin} of{' '}
-              {marginCoverage.products} products; the rest show &laquo;—&raquo; because no cost
-              is entered, not because the margin is zero. An asterisk means the cost covers
-              only some of the product&apos;s variants.
+              Margin er listepris minus Shopifys kostpris (Cost per item) — bruttomargin før
+              fragt, gebyrer og returer. Kendt for {formatInt(marginCoverage.withMargin)} af{' '}
+              {formatInt(marginCoverage.products)} varer; resten viser &laquo;—&raquo;, fordi der
+              ikke er angivet en kostpris, ikke fordi marginen er nul. En stjerne betyder, at
+              kostprisen kun dækker nogle af varens varianter.
             </p>
             <p>
-              Break-even is the ROAS at which gross profit covers the ad cost
+              Break-even er den ROAS, hvor bruttoprofitten dækker annonceforbruget
               {uplift !== null && uplift !== 1
-                ? ` — ${formatRatio(uplift, 2)} ÷ margin, the VAT uplift included so the reported conversion value and the net margin are on one basis`
+                ? ` — ${formatRatio(uplift, 2)} ÷ margin, med momstillægget regnet med, så den rapporterede konverteringsværdi og nettomarginen er på samme grundlag`
                 : ' — 1 ÷ margin'}
-              . Green means the product clears it{showReturns ? ' after returns' : ''}, red means
-              it does not. It always uses the net margin, so it does not move when the Margin
-              column is flipped to the gross basis. It is a floor and not a target: shipping,
-              payment fees and overhead come out after it, so a product sitting just above
-              break-even is not yet making money.
+              . Grøn betyder, at varen klarer den{showReturns ? ' efter returer' : ''}, rød
+              betyder, at den ikke gør. Den bruger altid nettomarginen, så den flytter sig ikke,
+              når Margin-kolonnen skiftes til bruttogrundlag. Den er en bund og ikke et mål:
+              fragt, betalingsgebyrer og faste omkostninger trækkes fra bagefter, så en vare, der
+              ligger lige over break-even, tjener endnu ikke penge.
             </p>
             {comparison && (
               <p>
-                Change figures compare {from} → {to} with {comparison.from} → {comparison.to} —
-                the equal-length period immediately before, with no gap and no overlap. A dash
-                means the product had no data in the earlier period, which is a start rather than
-                a change; those sort last rather than as the largest gain. Δ ROAS is an absolute
-                move, so &laquo;+0,80&raquo; means the ratio rose by 0,80.
+                Ændringstallene sammenligner {from} → {to} med {comparison.from} →{' '}
+                {comparison.to} — den lige så lange periode umiddelbart før, uden hul og uden
+                overlap. En streg betyder, at varen ikke havde data i den tidligere periode, hvilket
+                er en start og ikke en ændring; de varer sorteres sidst i stedet for som den største
+                stigning. Δ ROAS er en absolut ændring, så &laquo;+0,80&raquo; betyder, at
+                forholdstallet steg med 0,80.
               </p>
             )}
             {stockContext && <StockBasisNote ctx={stockContext} stale={stockStale} />}
@@ -1121,8 +1122,8 @@ export function GoogleAdsClient({
             )}
             {unmatchedCost > 0 && (
               <p style={{ color: 'var(--accent-amber)' }}>
-                {formatMoney(unmatchedCost, currency)} could not be matched to a product in
-                this feed.
+                {formatMoney(unmatchedCost, currency)} kunne ikke matches med en vare i dette
+                feed.
               </p>
             )}
             {settings?.lastSyncedAt && (
@@ -1242,7 +1243,7 @@ function Trend({
   return (
     <section className="wl-card" style={{ padding: '16px 18px' }}>
       <div className="flex items-baseline justify-between gap-3 flex-wrap">
-        <div className="wl-eyebrow">Daily cost and revenue</div>
+        <div className="wl-eyebrow">Dagligt forbrug og omsætning</div>
         <div className="flex items-center gap-3" style={{ fontSize: '11px', color: 'var(--ink-muted)' }}>
           <span className="flex items-center gap-1.5">
             <span
@@ -1254,7 +1255,7 @@ function Trend({
                 display: 'inline-block',
               }}
             />
-            Cost
+            Forbrug
           </span>
           <span className="flex items-center gap-1.5">
             <span
@@ -1266,9 +1267,9 @@ function Trend({
                 display: 'inline-block',
               }}
             />
-            Revenue
+            Omsætning
           </span>
-          <span>last {days} days</span>
+          <span>seneste {days} dage</span>
         </div>
       </div>
 
@@ -1295,7 +1296,7 @@ function Trend({
             title={
               dense
                 ? undefined
-                : `${p.date}\nCost ${formatMoney(p.cost, currency)}\nRevenue ${formatMoney(
+                : `${p.date}\nForbrug ${formatMoney(p.cost, currency)}\nOmsætning ${formatMoney(
                     p.revenue,
                     currency
                   )}\nROAS ${formatRatio(p.roas)}`
@@ -1331,7 +1332,7 @@ function Trend({
         {/* Days with no activity are absent rather than zero, so the count is
             worth stating: a 30-day window showing 22 bars is a finding. */}
         <span>
-          {points.length} day{points.length === 1 ? '' : 's'} with data
+          {points.length} {points.length === 1 ? 'dag' : 'dage'} med data
         </span>
         <span>{points[points.length - 1]?.date}</span>
       </div>
@@ -1375,10 +1376,10 @@ function MetricPicker({
 
   const summary =
     current.length === 0
-      ? 'Not selected'
+      ? 'Ikke valgt'
       : current.length === 1
         ? current[0]
-        : `${current.length} actions summed`
+        : `${current.length} handlinger lagt sammen`
 
   return (
     <div className="space-y-1.5" style={{ minWidth: '260px', flex: '1 1 260px' }}>
@@ -1463,8 +1464,8 @@ function MetricPicker({
                       </span>
                       <span style={{ fontSize: '11px', color: 'var(--ink-muted)' }}>
                         {a.inWindow
-                          ? `${formatMoney(a.value, currency)} · ${a.items} items`
-                          : 'No data in this period'}
+                          ? `${formatMoney(a.value, currency)} · ${formatInt(a.items)} varer`
+                          : 'Ingen data i perioden'}
                       </span>
                     </span>
                   </label>
@@ -1485,7 +1486,7 @@ function MetricPicker({
                     cursor: 'pointer',
                   }}
                 >
-                  Clear selection
+                  Ryd valg
                 </button>
               )}
             </div>
@@ -1560,7 +1561,7 @@ function VatNote({
     const json = await res.json().catch(() => ({}))
     setSaving(false)
     if (!res.ok) {
-      setError((json as { error?: string }).error ?? 'Could not save')
+      setError((json as { error?: string }).error ?? 'Kunne ikke gemme')
       return
     }
     setEditing(false)
@@ -1571,15 +1572,15 @@ function VatNote({
     return (
       <div className="space-y-2" style={{ paddingTop: '2px' }}>
         <TriChoice
-          label="Do Shopify's prices include VAT?"
+          label="Er Shopifys priser inkl. moms?"
           value={includes}
           onChange={setIncludes}
         />
         <TriChoice
-          label="Does Google's conversion value include VAT?"
+          label="Er Googles konverteringsværdi inkl. moms?"
           value={convIncludes}
           onChange={setConvIncludes}
-          hint="This is the one that moves break-even."
+          hint="Det er den, der flytter break-even."
         />
         <div className="flex items-center gap-2 flex-wrap">
           {needsRate && (
@@ -1589,7 +1590,7 @@ function VatNote({
                 step="any"
                 value={rate}
                 onChange={(e) => setRate(e.target.value)}
-                aria-label="VAT rate in percent"
+                aria-label="Momssats i procent"
                 style={{
                   padding: '4px 8px',
                   borderRadius: '8px',
@@ -1607,13 +1608,13 @@ function VatNote({
             onClick={save}
             disabled={saving || unanswered}
             className="wl-btn-primary"
-            title={unanswered ? 'Answer both questions first' : undefined}
+            title={unanswered ? 'Besvar begge spørgsmål først' : undefined}
             style={unanswered ? { opacity: 0.5, cursor: 'not-allowed' } : undefined}
           >
-            {saving ? 'Saving…' : 'Save'}
+            {saving ? 'Gemmer…' : 'Gem'}
           </button>
           <button onClick={() => setEditing(false)} className="wl-btn-secondary">
-            Cancel
+            Annuller
           </button>
           {error && <span style={{ color: 'var(--accent-red)' }}>{error}</span>}
         </div>
@@ -1627,27 +1628,27 @@ function VatNote({
       {vat.pricesIncludeVat === null ? (
         // Unanswered. The margin on screen is the overstated one, and says so.
         <p style={{ color: 'var(--accent-amber)' }}>
-          Margin is calculated on prices exactly as Shopify stores them. If those include VAT and
-          your cost per item does not — the usual setup for a Danish shop — the margin shown is too
-          high, and most so where it is thinnest.{' '}
+          Margin beregnes på priserne, præcis som Shopify gemmer dem. Hvis de er inkl. moms, og din
+          kostpris ikke er — den normale opsætning for en dansk shop — er den viste margin for høj,
+          og mest der, hvor den er tyndest.{' '}
           <button onClick={() => setEditing(true)} style={linkButton}>
-            Set the VAT basis
+            Angiv momsgrundlaget
           </button>
         </p>
       ) : !vat.pricesIncludeVat ? (
         <p>
-          Shopify prices are net of VAT, so margin needs no adjustment.{' '}
+          Shopifys priser er ekskl. moms, så marginen skal ikke justeres.{' '}
           <button onClick={() => setEditing(true)} style={linkButton}>
-            Change
+            Ret
           </button>
         </p>
       ) : (
         <p>
           {grossBasis
-            ? `Margin is shown on gross prices, VAT included — for reconciling against Shopify. It overstates profitability, because cost per item is net of VAT.`
-            : `Margin is taken on prices net of ${vat.rate}% VAT, the same basis as Shopify's cost per item.`}{' '}
+            ? `Margin vises på bruttopriser inkl. moms — til afstemning med Shopify. Den overvurderer rentabiliteten, fordi kostprisen er ekskl. moms.`
+            : `Margin beregnes på priser ekskl. ${vat.rate?.toLocaleString('da-DK')} % moms, samme grundlag som Shopifys kostpris.`}{' '}
           <button onClick={() => setEditing(true)} style={linkButton}>
-            Change
+            Ret
           </button>
         </p>
       )}
@@ -1655,28 +1656,28 @@ function VatNote({
       {/* ── Does Google's conversion value carry VAT ── */}
       {uplift === null ? (
         <p style={{ color: 'var(--accent-amber)' }}>
-          Break-even is treating Google&apos;s conversion value as net of VAT, because the basis is
-          not on record. Shopify&apos;s standard tracking sends the gross order total — if that is
-          your setup, every break-even here is too LOW by the VAT rate, and products are being
-          marked as clearing a bar they are under.{' '}
+          Break-even behandler Googles konverteringsværdi som ekskl. moms, fordi grundlaget ikke er
+          angivet. Shopifys standardsporing sender ordrens samlede beløb inkl. moms — hvis det er din
+          opsætning, er hver break-even her for LAV med momssatsen, og varer bliver markeret som
+          over en grænse, de ligger under.{' '}
           <button onClick={() => setEditing(true)} style={linkButton}>
-            Set the conversion value basis
+            Angiv grundlaget for konverteringsværdien
           </button>
         </p>
       ) : uplift > 1 ? (
         <p>
-          Google&apos;s conversion value includes {vat.rate}% VAT, so break-even is raised by that
-          much to meet the net margin on the same basis.{' '}
+          Googles konverteringsværdi er inkl. {vat.rate?.toLocaleString('da-DK')} % moms, så
+          break-even hæves tilsvarende, så den er på samme grundlag som nettomarginen.{' '}
           <button onClick={() => setEditing(true)} style={linkButton}>
-            Change
+            Ret
           </button>
         </p>
       ) : (
         <p>
-          Google&apos;s conversion value is net of VAT, the same basis as the margin, so break-even
-          is 1 ÷ margin unadjusted.{' '}
+          Googles konverteringsværdi er ekskl. moms, samme grundlag som marginen, så break-even er
+          1 ÷ margin uden justering.{' '}
           <button onClick={() => setEditing(true)} style={linkButton}>
-            Change
+            Ret
           </button>
         </p>
       )}
@@ -1728,12 +1729,12 @@ function TriChoice({
               border: value === opt ? 'none' : '1px solid var(--hairline)',
             }}
           >
-            {opt ? 'Yes' : 'No'}
+            {opt ? 'Ja' : 'Nej'}
           </button>
         ))}
       </div>
       {value === null ? (
-        <span style={{ color: 'var(--accent-amber)' }}>not answered</span>
+        <span style={{ color: 'var(--accent-amber)' }}>ikke besvaret</span>
       ) : (
         hint && <span style={{ color: 'var(--ink-muted)' }}>{hint}</span>
       )}
@@ -1754,28 +1755,29 @@ function ReturnsNote({ ctx, currency }: { ctx: ReturnsContext; currency: string 
   return (
     <>
       <p>
-        Net ROAS and net POAS are the gross figures reduced by this product&apos;s measured
-        return rate — refunded value ÷ sold value for orders placed{' '}
+        Netto ROAS og netto POAS er bruttotallene reduceret med varens målte returrate —
+        refunderet værdi ÷ solgt værdi for ordrer afgivet{' '}
         {ctx.cohortFrom && ctx.cohortTo ? (
           <>
-            between {ctx.cohortFrom} and {ctx.cohortTo}
+            mellem {ctx.cohortFrom} og {ctx.cohortTo}
           </>
         ) : (
-          'in the matured period'
+          'i den modnede periode'
         )}
-        {ctx.country ? ` in ${ctx.country}` : ''}. That period stops 30 days short of today on
-        purpose: a return takes weeks to arrive, so counting recent orders would make every
-        product look clean. Google is not told any of this — its own numbers are unchanged.
+        {ctx.country ? ` i ${ctx.country}` : ''}. Perioden stopper med vilje 30 dage før i dag:
+        en retur tager uger om at komme, så hvis de seneste ordrer talte med, ville alle varer se
+        ud til at have få returer. Google får intet af dette at vide — Googles egne tal er
+        uændrede.
       </p>
       <p>
-        &laquo;Refunded&raquo; is different: it is money that actually left in the window
-        shown, whatever the age of the order it belonged to. It will not match the net
-        columns, and is not supposed to.{' '}
+        &laquo;Refunderet&raquo; er noget andet: det er penge, der faktisk er gået ud i den
+        viste periode, uanset hvor gammel ordren er. Det stemmer ikke med netto-kolonnerne, og
+        det skal det heller ikke.{' '}
         {ctx.refundedInWindow > 0 && (
           <>
-            {formatMoney(ctx.returnedInWindow, currency)} of it was return-driven
+            {formatMoney(ctx.returnedInWindow, currency)} af det skyldtes returer
             {ctx.otherRefundedInWindow > 0 && (
-              <> and {formatMoney(ctx.otherRefundedInWindow, currency)} was cancellations or
+              <>, og {formatMoney(ctx.otherRefundedInWindow, currency)} var annulleringer eller
               goodwill</>
             )}
             .
@@ -1783,25 +1785,26 @@ function ReturnsNote({ ctx, currency }: { ctx: ReturnsContext; currency: string 
         )}
       </p>
       <p>
-        A product shows &laquo;—&raquo; until it has sold at least 20 units in the matured
-        period — one return out of three is not a 33% return rate, it is an unknown one.
+        En vare viser &laquo;—&raquo;, indtil den har solgt mindst 20 stk. i den modnede
+        periode — én retur ud af tre er ikke en returrate på 33 %, men en ukendt returrate.
         {ctx.overallRate !== null && (
           <>
             {' '}
-            Across this market the rate is {formatPercent(ctx.overallRate, 1)} on{' '}
-            {formatInt(ctx.overallSample)} units, which is context for a product with too few
-            of its own — not a substitute for it.
+            For hele markedet er returraten {formatPercent(ctx.overallRate, 1)} på{' '}
+            {formatInt(ctx.overallSample)} stk. Det er kontekst for en vare med for få salg af
+            sine egne — ikke en erstatning for dem.
           </>
         )}
       </p>
       {(ctx.archiveHasGap || (ctx.archiveDepthDays ?? 0) < 90) && (
         <p style={{ color: 'var(--accent-amber)' }}>
           {ctx.archiveLastRunAt === null
-            ? 'No order history has been captured yet, so no return rate can exist. '
-            : `Order history goes back ${ctx.archiveDepthDays ?? 0} days. `}
-          Shopify only exposes the last 60 days without the read_all_orders scope, so history
-          is built by syncing regularly — and any gap longer than that is permanent.
-          {ctx.archiveHasGap && ctx.archiveLastRunAt !== null && ' The sync has lapsed past that window.'}
+            ? 'Der er endnu ikke hentet nogen ordrehistorik, så der kan ikke findes nogen returrate. '
+            : `Ordrehistorikken går ${formatInt(ctx.archiveDepthDays ?? 0)} dage tilbage. `}
+          Uden scopet read_all_orders giver Shopify kun adgang til de seneste 60 dage, så
+          historikken opbygges ved at synkronisere jævnligt — og et hul, der er længere end det,
+          er permanent.
+          {ctx.archiveHasGap && ctx.archiveLastRunAt !== null && ' Synkroniseringen har ikke kørt i længere tid end det vindue.'}
         </p>
       )}
     </>
@@ -1823,8 +1826,8 @@ function NetRatio({
         style={{ color: 'var(--ink-muted)' }}
         title={
           sample > 0
-            ? `Only ${sample} unit(s) sold in the matured period — too few for a return rate`
-            : 'No matured sales for this product yet'
+            ? `Kun ${formatInt(sample)} stk. solgt i den modnede periode — for få til en returrate`
+            : 'Ingen salg i den modnede periode for denne vare endnu'
         }
       >
         —
@@ -1874,8 +1877,8 @@ function SearchBox({
       {value && (
         <button
           onClick={() => onChange('')}
-          title="Clear"
-          aria-label="Clear search"
+          title="Ryd"
+          aria-label="Ryd søgning"
           style={{
             background: 'none',
             border: 'none',
@@ -1904,33 +1907,32 @@ function StockBasisNote({ ctx, stale }: { ctx: StockContext; stale: boolean }) {
   if (!ctx.syncedAt) {
     return (
       <p style={{ color: 'var(--accent-amber)' }}>
-        Stock has never been read from Shopify for this feed, so no product shows a stock
-        note. Run a product sync to populate it.
+        Lageret er aldrig blevet læst fra Shopify for dette feed, så ingen vare viser en
+        lagernote. Kør en produktsynkronisering for at hente det.
       </p>
     )
   }
 
   return (
     <p style={stale ? { color: 'var(--accent-amber)' } : undefined}>
-      Stock is as of {new Date(ctx.syncedAt).toLocaleString('da-DK')}
+      Lagertallene er fra {new Date(ctx.syncedAt).toLocaleString('da-DK')}
       {ctx.ageDays !== null && ctx.ageDays > 0
-        ? ` — ${ctx.ageDays} day${ctx.ageDays === 1 ? '' : 's'} ago`
+        ? ` — ${formatInt(ctx.ageDays)} ${ctx.ageDays === 1 ? 'dag' : 'dage'} siden`
         : ''}
-      {stale && ', which is old enough that it may have moved since'}. Days of stock is units
-      on hand divided by sales over the last {ctx.velocityDays} days, and is only shown once a
-      product has sold enough for the rate to mean something — products below that, and
-      products Shopify does not track stock for, show nothing rather than a zero.
+      {stale && ', så længe siden, at de kan have ændret sig'}. Dages lager er antal på lager
+      divideret med salget over de seneste {ctx.velocityDays} dage og vises først, når en vare
+      har solgt nok til, at tallet betyder noget — varer under den grænse, og varer, hvor Shopify
+      ikke sporer lager, viser ingenting i stedet for nul.
       {ctx.multipleLocations && ctx.locationCount !== null && (
         <>
           {' '}
-          This shop holds stock at {ctx.locationCount} locations and the quantity is the total
-          across all of them, so not all of it is necessarily available to this feed&apos;s
-          market.
+          Shoppen har lager på {ctx.locationCount} lokationer, og antallet er summen for dem
+          alle, så det er ikke nødvendigvis alt sammen tilgængeligt for dette feeds marked.
         </>
       )}
       {ctx.locationCount === null && (
-        <> The shop&apos;s locations have not been detected yet, so it is not known whether
-        this quantity spans more than one.</>
+        <> Shoppens lokationer er ikke registreret endnu, så det vides ikke, om antallet
+        dækker mere end én.</>
       )}
     </p>
   )
@@ -1958,16 +1960,16 @@ function StockNote({ stock, stale }: { stock: StockView | undefined; stale: bool
   const parts: string[] = []
 
   if (stock.outOfStock) {
-    parts.push('out of stock')
+    parts.push('udsolgt')
   } else if (stock.coverage !== null && stock.coverage < 1) {
     const gone = stock.variantsTotal - stock.variantsSellable
-    parts.push(`${gone} of ${stock.variantsTotal} out of stock`)
+    parts.push(`${gone} af ${stock.variantsTotal} udsolgt`)
     // Only when some of it can still be bought: "out of stock, 0 days of
     // stock" says the same thing twice and the second half is noise.
   }
 
   if (!stock.outOfStock && stock.daysOfStock !== null && stock.daysOfStock < LOW_STOCK_DAYS) {
-    parts.push(`${Math.floor(stock.daysOfStock)} days of stock`)
+    parts.push(`${Math.floor(stock.daysOfStock)} dages lager`)
   }
 
   if (!parts.length) return null
@@ -1981,7 +1983,7 @@ function StockNote({ stock, stale }: { stock: StockView | undefined; stale: bool
       style={{ color: 'var(--accent-amber)' }}
       title={
         stale
-          ? `Stock was last read from Shopify more than ${STALE_STOCK_DAYS} days ago, so it may have moved since.`
+          ? `Lageret blev sidst læst fra Shopify for mere end ${STALE_STOCK_DAYS} dage siden, så det kan have ændret sig.`
           : undefined
       }
     >
@@ -2003,7 +2005,7 @@ function Margin({ value, coverage }: { value: number | null; coverage: number })
   const partial = coverage > 0 && coverage < 1
   return (
     <span
-      title={partial ? `Cost known for ${Math.round(coverage * 100)}% of variants` : undefined}
+      title={partial ? `Kostpris kendt for ${Math.round(coverage * 100)} % af varianterne` : undefined}
       style={{ color: value < 0 ? 'var(--accent-red)' : 'var(--ink)' }}
     >
       {formatPercent(value, 0)}
@@ -2048,8 +2050,8 @@ function BreakEven({
         style={{ color: unreachable ? 'var(--accent-red)' : 'var(--ink-muted)' }}
         title={
           unreachable
-            ? 'No gross margin on this product, so no ROAS breaks even'
-            : 'No cost per item entered, so break-even cannot be worked out'
+            ? 'Varen har ingen bruttomargin, så ingen ROAS giver break-even'
+            : 'Ingen kostpris angivet, så break-even kan ikke beregnes'
         }
       >
         {unreachable ? '∞' : '—'}
@@ -2062,10 +2064,10 @@ function BreakEven({
     <span
       title={
         clears === null
-          ? 'No ROAS to compare against yet'
+          ? 'Ingen ROAS at sammenligne med endnu'
           : clears
-            ? 'Above break-even'
-            : 'Below break-even — the ads cost more than the gross profit they earn'
+            ? 'Over break-even'
+            : 'Under break-even — annoncerne koster mere end den bruttoprofit, de giver'
       }
       style={{
         color:
@@ -2087,7 +2089,7 @@ function CountPill({ n }: { n: number }) {
   return (
     <span
       className="wl-pill"
-      title={`${n} conversion actions summed`}
+      title={`${n} konverteringshandlinger lagt sammen`}
       style={{
         marginLeft: '6px',
         background: 'var(--bg-surface)',
@@ -2194,8 +2196,8 @@ function Cell({
       style={{ color: good ? 'var(--accent-green)' : 'var(--accent-red)' }}
       title={
         d.pct === null
-          ? 'No comparable figure in the previous period — this is a start, not a percentage change.'
-          : `${up ? '+' : ''}${d.abs.toLocaleString('da-DK', { maximumFractionDigits: 2 })} in absolute terms`
+          ? 'Intet sammenligneligt tal i perioden før — det er en start, ikke en procentvis ændring.'
+          : `${up ? '+' : ''}${d.abs.toLocaleString('da-DK', { maximumFractionDigits: 2 })} i absolutte tal`
       }
     >
       {text}
@@ -2247,7 +2249,7 @@ function VariantTable({
   if (!rows.length && !missingUnavailable.length) {
     return (
       <p style={{ fontSize: '12px', color: 'var(--ink-muted)', padding: '10px 0' }}>
-        No variant data in this period.
+        Ingen variantdata i perioden.
       </p>
     )
   }
@@ -2316,14 +2318,14 @@ function VariantTable({
           lineHeight: 1.5,
         }}
       >
-        Out of stock, with no traffic in this period:{' '}
+        Udsolgt og uden trafik i perioden:{' '}
         {missingUnavailable
-          .map((s) => s.title ?? s.sku ?? 'unnamed variant')
+          .map((s) => s.title ?? s.sku ?? 'unavngiven variant')
           .join(' · ')}
         {stale && '*'}
         <span style={{ color: 'var(--ink-muted)' }}>
-          {' — '}Google stops serving an offer once it goes unavailable, so these usually
-          disappear from the report rather than showing zero.
+          {' — '}Google holder op med at vise et produkt, når det ikke længere kan købes, så
+          de forsvinder som regel fra rapporten i stedet for at stå med nul.
         </span>
       </p>
     )}
@@ -2342,9 +2344,9 @@ function VariantStockTag({ stock, stale }: { stock: VariantStockView | undefined
   if (!stock) return null
 
   const label = !stock.sellable
-    ? 'out of stock'
+    ? 'udsolgt'
     : stock.daysOfStock !== null && stock.daysOfStock < LOW_STOCK_DAYS
-      ? `${Math.floor(stock.daysOfStock)} days of stock`
+      ? `${Math.floor(stock.daysOfStock)} dages lager`
       : null
 
   if (!label) return null
@@ -2354,9 +2356,9 @@ function VariantStockTag({ stock, stale }: { stock: VariantStockView | undefined
       style={{ color: 'var(--accent-amber)', marginLeft: '8px' }}
       title={
         stale
-          ? `Stock was last read from Shopify more than ${STALE_STOCK_DAYS} days ago, so it may have moved since.`
+          ? `Lageret blev sidst læst fra Shopify for mere end ${STALE_STOCK_DAYS} dage siden, så det kan have ændret sig.`
           : stock.quantity !== null
-            ? `${stock.quantity} in stock`
+            ? `${formatInt(stock.quantity)} på lager`
             : undefined
       }
     >

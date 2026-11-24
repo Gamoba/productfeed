@@ -56,14 +56,14 @@ export function BucketCustomLabelPanel({ feedId, bucketId }: { feedId: string; b
   return (
     <div className="ff-panel">
       <div className="ff-panel-header" style={{ textTransform: 'none', letterSpacing: 0, fontSize: '12px', padding: '10px 14px' }}>
-        Custom label — split-testing
+        Custom label til split-test
       </div>
       <div className="p-3.5 space-y-2">
         {error && <div style={{ fontSize: '11px', color: 'var(--accent-red)' }}>{error}</div>}
 
         <p style={{ fontSize: '11px', color: 'var(--ink-muted)' }}>
-          Tag every product in this bucket with a Google Shopping custom label, so you can compare this
-          bucket&apos;s real performance (clicks / sales) against another bucket in Google Ads.
+          Giv alle varer i bucketen et custom label i Google Shopping, så du kan sammenligne bucketens
+          resultater (klik og salg) med en anden bucket i Google Ads.
         </p>
 
         <div className="flex items-end gap-2 flex-wrap">
@@ -78,7 +78,7 @@ export function BucketCustomLabelPanel({ feedId, bucketId }: { feedId: string; b
               disabled={loading}
               className="ff-select w-44"
             >
-              <option value="">None</option>
+              <option value="">Ingen</option>
               {[0, 1, 2, 3, 4].map((n) => (
                 <option key={n} value={n}>
                   custom_label_{n}
@@ -87,7 +87,7 @@ export function BucketCustomLabelPanel({ feedId, bucketId }: { feedId: string; b
             </select>
           </div>
           <div className="flex-1 min-w-[160px]">
-            <label className="ff-label">Value</label>
+            <label className="ff-label">Værdi</label>
             <input
               type="text"
               value={value}
@@ -96,19 +96,19 @@ export function BucketCustomLabelPanel({ feedId, bucketId }: { feedId: string; b
                 setSaved(false)
               }}
               disabled={loading || index === null}
-              placeholder="e.g. title-test-A"
+              placeholder="Fx title-test-A"
               className="ff-input w-full"
             />
           </div>
           <button onClick={handleSave} disabled={saving || loading} className="ff-btn-primary">
-            {saving ? 'Saving…' : saved ? 'Saved ✓' : 'Save'}
+            {saving ? 'Gemmer…' : saved ? 'Gemt ✓' : 'Gem'}
           </button>
         </div>
 
         {conflict && (
           <div className="ff-badge ff-badge-warning" style={{ display: 'inline-block', whiteSpace: 'normal', lineHeight: 1.4 }}>
-            ⚠ custom_label_{index} is already set by a feed mapping — the mapping wins, so this bucket
-            value won&apos;t appear in the feed. Pick another index, or remove that mapping.
+            ⚠ custom_label_{index} bliver allerede sat af en mapping i feedet. Mappingen vinder, så bucketens
+            værdi kommer ikke med i feedet. Vælg et andet label, eller fjern mappingen.
           </div>
         )}
       </div>

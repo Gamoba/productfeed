@@ -14,18 +14,18 @@ import { listBucketResults, getBucketProductDetail, saveBucketReviewTitle, rejec
 import type { ResultItem, ResultStatus, ProductDetail } from '@/lib/titleOptimizationService'
 
 const STATUS_META: Record<ResultStatus, { label: string; badge: string }> = {
-  ai_generated: { label: 'Optimized', badge: 'ff-badge-success' },
-  human_edited: { label: 'Edited', badge: 'ff-badge-accent' },
-  needs_review: { label: 'Review', badge: 'ff-badge-warning' },
-  not_optimized: { label: 'Not optimized', badge: 'ff-badge-neutral' },
+  ai_generated: { label: 'Optimeret', badge: 'ff-badge-success' },
+  human_edited: { label: 'Rettet', badge: 'ff-badge-accent' },
+  needs_review: { label: 'Til godkendelse', badge: 'ff-badge-warning' },
+  not_optimized: { label: 'Ikke optimeret', badge: 'ff-badge-neutral' },
 }
 
 const FILTERS: { id: ResultStatus | 'all'; label: string }[] = [
-  { id: 'all', label: 'All' },
-  { id: 'needs_review', label: 'Needs review' },
-  { id: 'not_optimized', label: 'Not optimized' },
-  { id: 'ai_generated', label: 'Optimized' },
-  { id: 'human_edited', label: 'Hand-edited' },
+  { id: 'all', label: 'Alle' },
+  { id: 'needs_review', label: 'Til godkendelse' },
+  { id: 'not_optimized', label: 'Ikke optimeret' },
+  { id: 'ai_generated', label: 'Optimeret' },
+  { id: 'human_edited', label: 'Rettet i hånden' },
 ]
 
 function CheckIcon() {
@@ -201,13 +201,13 @@ export function BucketResultsPanel({
   )
   const shown = filter === 'all' ? items : items.filter((i) => i.status === filter)
 
-  if (loading) return <p style={{ fontSize: '11px', color: 'var(--ink-muted)' }}>Loading results…</p>
+  if (loading) return <p style={{ fontSize: '11px', color: 'var(--ink-muted)' }}>Henter resultater…</p>
 
   return (
     <div className="space-y-2.5">
       <div className="flex items-center justify-between flex-wrap gap-2">
         <span style={{ fontSize: '16px', fontWeight: 500, color: 'var(--ink)' }}>
-          Results <span style={{ color: 'var(--ink-muted)', fontWeight: 400 }}>· {items.length} {items.length === 1 ? 'product' : 'products'}</span>
+          Resultater <span style={{ color: 'var(--ink-muted)', fontWeight: 400 }}>· {items.length.toLocaleString('da-DK')} {items.length === 1 ? 'vare' : 'varer'}</span>
         </span>
         {error && <span style={{ fontSize: '11px', color: 'var(--accent-red)' }}>{error}</span>}
       </div>
@@ -231,14 +231,14 @@ export function BucketResultsPanel({
                   color: active ? '#ffffff' : 'var(--ink-secondary)',
                 }}
               >
-                {f.label} {n > 0 && <span style={{ opacity: 0.7 }}>({n})</span>}
+                {f.label} {n > 0 && <span style={{ opacity: 0.7 }}>({n.toLocaleString('da-DK')})</span>}
               </button>
             )
           })}
         </div>
 
         {shown.length === 0 ? (
-          <p style={{ fontSize: '11px', color: 'var(--ink-muted)' }}>No products in this view.</p>
+          <p style={{ fontSize: '11px', color: 'var(--ink-muted)' }}>Ingen varer i denne visning.</p>
         ) : (
           <div className="space-y-1.5">
             {shown.map((it) => {
@@ -269,10 +269,10 @@ export function BucketResultsPanel({
                         <input
                           value={draft}
                           onChange={(e) => setDrafts((p) => ({ ...p, [it.product_ref]: e.target.value }))}
-                          placeholder={it.status === 'not_optimized' ? 'No title yet — type one to save' : ''}
+                          placeholder={it.status === 'not_optimized' ? 'Ingen titel endnu. Skriv en for at gemme' : ''}
                           className="ff-input flex-1 min-w-0"
                           style={{ fontSize: '12px' }}
-                          aria-label="New title"
+                          aria-label="Ny titel"
                         />
                         {dirty && (
                           <>
@@ -282,8 +282,8 @@ export function BucketResultsPanel({
                               disabled={rowBusy || !draft.trim()}
                               className="ff-btn-ghost shrink-0 w-6 h-6 flex items-center justify-center"
                               style={{ color: 'var(--good)' }}
-                              aria-label="Save title"
-                              title="Save"
+                              aria-label="Gem titel"
+                              title="Gem"
                             >
                               <CheckIcon />
                             </button>
@@ -293,8 +293,8 @@ export function BucketResultsPanel({
                               disabled={rowBusy}
                               className="ff-btn-ghost shrink-0 w-6 h-6 flex items-center justify-center"
                               style={{ color: 'var(--ink-muted)' }}
-                              aria-label="Cancel edit"
-                              title="Cancel"
+                              aria-label="Annullér ændring"
+                              title="Annullér"
                             >
                               <XIcon />
                             </button>
@@ -304,7 +304,7 @@ export function BucketResultsPanel({
 
                       {/* Original title (read-only) */}
                       <div className="truncate" style={{ fontSize: '10px', color: 'var(--ink-muted)' }}>
-                        Original: {it.original_title || '—'}
+                        Oprindelig: {it.original_title || '—'}
                       </div>
 
                       {/* needs_review: why it failed */}
@@ -326,7 +326,7 @@ export function BucketResultsPanel({
                             className="ff-btn-secondary"
                             style={{ fontSize: '11px' }}
                           >
-                            Approve
+                            Godkend
                           </button>
                         )}
                         {hasRow && (
@@ -336,9 +336,9 @@ export function BucketResultsPanel({
                             disabled={rowBusy}
                             className="ff-btn-ghost"
                             style={{ fontSize: '11px', padding: '0 8px', color: 'var(--accent-red)' }}
-                            title="Revert to the original Shopify title"
+                            title="Gå tilbage til den oprindelige titel fra Shopify"
                           >
-                            Reject
+                            Afvis
                           </button>
                         )}
                       </div>
@@ -350,8 +350,8 @@ export function BucketResultsPanel({
                       onClick={() => toggleExpand(it.product_ref)}
                       className="shrink-0 self-center cursor-pointer flex items-center justify-center"
                       style={{ width: '24px', height: '24px', background: 'transparent', border: 'none' }}
-                      aria-label={isOpen ? 'Collapse' : 'Expand product'}
-                      title="Show product data"
+                      aria-label={isOpen ? 'Fold sammen' : 'Fold vare ud'}
+                      title="Vis varedata"
                     >
                       <ChevronIcon open={isOpen} />
                     </button>
@@ -361,19 +361,19 @@ export function BucketResultsPanel({
                   {isOpen && (
                     <div className="px-3.5 py-3 space-y-4" style={{ borderTop: '1px solid var(--hairline)' }}>
                       {detail === 'loading' || detail === undefined ? (
-                        <p style={{ fontSize: '11px', color: 'var(--ink-muted)' }}>Loading product data…</p>
+                        <p style={{ fontSize: '11px', color: 'var(--ink-muted)' }}>Henter varedata…</p>
                       ) : (
                         <>
                           <section>
-                            <SectionHeader>Optimization</SectionHeader>
+                            <SectionHeader>Optimering</SectionHeader>
                             <div className="space-y-1.5">
                               <InfoRow label="Status">
                                 <span className={`ff-badge ${meta.badge}`}>{meta.label}</span>
                               </InfoRow>
-                              <InfoRow label="Original title">{it.original_title || '—'}</InfoRow>
-                              <InfoRow label="New title">{it.new_title || '—'}</InfoRow>
+                              <InfoRow label="Oprindelig titel">{it.original_title || '—'}</InfoRow>
+                              <InfoRow label="Ny titel">{it.new_title || '—'}</InfoRow>
                               {detail.validation_issues.length > 0 && (
-                                <InfoRow label="Validation">
+                                <InfoRow label="Validering">
                                   <span style={{ color: 'var(--accent-amber)' }}>
                                     {detail.validation_issues.map((iss) => iss.detail).join('; ')}
                                   </span>
@@ -383,10 +383,10 @@ export function BucketResultsPanel({
                           </section>
 
                           <section>
-                            <SectionHeader>Product data</SectionHeader>
+                            <SectionHeader>Varedata</SectionHeader>
                             {detail.fields.length === 0 ? (
                               <span style={{ fontSize: '11px', color: 'var(--ink-muted)' }}>
-                                No structured fields on this product.
+                                Varen har ingen strukturerede felter.
                               </span>
                             ) : (
                               <div className="space-y-1.5">

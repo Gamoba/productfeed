@@ -48,7 +48,7 @@ function fieldLabel(token: string, metafields?: MetafieldOption[], bare = false)
     const nsKey = token.slice('metafield:'.length)
     const opt = metafields?.find((m) => `${m.namespace}.${m.key}` === nsKey)
     const name = opt?.name ?? nsKey
-    return bare ? name : `${name} (metafield)`
+    return bare ? name : `${name} (metafelt)`
   }
   return STANDARD_FIELDS.find((f) => f.value === token)?.label ?? token
 }
@@ -147,11 +147,15 @@ export function BucketWorkshopTab({ feedId, bucketId }: { feedId: string; bucket
   // current title for the round header (works both right after generation and on
   // a later reload, since it's keyed off the persisted candidates).
   const roundProductRef = candidates[0]?.product_ref ?? null
+  // Clear the round header when the round goes away. Done during render (React's
+  // "adjust state when a prop changes" pattern) instead of inside the effect.
+  const [prevRoundProductRef, setPrevRoundProductRef] = useState(roundProductRef)
+  if (roundProductRef !== prevRoundProductRef) {
+    setPrevRoundProductRef(roundProductRef)
+    if (!roundProductRef) setRoundContext({ title: '', fields: [] })
+  }
   useEffect(() => {
-    if (!roundProductRef) {
-      setRoundContext({ title: '', fields: [] })
-      return
-    }
+    if (!roundProductRef) return
     let cancelled = false
     getRoundProductContext(feedId, bucketId, roundProductRef).then((r) => {
       if (!cancelled && 'data' in r) setRoundContext(r.data)
@@ -260,7 +264,7 @@ export function BucketWorkshopTab({ feedId, bucketId }: { feedId: string; bucket
     const r = await setBucketExampleStatus(feedId, bucketId, id, 'approved')
     if (r.error) {
       setExamples((cur) => revertStatus(cur, id, prev.status, prev.position))
-      setError(`Couldn't approve — change reverted. ${r.error}`)
+      setError(`Kunne ikke godkende. Ændringen er rullet tilbage. ${r.error}`)
     }
   }
 
@@ -275,13 +279,13 @@ export function BucketWorkshopTab({ feedId, bucketId }: { feedId: string; bucket
     const r = await deleteBucketExample(feedId, bucketId, id)
     if (r.error) {
       setExamples((cur) => restoreDeleted(cur, prev, prevIndex))
-      setError(`Couldn't delete — restored. ${r.error}`)
+      setError(`Kunne ikke slette. Eksemplet er gendannet. ${r.error}`)
     }
   }
 
   const approvedFull = approved.length >= MAX_APPROVED
 
-  if (loading) return <p style={{ fontSize: '11px', color: 'var(--color-text-tertiary)' }}>Loading…</p>
+  if (loading) return <p style={{ fontSize: '11px', color: 'var(--color-text-tertiary)' }}>Henter…</p>
 
   return (
     <div className="space-y-3">
@@ -290,16 +294,16 @@ export function BucketWorkshopTab({ feedId, bucketId }: { feedId: string; bucket
       {/* Step heading — names the task and lays out the three-step flow below. */}
       <div>
         <div style={{ fontSize: '11px', fontWeight: 600, textTransform: 'uppercase', letterSpacing: '0.08em', color: 'var(--accent-ink)' }}>
-          Examples
+          Eksempler
         </div>
         <h2 style={{ fontSize: '20px', fontWeight: 500, color: 'var(--color-text-primary)', letterSpacing: '-0.01em', lineHeight: 1.2, marginTop: '3px' }}>
-          Teach the AI how to write titles
+          Lær AI’en at skrive titler
         </h2>
         <p style={{ fontSize: '12px', color: 'var(--color-text-secondary)', lineHeight: 1.5, marginTop: '6px', maxWidth: '70ch' }}>
-          Work through three steps: <strong style={{ color: 'var(--color-text-primary)', fontWeight: 500 }}>1</strong> write your instructions,{' '}
-          <strong style={{ color: 'var(--color-text-primary)', fontWeight: 500 }}>2</strong> generate 5 different approaches, and{' '}
-          <strong style={{ color: 'var(--color-text-primary)', fontWeight: 500 }}>3</strong> approve the ones you like (keep up to {MAX_APPROVED}).
-          The bucket run later uses your approved examples + instructions + input fields.
+          Tre trin: <strong style={{ color: 'var(--color-text-primary)', fontWeight: 500 }}>1</strong> skriv dine instruktioner,{' '}
+          <strong style={{ color: 'var(--color-text-primary)', fontWeight: 500 }}>2</strong> generér 5 forskellige bud, og{' '}
+          <strong style={{ color: 'var(--color-text-primary)', fontWeight: 500 }}>3</strong> godkend dem, du kan lide (højst {MAX_APPROVED}).
+          Når du kører bucketen, bruger AI’en dine godkendte eksempler, instruktioner og inputfelter.
         </p>
       </div>
 
@@ -315,17 +319,17 @@ export function BucketWorkshopTab({ feedId, bucketId }: { feedId: string; bucket
       <div className="ff-panel" style={{ overflow: 'visible' }}>
         <div className="ff-panel-header" style={{ textTransform: 'none', letterSpacing: 0, fontSize: '12px', padding: '10px 14px' }}>
           <span className="flex items-center gap-2" style={{ fontWeight: 500, color: 'var(--color-text-primary)' }}>
-            <StepNumber n={1} /> Write your instructions
+            <StepNumber n={1} /> Skriv dine instruktioner
           </span>
           {dirty && (
             <span className="ff-badge ff-badge-warning shrink-0" style={{ textTransform: 'none', letterSpacing: 0 }}>
-              Unsaved changes
+              Ikke gemt
             </span>
           )}
         </div>
         <div className="p-3.5 space-y-3">
           <div>
-            <label className="ff-label">Instructions</label>
+            <label className="ff-label">Instruktioner</label>
             <textarea
               value={instructions}
               onChange={(e) => {
@@ -333,19 +337,19 @@ export function BucketWorkshopTab({ feedId, bucketId }: { feedId: string; bucket
                 markDirty()
               }}
               rows={3}
-              placeholder="e.g. Brand first. Include vintage if present. Keep it short and searchable."
+              placeholder="Fx: Brand først. Tag årgang med, hvis den findes. Hold titlen kort og søgbar."
               className="ff-input w-full"
               style={{ resize: 'vertical' }}
             />
           </div>
 
           <div>
-            <label className="ff-label">Choose inputs for the title generation</label>
+            <label className="ff-label">Vælg felter, AI’en må bruge til titlen</label>
 
             {/* Checkbox dropdown: pick/unpick many fields at once. */}
             <div ref={pickerRef} style={{ position: 'relative', maxWidth: '320px' }}>
               <button type="button" onClick={() => setPickerOpen((o) => !o)} className="ff-select w-full text-left">
-                {inputFields.length ? `${inputFields.length} field${inputFields.length > 1 ? 's' : ''} selected` : 'Select fields…'}
+                {inputFields.length ? `${inputFields.length.toLocaleString('da-DK')} ${inputFields.length > 1 ? 'felter' : 'felt'} valgt` : 'Vælg felter…'}
               </button>
               {pickerOpen && (
                 <div
@@ -363,7 +367,7 @@ export function BucketWorkshopTab({ feedId, bucketId }: { feedId: string; bucket
                     </label>
                   ))}
                   {allFields.length === 0 && (
-                    <p style={{ fontSize: '11px', color: 'var(--color-text-tertiary)', padding: '4px' }}>No fields available.</p>
+                    <p style={{ fontSize: '11px', color: 'var(--color-text-tertiary)', padding: '4px' }}>Ingen felter at vælge.</p>
                   )}
                 </div>
               )}
@@ -372,7 +376,7 @@ export function BucketWorkshopTab({ feedId, bucketId }: { feedId: string; bucket
             {/* Ordered priority list — drag to reorder. */}
             <div className="mt-2 space-y-1">
               {inputFields.length === 0 ? (
-                <span style={{ fontSize: '11px', color: 'var(--color-text-tertiary)' }}>None — only the current title is used.</span>
+                <span style={{ fontSize: '11px', color: 'var(--color-text-tertiary)' }}>Ingen. Kun den nuværende titel bruges.</span>
               ) : (
                 inputFields.map((t, i) => (
                   <div
@@ -398,15 +402,15 @@ export function BucketWorkshopTab({ feedId, bucketId }: { feedId: string; bucket
                     <span style={{ color: 'var(--color-text-tertiary)' }}><GripIcon /></span>
                     <span className="ff-badge ff-badge-neutral shrink-0" style={{ textTransform: 'none', letterSpacing: 0 }}>{i + 1}</span>
                     <span className="flex-1 min-w-0" style={{ color: 'var(--color-text-primary)' }}>{fieldLabel(t, metafields)}</span>
-                    <button type="button" onClick={() => removeField(t)} className="ff-btn-ghost shrink-0 w-5 h-5" aria-label="Remove field">×</button>
+                    <button type="button" onClick={() => removeField(t)} className="ff-btn-ghost shrink-0 w-5 h-5" aria-label="Fjern felt">×</button>
                   </div>
                 ))
               )}
             </div>
 
             <p className="mt-1.5" style={{ fontSize: '10px', color: 'var(--color-text-tertiary)' }}>
-              Fields are a wish list: the model includes each only when the product has it, in this priority order, and never invents a missing one.
-              A product just needs a title plus one attribute (brand/type or a selected field) to be a candidate.
+              Felterne er en ønskeliste: AI’en tager et felt med, når varen har det, i den rækkefølge du har valgt, og finder aldrig på et felt, der mangler.
+              En vare skal bare have en titel og én egenskab (brand/varetype eller et valgt felt) for at kunne bruges.
             </p>
           </div>
 
@@ -416,11 +420,11 @@ export function BucketWorkshopTab({ feedId, bucketId }: { feedId: string; bucket
               disabled={savingConfig || (!dirty && !savedConfig)}
               className={dirty ? 'ff-btn-primary' : 'ff-btn-secondary'}
             >
-              {savingConfig ? 'Saving…' : savedConfig ? 'Saved ✓' : dirty ? 'Save settings' : 'Saved'}
+              {savingConfig ? 'Gemmer…' : savedConfig ? 'Gemt ✓' : dirty ? 'Gem indstillinger' : 'Gemt'}
             </button>
             {dirty && (
               <span style={{ fontSize: '10px', color: 'var(--color-text-tertiary)' }}>
-                You have unsaved changes.
+                Du har ændringer, der ikke er gemt.
               </span>
             )}
           </div>
@@ -435,29 +439,29 @@ export function BucketWorkshopTab({ feedId, bucketId }: { feedId: string; bucket
       <div className="ff-panel">
         <div className="ff-panel-header" style={{ textTransform: 'none', letterSpacing: 0, fontSize: '12px', padding: '10px 14px' }}>
           <span className="flex items-center gap-2" style={{ fontWeight: 500, color: 'var(--color-text-primary)' }}>
-            <StepNumber n={2} /> Generate approaches
+            <StepNumber n={2} /> Generér bud
           </span>
         </div>
         <div className="p-3.5 space-y-2">
           <div className="flex items-center gap-2">
             <button onClick={handleGenerate} disabled={generating} className="ff-btn-primary">
               {generating
-                ? 'Generating…'
+                ? 'Genererer…'
                 : examples.length === 0
-                  ? 'Generate title approaches'
-                  : 'Generate more approaches'}
+                  ? 'Generér titelbud'
+                  : 'Generér flere bud'}
             </button>
             <span style={{ fontSize: '10px', color: 'var(--color-text-tertiary)' }}>
-              {approved.length} approved{approved.length ? ' (those approaches are avoided next round)' : ''}
-              {unusedLeft !== null ? ` · ${unusedLeft} members left` : ''}
+              {approved.length} godkendt{approved.length ? ' (de tilgange undgås i næste runde)' : ''}
+              {unusedLeft !== null ? ` · ${unusedLeft.toLocaleString('da-DK')} varer tilbage` : ''}
             </span>
           </div>
           <p style={{ fontSize: '10px', color: 'var(--color-text-tertiary)' }}>
-            Generating starts a fresh round of 5; any candidates you didn&apos;t pick from the last round are set aside.
+            En ny runde giver 5 nye bud. De bud, du ikke valgte i sidste runde, lægges til side.
           </p>
           {approvedFull && (
             <p style={{ fontSize: '10px', color: 'var(--color-text-tertiary)' }}>
-              You have {MAX_APPROVED} approved examples — delete one below to free a slot before approving more.
+              Du har {MAX_APPROVED} godkendte eksempler. Slet et nedenfor, før du kan godkende flere.
             </p>
           )}
         </div>
@@ -466,12 +470,12 @@ export function BucketWorkshopTab({ feedId, bucketId }: { feedId: string; bucket
       {/* Approved examples (few-shot) — fills up as you approve from each round. */}
       <div className="ff-panel">
         <div className="ff-panel-header" style={{ textTransform: 'none', letterSpacing: 0, fontSize: '12px', padding: '10px 14px' }}>
-          Approved examples — {approved.length}/{MAX_APPROVED}
+          Godkendte eksempler: {approved.length}/{MAX_APPROVED}
         </div>
         <div className="p-3.5 space-y-1.5">
           {approved.length === 0 ? (
             <p style={{ fontSize: '11px', color: 'var(--color-text-tertiary)' }}>
-              None yet. Generate approaches above and approve the good ones.
+              Ingen endnu. Generér bud ovenfor, og godkend de gode.
             </p>
           ) : (
             approved.map((e) => (
@@ -490,7 +494,7 @@ export function BucketWorkshopTab({ feedId, bucketId }: { feedId: string; bucket
                   type="button"
                   onClick={() => removeExample(e.id)}
                   className="ff-btn-ghost shrink-0 w-6 h-6"
-                  aria-label="Delete example (frees a slot)"
+                  aria-label="Slet eksempel (giver plads til et nyt)"
                 >
                   <TrashIcon />
                 </button>
@@ -505,7 +509,7 @@ export function BucketWorkshopTab({ feedId, bucketId }: { feedId: string; bucket
         <div className="ff-panel">
           <div className="ff-panel-header" style={{ textTransform: 'none', letterSpacing: 0, fontSize: '12px', padding: '10px 14px' }}>
             <span className="flex items-center gap-2" style={{ fontWeight: 500, color: 'var(--color-text-primary)' }}>
-              <StepNumber n={3} /> Approve the ones you like
+              <StepNumber n={3} /> Godkend dem, du kan lide
             </span>
           </div>
           <div className="p-3.5 space-y-2.5">
@@ -523,7 +527,7 @@ export function BucketWorkshopTab({ feedId, bucketId }: { feedId: string; bucket
                 }}
               >
                 <div style={{ fontSize: '9px', textTransform: 'uppercase', letterSpacing: '0.04em', color: 'var(--color-text-tertiary)' }}>
-                  Original title — the 5 approaches below are all rewrites of this
+                  Oprindelig titel. De 5 bud nedenfor er alle omskrivninger af den
                 </div>
                 <div style={{ fontSize: '13px', fontWeight: 600, color: 'var(--color-text-primary)', marginTop: '2px' }}>
                   {roundContext.title}
@@ -555,8 +559,8 @@ export function BucketWorkshopTab({ feedId, bucketId }: { feedId: string; bucket
                     disabled={approvedFull}
                     onChange={() => approveExample(e.id)}
                     className="mt-0.5"
-                    aria-label="Approve this approach"
-                    title={approvedFull ? `Max ${MAX_APPROVED} approved` : 'Approve'}
+                    aria-label="Godkend dette bud"
+                    title={approvedFull ? `Højst ${MAX_APPROVED} godkendte` : 'Godkend'}
                   />
                   <div className="flex-1 min-w-0 space-y-0.5">
                     <div className="flex items-center gap-2 flex-wrap">
@@ -586,7 +590,7 @@ export function BucketWorkshopTab({ feedId, bucketId }: { feedId: string; bucket
             className="ff-panel-header"
             style={{ textTransform: 'none', letterSpacing: 0, fontSize: '12px', padding: '10px 14px', cursor: 'pointer' }}
           >
-            Not chosen — {rejected.length} from earlier rounds
+            Ikke valgt: {rejected.length} fra tidligere runder
           </summary>
           <div className="p-3.5 space-y-1.5">
             {rejected.map((e) => (
@@ -599,7 +603,7 @@ export function BucketWorkshopTab({ feedId, bucketId }: { feedId: string; bucket
                   type="button"
                   onClick={() => removeExample(e.id)}
                   className="ff-btn-ghost shrink-0 w-6 h-6"
-                  aria-label="Delete from history"
+                  aria-label="Slet fra historik"
                 >
                   <TrashIcon />
                 </button>
@@ -628,10 +632,10 @@ export function BucketWorkshopTab({ feedId, bucketId }: { feedId: string; bucket
           }}
         >
           <span style={{ fontSize: '11px', color: 'var(--color-text-secondary)' }}>
-            You have unsaved changes to this bucket&apos;s instructions / input fields.
+            Du har ændringer i bucketens instruktioner eller inputfelter, der ikke er gemt.
           </span>
           <button onClick={handleSaveConfig} disabled={savingConfig} className="ff-btn-primary shrink-0">
-            {savingConfig ? 'Saving…' : 'Save settings'}
+            {savingConfig ? 'Gemmer…' : 'Gem indstillinger'}
           </button>
         </div>
       )}

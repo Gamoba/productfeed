@@ -278,26 +278,29 @@ body {
   overflow: hidden;
 }
 
+/* Card header in Design B: a 13px title on the card itself, not an uppercase
+   strip. Older panels (AI Titles, Mapping) still use this class. */
 .ff-panel-header {
-  padding: 10px 14px;
-  border-bottom: 1px solid var(--hairline);
-  background: var(--bg-surface);
-  font-size: 10px;
-  font-weight: 600;
-  text-transform: uppercase;
-  letter-spacing: 0.6px;
-  color: var(--ink-muted);
+  padding: 12px 16px;
+  border-bottom: 1px solid var(--line);
+  background: transparent;
+  font-size: 13px;
+  font-weight: 500;
+  text-transform: none;
+  letter-spacing: 0;
+  color: var(--card-fg);
   display: flex;
   align-items: center;
   justify-content: space-between;
   gap: 8px;
 }
 
+/* Section label in Design B: 11px, uppercase, 0.08em. */
 .ff-label {
-  font-size: 10px;
+  font-size: 11px;
   text-transform: uppercase;
-  letter-spacing: 0.6px;
-  color: var(--ink-muted);
+  letter-spacing: 0.08em;
+  color: var(--muted);
   font-weight: 500;
 }
 

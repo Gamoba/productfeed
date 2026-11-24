@@ -1,7 +1,9 @@
 'use client'
 
 import { useState } from 'react'
+import { createPortal } from 'react-dom'
 import type { MissingScope } from '@/lib/shopifyScopes'
+import './connect.css'
 
 export type ProjectSource = 'shopify' | 'feed_url'
 
@@ -128,8 +130,8 @@ export function ProjectConnectModal({
         // modal open so the user reads it here, where they still have the
         // Shopify app settings in mind — not later, from a feed full of IDs.
         setWarning(
-          'Connected, but the token is missing: ' +
-            result.missingScopes.map((s) => `${s.handle} — ${s.impact}`).join(' ')
+          'Forbundet, men nøglen mangler adgang: ' +
+            result.missingScopes.map((s) => `${s.handle}: ${s.impact}`).join(' ')
         )
         onConnected(result)
       } else {
@@ -145,217 +147,172 @@ export function ProjectConnectModal({
 
   const title =
     mode === 'connect'
-      ? 'Connect product source'
+      ? 'Forbind varekilde'
       : source === 'feed_url'
         ? rotating
-          ? 'Change feed URL'
-          : 'Switch to feed URL'
+          ? 'Skift feed-URL'
+          : 'Skift til feed-URL'
         : rotating
-          ? 'Replace access token'
-          : 'Switch to Shopify'
+          ? 'Skift Shopify-nøgle'
+          : 'Skift til Shopify'
 
   const submitLabel = submitting
     ? source === 'feed_url'
-      ? 'Checking feed…'
-      : 'Verifying…'
+      ? 'Tjekker feedet…'
+      : 'Tjekker nøglen…'
     : source === 'feed_url'
       ? rotating
-        ? 'Save feed URL'
-        : 'Connect feed'
+        ? 'Gem feed-URL'
+        : 'Forbind feed'
       : rotating
-        ? 'Replace token'
-        : 'Connect'
+        ? 'Skift nøgle'
+        : 'Forbind'
 
-  return (
-    <div className="fixed inset-0 z-50 flex items-start justify-center pt-20 px-4" onClick={onClose}>
-      <div className="absolute inset-0" style={{ background: 'rgba(0,0,0,0.3)' }} />
-      <div className="relative ff-panel w-full max-w-md" onClick={(e) => e.stopPropagation()}>
-        <div className="ff-panel-header" style={{ textTransform: 'none', letterSpacing: 0, fontSize: '12px' }}>
-          <span style={{ fontSize: '13px', fontWeight: 500, color: 'var(--color-text-primary)' }}>{title}</span>
-        </div>
-
-        <form onSubmit={submit}>
-          <div className="p-3.5 space-y-3">
-            <div>
-              <label className="ff-label block mb-1.5">Source</label>
-              <div
-                role="radiogroup"
-                aria-label="Product source"
-                className="grid grid-cols-2 gap-1 p-1"
-                style={{ border: '1px solid var(--hairline)', borderRadius: '10px' }}
-              >
-                <SourceOption
-                  label="Shopify"
-                  hint="Admin API token"
-                  selected={source === 'shopify'}
-                  onSelect={() => {
-                    setSource('shopify')
-                    setError(null)
-                  }}
-                />
-                <SourceOption
-                  label="Feed URL"
-                  hint="Google Shopping XML"
-                  selected={source === 'feed_url'}
-                  onSelect={() => {
-                    setSource('feed_url')
-                    setError(null)
-                  }}
-                />
-              </div>
+  // Portalled to <body> so no ancestor (a table row, an animated page) can clip
+  // or contain the fixed backdrop.
+  return createPortal(
+    <div className="pc-overlay" onClick={onClose}>
+      <div
+        className="pc-dlg"
+        role="dialog"
+        aria-modal="true"
+        aria-label={title}
+        onClick={(e) => e.stopPropagation()}
+        onKeyDown={(e) => e.key === 'Escape' && onClose()}
+      >
+        <h2>{title}</h2>
+        <form onSubmit={submit} className="pc-body">
+          <div className="pc-field">
+            <span>Kilde</span>
+            <div role="radiogroup" aria-label="Varekilde" className="pc-seg">
+              <SourceOption
+                label="Shopify"
+                hint="Admin API-nøgle"
+                selected={source === 'shopify'}
+                onSelect={() => {
+                  setSource('shopify')
+                  setError(null)
+                }}
+              />
+              <SourceOption
+                label="Feed-URL"
+                hint="Google Shopping-XML"
+                selected={source === 'feed_url'}
+                onSelect={() => {
+                  setSource('feed_url')
+                  setError(null)
+                }}
+              />
             </div>
-
-            {source === 'shopify' ? (
-              <>
-                <p style={{ fontSize: '11px', color: 'var(--color-text-tertiary)' }}>
-                  We verify the credentials against Shopify before saving. The token is encrypted at
-                  rest and never shown again.
-                </p>
-
-                <div>
-                  <label className="ff-label block mb-1.5">Shop URL</label>
-                  <input
-                    type="text"
-                    value={shopUrl}
-                    onChange={(e) => setShopUrl(e.target.value)}
-                    placeholder="your-store.myshopify.com"
-                    autoFocus={mode === 'connect'}
-                    className="ff-input"
-                    required
-                  />
-                </div>
-
-                <div>
-                  <label className="ff-label block mb-1.5">
-                    {rotating ? 'New access token' : 'Admin API access token'}
-                  </label>
-                  <input
-                    type="password"
-                    value={token}
-                    onChange={(e) => setToken(e.target.value)}
-                    placeholder={rotating ? 'Paste the new token' : 'shpat_…'}
-                    autoComplete="off"
-                    autoFocus={rotating}
-                    className="ff-input"
-                    required
-                  />
-                </div>
-              </>
-            ) : (
-              <>
-                <p style={{ fontSize: '11px', color: 'var(--color-text-tertiary)' }}>
-                  A public product feed — for example the Google Shopping feed a site on Umbraco
-                  exports. We download it once to check it contains products before saving, and
-                  again every time the feed is synced.
-                </p>
-
-                <div>
-                  <label className="ff-label block mb-1.5">Feed URL</label>
-                  <input
-                    type="url"
-                    value={feedUrl}
-                    onChange={(e) => setFeedUrl(e.target.value)}
-                    placeholder="https://example.com/google-feed.xml"
-                    autoFocus
-                    className="ff-input"
-                    required
-                  />
-                </div>
-
-                <div>
-                  <label className="ff-label block mb-1.5">Login (optional)</label>
-                  <div className="grid grid-cols-2 gap-2">
-                    <input
-                      type="text"
-                      value={authUser}
-                      onChange={(e) => setAuthUser(e.target.value)}
-                      placeholder="Username"
-                      autoComplete="off"
-                      aria-label="Feed username"
-                      className="ff-input"
-                    />
-                    <input
-                      type="password"
-                      value={authPass}
-                      onChange={(e) => setAuthPass(e.target.value)}
-                      placeholder="Password"
-                      autoComplete="new-password"
-                      aria-label="Feed password"
-                      className="ff-input"
-                    />
-                  </div>
-                  <p className="mt-1.5" style={{ fontSize: '11px', color: 'var(--color-text-tertiary)' }}>
-                    {rotating
-                      ? 'Only for feeds behind a login (HTTP Basic Auth). Leave empty to keep the stored login on the same domain.'
-                      : 'Only for feeds behind a login (HTTP Basic Auth). Stored encrypted and never shown again.'}
-                  </p>
-                </div>
-              </>
-            )}
-
-            {switching && (
-              <div
-                className="p-2.5"
-                style={{
-                  background: 'var(--color-badge-warning-bg)',
-                  border: '1px solid var(--color-badge-warning-text)',
-                  borderRadius: '4px',
-                }}
-              >
-                <p style={{ fontSize: '11px', color: 'var(--color-badge-warning-text)' }}>
-                  {source === 'feed_url'
-                    ? 'This replaces the Shopify connection — the stored access token is deleted. Existing feeds get their products from the feed URL at their next sync.'
-                    : 'This replaces the feed URL. Existing feeds get their products from Shopify at their next sync.'}
-                </p>
-              </div>
-            )}
-
-            {error && (
-              <div
-                className="p-2.5"
-                style={{
-                  background: 'var(--color-badge-danger-bg)',
-                  border: '1px solid var(--color-badge-danger-text)',
-                  borderRadius: '4px',
-                }}
-              >
-                <p style={{ fontSize: '11px', color: 'var(--color-badge-danger-text)' }}>{error}</p>
-              </div>
-            )}
-
-            {warning && (
-              <div
-                className="p-2.5"
-                style={{
-                  background: 'var(--color-badge-warning-bg)',
-                  border: '1px solid var(--color-badge-warning-text)',
-                  borderRadius: '4px',
-                }}
-              >
-                <p style={{ fontSize: '11px', color: 'var(--color-badge-warning-text)' }}>{warning}</p>
-              </div>
-            )}
           </div>
 
-          <div
-            className="px-3.5 py-3 flex items-center justify-end gap-2"
-            style={{ borderTop: '1px solid var(--color-border-tertiary)' }}
-          >
-            <button type="button" onClick={onClose} className="ff-btn-secondary" disabled={submitting}>
-              {warning ? 'Close' : 'Cancel'}
+          {source === 'shopify' ? (
+            <>
+              <p className="pc-muted">
+                Vi tjekker nøglen mod Shopify, før den gemmes. Den gemmes krypteret og vises aldrig igen. FeedFlow
+                læser kun og ændrer aldrig noget i shoppen.
+              </p>
+              <label className="pc-field">
+                <span>Shop-URL</span>
+                <input
+                  type="text"
+                  value={shopUrl}
+                  onChange={(e) => setShopUrl(e.target.value)}
+                  placeholder="din-shop.myshopify.com"
+                  autoFocus={mode === 'connect'}
+                  className="pc-inp"
+                  required
+                />
+              </label>
+              <label className="pc-field">
+                <span>{rotating ? 'Ny nøgle' : 'Admin API-nøgle'}</span>
+                <input
+                  type="password"
+                  value={token}
+                  onChange={(e) => setToken(e.target.value)}
+                  placeholder={rotating ? 'Indsæt den nye nøgle' : 'shpat_…'}
+                  autoComplete="off"
+                  autoFocus={rotating}
+                  className="pc-inp"
+                  required
+                />
+              </label>
+            </>
+          ) : (
+            <>
+              <p className="pc-muted">
+                Et offentligt varefeed, fx det Google Shopping-feed en Umbraco-side eksporterer. Vi henter det én gang
+                for at tjekke, at det har varer, før det gemmes, og igen ved hver synkronisering.
+              </p>
+              <label className="pc-field">
+                <span>Feed-URL</span>
+                <input
+                  type="url"
+                  value={feedUrl}
+                  onChange={(e) => setFeedUrl(e.target.value)}
+                  placeholder="https://eksempel.dk/google-feed.xml"
+                  autoFocus
+                  className="pc-inp"
+                  required
+                />
+              </label>
+              <div className="pc-field">
+                <span>Login (valgfrit)</span>
+                <div className="pc-two">
+                  <input
+                    type="text"
+                    value={authUser}
+                    onChange={(e) => setAuthUser(e.target.value)}
+                    placeholder="Brugernavn"
+                    autoComplete="off"
+                    aria-label="Brugernavn til feedet"
+                    className="pc-inp"
+                  />
+                  <input
+                    type="password"
+                    value={authPass}
+                    onChange={(e) => setAuthPass(e.target.value)}
+                    placeholder="Adgangskode"
+                    autoComplete="new-password"
+                    aria-label="Adgangskode til feedet"
+                    className="pc-inp"
+                  />
+                </div>
+                <small>
+                  {rotating
+                    ? 'Kun til feeds bag et login (HTTP Basic Auth). Lad felterne stå tomme for at beholde det gemte login på samme domæne.'
+                    : 'Kun til feeds bag et login (HTTP Basic Auth). Gemmes krypteret og vises aldrig igen.'}
+                </small>
+              </div>
+            </>
+          )}
+
+          {switching && (
+            <p className="note warn">
+              {source === 'feed_url'
+                ? 'Det erstatter Shopify-forbindelsen, og den gemte nøgle slettes. Feedsene henter varer fra feed-URL’en ved næste synkronisering.'
+                : 'Det erstatter feed-URL’en. Feedsene henter varer fra Shopify ved næste synkronisering.'}
+            </p>
+          )}
+          {error && <p className="note warn">{error}</p>}
+          {warning && <p className="note warn">{warning}</p>}
+
+          <div className="pc-foot">
+            <button type="button" onClick={onClose} className="wl-btn-secondary" disabled={submitting}>
+              {warning ? 'Luk' : 'Annullér'}
             </button>
-            <button type="submit" disabled={!canSubmit} className="ff-btn-primary">
+            <button type="submit" disabled={!canSubmit} className="wl-btn-primary">
               {submitLabel}
             </button>
           </div>
         </form>
       </div>
-    </div>
+    </div>,
+    document.body
   )
 }
 
-// One half of the source toggle. Selected = quiet surface fill + ink text; the
-// rest stays neutral, so colour isn't spent on a mode switch.
+// One half of the source toggle. Selected = dark, like every segmented control.
 function SourceOption({
   label,
   hint,
@@ -368,40 +325,9 @@ function SourceOption({
   onSelect: () => void
 }) {
   return (
-    <button
-      type="button"
-      role="radio"
-      aria-checked={selected}
-      onClick={onSelect}
-      className="text-left px-3 py-2 transition-colors"
-      style={{
-        borderRadius: '8px',
-        border: `1px solid ${selected ? 'var(--hairline)' : 'transparent'}`,
-        background: selected ? 'var(--bg-surface)' : 'transparent',
-        cursor: 'pointer',
-      }}
-    >
-      <span
-        className="block"
-        style={{ fontSize: '12px', fontWeight: 500, color: selected ? 'var(--ink)' : 'var(--ink-secondary)' }}
-      >
-        {label}
-      </span>
-      <span className="block" style={{ fontSize: '11px', color: 'var(--ink-muted)' }}>
-        {hint}
-      </span>
+    <button type="button" role="radio" aria-checked={selected} onClick={onSelect} className="pc-opt">
+      <b>{label}</b>
+      <small>{hint}</small>
     </button>
   )
-}
-
-// Shared status → badge mapping for projects.
-export function projectStatusBadge(status: string): { className: string; label: string } {
-  switch (status) {
-    case 'connected':
-      return { className: 'ff-badge ff-badge-success', label: 'Connected' }
-    case 'error':
-      return { className: 'ff-badge ff-badge-danger', label: 'Error' }
-    default:
-      return { className: 'ff-badge ff-badge-neutral', label: 'Not connected' }
-  }
 }

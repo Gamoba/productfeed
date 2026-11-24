@@ -20,23 +20,23 @@ export const SHOPIFY_SCOPES: ScopeRequirement[] = [
   {
     handle: 'read_products',
     required: true,
-    impact: 'Products cannot be synced at all.',
+    impact: 'Varerne kan slet ikke synkroniseres.',
   },
   {
     handle: 'read_metaobjects',
     required: false,
     impact:
-      'Metaobject fields (region, grape, country, …) show a raw Shopify ID instead of their value.',
+      'Metaobject-felter (region, drue, land …) viser et Shopify-id i stedet for værdien.',
   },
   {
     handle: 'read_markets',
     required: false,
-    impact: 'Markets will not load in the feed wizard.',
+    impact: 'Markeder kan ikke hentes, når du opretter et feed.',
   },
   {
     handle: 'read_translations',
     required: false,
-    impact: 'Translated titles and descriptions are not fetched for localised feeds.',
+    impact: 'Oversatte titler og beskrivelser hentes ikke til feeds på andre sprog.',
   },
 ]
 

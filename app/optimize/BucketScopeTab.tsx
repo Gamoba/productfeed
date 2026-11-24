@@ -21,6 +21,14 @@ import type { BucketConflict } from '@/lib/optimizationBuckets'
 
 type OverlapData = { conflicts: BucketConflict[]; inThisBucket: number; unassigned: number }
 
+// Same words as the Results tab (BucketResultsPanel).
+const STATUS_LABEL: Record<string, string> = {
+  ai_generated: 'Optimeret',
+  human_edited: 'Rettet i hånden',
+  needs_review: 'Til godkendelse',
+  not_optimized: 'Ikke optimeret',
+}
+
 // Membership for a candidate set = all candidates except the conflicts the user
 // chose to LEAVE in their current bucket. Pure (no component state) so it can be
 // reused by the debounced auto-save and the pull-in toggles without re-renders.
@@ -96,12 +104,10 @@ export function BucketScopeTab({
   // Debounced product search for the manual-add picker.
   useEffect(() => {
     const q = search.trim()
-    if (!q) {
-      setResults([])
-      return
-    }
+    // Clearing the results for an empty query, and switching the spinner on for a
+    // non-empty one, happen in the input's onChange (not synchronously in here).
+    if (!q) return
     let cancelled = false
-    setSearching(true)
     const t = setTimeout(async () => {
       const r = await searchFeedProducts(feedId, q)
       if (cancelled) return
@@ -353,20 +359,20 @@ export function BucketScopeTab({
             Scope
           </div>
           <h2 style={{ fontSize: '20px', fontWeight: 500, color: 'var(--ink)', letterSpacing: '-0.01em', lineHeight: 1.2, marginTop: '3px' }}>
-            Choose products for this bucket
+            Vælg varer til bucketen
           </h2>
           <p style={{ fontSize: '12px', color: 'var(--ink-secondary)', lineHeight: 1.5, marginTop: '6px', maxWidth: '52ch' }}>
-            Define which products this bucket targets. The match count and the bucket&apos;s products
-            update automatically as you change the criteria — no need to save.
+            Vælg hvilke varer bucketen dækker. Antallet og bucketens varer
+            opdateres automatisk, når du ændrer reglerne. Du skal ikke gemme.
           </p>
           <div className="flex items-center gap-2" style={{ marginTop: '10px' }}>
-            <span style={{ fontSize: '13px', fontWeight: 500, color: 'var(--ink-secondary)' }}>Products match:</span>
+            <span style={{ fontSize: '13px', fontWeight: 500, color: 'var(--ink-secondary)' }}>Matchende varer:</span>
             {recomputing || displayCount === null ? (
               // Box styled INLINE (not via a CSS class) so it's visible even if the
               // class were ever absent from the build; it only borrows the keyframe.
               <span
                 aria-hidden
-                title="Recomputing…"
+                title="Tæller igen…"
                 style={{
                   display: 'inline-block',
                   width: '13px',
@@ -378,15 +384,15 @@ export function BucketScopeTab({
                 }}
               />
             ) : (
-              <span style={{ fontSize: '16px', fontWeight: 500, color: 'var(--ink)', letterSpacing: '-0.01em' }}>{displayCount}</span>
+              <span style={{ fontSize: '16px', fontWeight: 500, color: 'var(--ink)', letterSpacing: '-0.01em' }}>{displayCount.toLocaleString('da-DK')}</span>
             )}
           </div>
         </div>
         <div className="shrink-0 text-right">
           {saveState === 'saving' ? (
-            <div style={{ fontSize: '11px', color: 'var(--ink-muted)' }}>Saving…</div>
+            <div style={{ fontSize: '11px', color: 'var(--ink-muted)' }}>Gemmer…</div>
           ) : saveState === 'saved' ? (
-            <div style={{ fontSize: '11px', color: 'var(--accent-green)' }}>Saved ✓</div>
+            <div style={{ fontSize: '11px', color: 'var(--accent-green)' }}>Gemt ✓</div>
           ) : null}
         </div>
       </div>
@@ -398,9 +404,9 @@ export function BucketScopeTab({
       <div className="flex flex-col lg:flex-row gap-4 items-start">
         <div className="w-full lg:flex-1 min-w-0 space-y-4">
       <FilterSection
-        title="Include products"
-        description="Only products matching these rules are candidates. No rules = all feed products."
-        badge="INCLUDE"
+        title="Inkludér varer"
+        description="Kun varer, der matcher reglerne, kommer med. Ingen regler betyder alle varer i feedet."
+        badge="INKLUDÉR"
         badgeCls="ff-badge ff-badge-success"
         config={include}
         onAddRule={() => addRule('include')}
@@ -410,9 +416,9 @@ export function BucketScopeTab({
         metafieldOptions={metafields}
       />
       <FilterSection
-        title="Exclude products"
-        description="Products matching these rules are removed from the candidates."
-        badge="EXCLUDE"
+        title="Ekskludér varer"
+        description="Varer, der matcher reglerne, fjernes igen."
+        badge="EKSKLUDÉR"
         badgeCls="ff-badge ff-badge-danger"
         config={exclude}
         onAddRule={() => addRule('exclude')}
@@ -425,12 +431,12 @@ export function BucketScopeTab({
       {/* Manual additions — added on top of the filter; survive filter changes. */}
       <div className="ff-panel">
         <div className="ff-panel-header" style={{ textTransform: 'none', letterSpacing: 0, fontSize: '12px', padding: '10px 14px' }}>
-          Add products manually
+          Tilføj varer manuelt
         </div>
         <div className="p-3.5 space-y-2.5">
           <p style={{ fontSize: '11px', color: 'var(--ink-muted)' }}>
-            Add specific products on top of the filter. Manual additions stay in the bucket even when you change the
-            filter. {manual.length} manually added.
+            Tilføj bestemte varer oven i reglerne. Manuelt tilføjede varer bliver i bucketen, selv om du ændrer
+            reglerne. {manual.length.toLocaleString('da-DK')} tilføjet manuelt.
           </p>
 
           {pendingConflict && (
@@ -439,15 +445,15 @@ export function BucketScopeTab({
               style={{ fontSize: '11px', padding: '8px 10px', borderRadius: '6px', background: 'var(--warn-bg)', border: '1px solid var(--accent-amber)' }}
             >
               <div style={{ color: 'var(--accent-amber)' }}>
-                “{pendingConflict.title}” already belongs to bucket “{pendingConflict.bucketName}”. Moving it here removes
-                it from that bucket (one bucket per product).
+                “{pendingConflict.title}” ligger allerede i bucketen “{pendingConflict.bucketName}”. Flytter du den hertil,
+                fjernes den derfra (en vare kan kun ligge i én bucket).
               </div>
               <div className="flex items-center gap-2">
                 <button onClick={() => commitAdd(pendingConflict.ref)} className="ff-btn-primary">
-                  Move it here
+                  Flyt hertil
                 </button>
                 <button onClick={() => setPendingConflict(null)} className="ff-btn-ghost" style={{ fontSize: '11px', padding: '0 8px' }}>
-                  Cancel
+                  Annullér
                 </button>
               </div>
             </div>
@@ -456,12 +462,16 @@ export function BucketScopeTab({
           <input
             type="search"
             value={search}
-            onChange={(e) => setSearch(e.target.value)}
-            placeholder="Search products by title or vendor…"
+            onChange={(e) => {
+              setSearch(e.target.value)
+              if (e.target.value.trim()) setSearching(true)
+              else setResults([])
+            }}
+            placeholder="Søg efter varer på titel eller producent…"
             className="ff-input w-full"
           />
 
-          {searching && <p style={{ fontSize: '11px', color: 'var(--ink-muted)' }}>Searching…</p>}
+          {searching && <p style={{ fontSize: '11px', color: 'var(--ink-muted)' }}>Søger…</p>}
 
           {results.length > 0 && (
             <div className="space-y-1" style={{ maxHeight: '260px', overflowY: 'auto' }}>
@@ -485,7 +495,7 @@ export function BucketScopeTab({
                       disabled={added || addBusy === p.product_ref}
                       className="ff-btn-secondary shrink-0"
                     >
-                      {added ? 'Added' : addBusy === p.product_ref ? 'Adding…' : 'Add'}
+                      {added ? 'Tilføjet' : addBusy === p.product_ref ? 'Tilføjer…' : 'Tilføj'}
                     </button>
                   </div>
                 )
@@ -495,7 +505,7 @@ export function BucketScopeTab({
 
           {manual.length > 0 && (
             <div>
-              <label className="ff-label">Manually added ({manual.length})</label>
+              <label className="ff-label">Tilføjet manuelt ({manual.length.toLocaleString('da-DK')})</label>
               <div className="space-y-1">
                 {manual.map((m) => (
                   <div
@@ -504,7 +514,7 @@ export function BucketScopeTab({
                     style={{ fontSize: '11px', padding: '4px 8px', border: '1px solid var(--hairline)', borderRadius: '5px' }}
                   >
                     <span className="flex-1 min-w-0 truncate" style={{ color: 'var(--ink)' }} title={m.product_ref}>{m.title}</span>
-                    <button type="button" onClick={() => removeManual(m.product_ref)} className="ff-btn-ghost shrink-0 w-5 h-5" aria-label="Remove manual product">×</button>
+                    <button type="button" onClick={() => removeManual(m.product_ref)} className="ff-btn-ghost shrink-0 w-5 h-5" aria-label="Fjern manuelt tilføjet vare">×</button>
                   </div>
                 ))}
               </div>
@@ -516,25 +526,25 @@ export function BucketScopeTab({
       {candidates && overlap && (
         <div className="ff-panel">
           <div className="ff-panel-header" style={{ textTransform: 'none', letterSpacing: 0, fontSize: '12px', padding: '10px 14px' }}>
-            Matches
+            Match
           </div>
           <div className="p-3.5 space-y-3">
             <div style={{ fontSize: '12px', color: 'var(--ink-secondary)' }}>
-              <strong style={{ color: 'var(--ink)' }}>{candidates.length}</strong> products match.{' '}
-              {overlap.inThisBucket} already in this bucket · {overlap.unassigned} unassigned ·{' '}
+              <strong style={{ color: 'var(--ink)' }}>{candidates.length.toLocaleString('da-DK')}</strong> varer matcher.{' '}
+              {overlap.inThisBucket.toLocaleString('da-DK')} er allerede i bucketen · {overlap.unassigned.toLocaleString('da-DK')} uden bucket ·{' '}
               <strong style={{ color: overlap.conflicts.length ? 'var(--accent-amber)' : 'inherit' }}>
-                {overlap.conflicts.length}
+                {overlap.conflicts.length.toLocaleString('da-DK')}
               </strong>{' '}
-              in other buckets.
+              i andre buckets.
               {manual.length > 0 && (
                 <>
                   {' '}
                   <span style={{ color: 'var(--ink-muted)' }}>
-                    + {manual.length} manual →{' '}
+                    + {manual.length.toLocaleString('da-DK')} manuelt →{' '}
                     <strong style={{ color: 'var(--ink)' }}>
-                      {new Set([...candidates, ...manualRefs]).size}
+                      {new Set([...candidates, ...manualRefs]).size.toLocaleString('da-DK')}
                     </strong>{' '}
-                    in scope.
+                    i alt.
                   </span>
                 </>
               )}
@@ -543,8 +553,8 @@ export function BucketScopeTab({
             {overlap.conflicts.length > 0 && (
               <div className="space-y-1.5">
                 <div style={{ fontSize: '11px', color: 'var(--ink-secondary)' }}>
-                  These already belong to another bucket. Check to pull them into THIS bucket (they move,
-                  enforcing one bucket per product); leave unchecked to keep them where they are:
+                  Disse varer ligger allerede i en anden bucket. Sæt flueben for at flytte dem til DENNE bucket
+                  (en vare kan kun ligge i én bucket). Uden flueben bliver de, hvor de er:
                 </div>
                 <button
                   type="button"
@@ -552,17 +562,17 @@ export function BucketScopeTab({
                   className="ff-btn-ghost"
                   style={{ fontSize: '10px', fontWeight: 500, color: 'var(--accent-ink)', padding: '2px 6px', alignSelf: 'flex-start' }}
                 >
-                  {allPulledIn ? 'Deselect all' : 'Select all'}
+                  {allPulledIn ? 'Fravælg alle' : 'Vælg alle'}
                 </button>
                 <div className="space-y-1" style={{ maxHeight: '280px', overflowY: 'auto' }}>
                   {overlap.conflicts.map((c) => (
                     <label key={c.product_ref} className="flex items-center gap-2" style={{ fontSize: '11px' }}>
                       <input type="checkbox" checked={pullIn.has(c.product_ref)} onChange={() => togglePull(c.product_ref)} />
                       <span style={{ color: 'var(--ink-secondary)' }} title={c.product_ref}>{c.title}</span>
-                      <span style={{ color: 'var(--ink-muted)' }}>in “{c.bucketName}”</span>
+                      <span style={{ color: 'var(--ink-muted)' }}>i “{c.bucketName}”</span>
                       {c.status && (
                         <span className={`ff-badge ${c.status === 'human_edited' ? 'ff-badge-warning' : 'ff-badge-neutral'}`}>
-                          {c.status}
+                          {STATUS_LABEL[c.status] ?? c.status}
                         </span>
                       )}
                     </label>
@@ -572,8 +582,8 @@ export function BucketScopeTab({
             )}
 
             <div style={{ fontSize: '11px', color: 'var(--ink-muted)' }}>
-              This bucket holds <strong style={{ color: 'var(--ink)' }}>{finalRefs.length}</strong>{' '}
-              {finalRefs.length === 1 ? 'product' : 'products'}, saved automatically.
+              Bucketen har <strong style={{ color: 'var(--ink)' }}>{finalRefs.length.toLocaleString('da-DK')}</strong>{' '}
+              {finalRefs.length === 1 ? 'vare' : 'varer'}. Gemt automatisk.
             </div>
           </div>
         </div>

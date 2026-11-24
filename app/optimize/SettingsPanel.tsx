@@ -64,7 +64,7 @@ export function SettingsPanel({
           <span style={{ fontSize: '11px', color: 'var(--color-badge-danger-text)' }}>{error}</span>
         )}
         <button onClick={handleSave} disabled={isPending} className="ff-btn-primary">
-          {isPending ? 'Saving…' : success ? 'Saved' : 'Save settings'}
+          {isPending ? 'Gemmer…' : success ? 'Gemt' : 'Gem indstillinger'}
         </button>
       </div>
 
@@ -74,26 +74,26 @@ export function SettingsPanel({
           className="ff-panel-header"
           style={{ textTransform: 'none', letterSpacing: 0, fontSize: '12px', padding: '10px 14px' }}
         >
-          Few-shot examples
+          Eksempler på titler
         </div>
         <div className="p-3.5 space-y-2">
           <p style={{ fontSize: '11px', color: 'var(--color-text-tertiary)' }}>
-            5–10 hand-written “perfect” titles for this catalogue, one per line. These anchor the
-            structure and tone of every generated title — the single biggest lever on quality.
-            Write them in the feed&apos;s market language.
+            5–10 håndskrevne “perfekte” titler for kataloget, én pr. linje. De styrer opbygning og
+            tone i alle genererede titler og betyder mest for kvaliteten.
+            Skriv dem på feedets markedssprog.
           </p>
           <textarea
             value={fewShot}
             onChange={(e) => setFewShot(e.target.value)}
             rows={10}
             spellCheck={false}
-            placeholder={'- Brand Product type Key attributes Variant\n- Villa Antinori Chianti Classico 1970 Rotwein\n- …'}
+            placeholder={'- Brand Varetype Vigtige egenskaber Variant\n- Villa Antinori Chianti Classico 1970 Rotwein\n- …'}
             className="ff-input w-full"
             style={{ fontFamily: 'var(--font-mono)', fontSize: '12px', lineHeight: 1.6, resize: 'vertical' }}
           />
           <p style={{ fontSize: '10px', color: 'var(--color-text-tertiary)' }}>
-            {exampleCount} {exampleCount === 1 ? 'example' : 'examples'}
-            {exampleCount > 0 && exampleCount < 5 ? ' — aim for at least 5' : ''}
+            {exampleCount.toLocaleString('da-DK')} {exampleCount === 1 ? 'eksempel' : 'eksempler'}
+            {exampleCount > 0 && exampleCount < 5 ? '. Gå efter mindst 5' : ''}
           </p>
         </div>
       </div>
@@ -104,11 +104,11 @@ export function SettingsPanel({
           className="ff-panel-header"
           style={{ textTransform: 'none', letterSpacing: 0, fontSize: '12px', padding: '10px 14px' }}
         >
-          Limits &amp; model
+          Grænser og model
         </div>
         <div className="p-3.5 space-y-3">
           <div>
-            <label className="ff-label">Character limit</label>
+            <label className="ff-label">Tegngrænse</label>
             <input
               type="number"
               min={1}
@@ -117,13 +117,13 @@ export function SettingsPanel({
               className="ff-input w-32"
             />
             <p className="mt-1" style={{ fontSize: '10px', color: 'var(--color-text-tertiary)' }}>
-              Google Merchant Center max is 150. Titles over this are sent to manual review.
+              Google Merchant Center tillader højst 150. Længere titler sendes til manuel godkendelse.
             </p>
           </div>
 
           <div className="flex gap-4">
             <div>
-              <label className="ff-label">Model (optional)</label>
+              <label className="ff-label">Model (valgfri)</label>
               <input
                 type="text"
                 value={model}
@@ -133,7 +133,7 @@ export function SettingsPanel({
               />
             </div>
             <div>
-              <label className="ff-label">Temperature (optional)</label>
+              <label className="ff-label">Temperatur (valgfri)</label>
               <input
                 type="number"
                 min={0}
@@ -147,8 +147,8 @@ export function SettingsPanel({
             </div>
           </div>
           <p style={{ fontSize: '10px', color: 'var(--color-text-tertiary)' }}>
-            Leave blank for the defaults (claude-haiku-4-5, temperature 0.3). Note: temperature
-            only applies to models that support it.
+            Lad felterne stå tomme for standardværdierne (claude-haiku-4-5, temperatur 0,3). Temperatur
+            virker kun på modeller, der understøtter den.
           </p>
         </div>
       </div>

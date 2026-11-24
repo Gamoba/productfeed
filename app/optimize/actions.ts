@@ -5,7 +5,8 @@
 // Reads return { data } | { error }; mutations return { error? }.
 
 import { createSupabaseServerClient } from '@/lib/supabase-server'
-import { getOwnedFeed } from '@/lib/feeds'
+import { adminDb, getOwnedFeed } from '@/lib/feeds'
+import { logActivity, type Actor } from '@/lib/activity'
 import { enforceRateLimit } from '@/lib/rateLimit'
 import { clientMessage } from '@/lib/errors'
 import * as svc from '@/lib/titleOptimizationService'
@@ -16,7 +17,7 @@ import type { RunResult, RerunChoice } from '@/lib/titleOptimizationRun'
 import type { OptimizationOutcome, TitleMethod, TitleRule } from '@/lib/titleOptimizer'
 
 // Resolves the caller and verifies they own the feed.
-async function requireOwnedFeed(feedId: string): Promise<{ userId: string } | { error: string }> {
+async function requireOwnedFeed(feedId: string): Promise<{ userId: string; user: Actor } | { error: string }> {
   const supabase = await createSupabaseServerClient()
   const {
     data: { user },
@@ -24,7 +25,13 @@ async function requireOwnedFeed(feedId: string): Promise<{ userId: string } | { 
   if (!user) return { error: 'Unauthorized' }
   const owned = await getOwnedFeed(user.id, feedId)
   if (!owned) return { error: 'Feed ikke fundet' }
-  return { userId: user.id }
+  return { userId: user.id, user }
+}
+
+// Activity log for AI Titles (Shop › Activity log). Generation runs are not
+// logged chunk by chunk; what a person decides (buckets, scope, approvals) is.
+async function logTitles(user: Actor, feedId: string, action: string, before?: string | null, after?: string | null) {
+  await logActivity(adminDb(), { user, feedId, area: 'AI Titles', action, before, after })
 }
 
 // Verifies the caller owns the feed AND the bucket belongs to it — guards every
@@ -32,12 +39,12 @@ async function requireOwnedFeed(feedId: string): Promise<{ userId: string } | { 
 async function requireOwnedBucket(
   feedId: string,
   bucketId: string
-): Promise<{ userId: string } | { error: string }> {
+): Promise<{ userId: string; user: Actor; bucketName: string } | { error: string }> {
   const g = await requireOwnedFeed(feedId)
   if ('error' in g) return g
   const bucket = await buckets.getBucket(feedId, bucketId)
   if (!bucket) return { error: 'Bucket ikke fundet' }
-  return { userId: g.userId }
+  return { userId: g.userId, user: g.user, bucketName: bucket.name }
 }
 
 // ── Settings ─────────────────────────────────────────────────────────────────
@@ -176,6 +183,7 @@ export async function saveManualTitle(
   if ('error' in g) return g
   try {
     await svc.saveManualTitle(feedId, productRef, title)
+    await logTitles(g.user, feedId, 'Titel skrevet manuelt', null, title)
     return {}
   } catch (e) {
     return { error: (e as Error).message }
@@ -277,7 +285,9 @@ export async function createBucket(
   const g = await requireOwnedFeed(feedId)
   if ('error' in g) return g
   try {
-    return { data: await buckets.createBucket(feedId, name, method) }
+    const bucket = await buckets.createBucket(feedId, name, method)
+    await logTitles(g.user, feedId, 'Bucket oprettet', null, name)
+    return { data: bucket }
   } catch (e) {
     return { error: (e as Error).message }
   }
@@ -292,6 +302,7 @@ export async function renameBucket(
   if ('error' in g) return g
   try {
     await buckets.renameBucket(feedId, bucketId, name)
+    if (name !== g.bucketName) await logTitles(g.user, feedId, 'Bucket omdøbt', g.bucketName, name)
     return {}
   } catch (e) {
     return { error: (e as Error).message }
@@ -307,6 +318,7 @@ export async function setBucketMethod(
   if ('error' in g) return g
   try {
     await buckets.setBucketMethod(feedId, bucketId, method)
+    await logTitles(g.user, feedId, `Metode ændret i ${g.bucketName}`, null, method === 'rule_based' ? 'Regelbaseret' : 'Automatisk')
     return {}
   } catch (e) {
     return { error: (e as Error).message }
@@ -318,6 +330,7 @@ export async function deleteBucket(feedId: string, bucketId: string): Promise<{ 
   if ('error' in g) return g
   try {
     await buckets.deleteBucket(feedId, bucketId)
+    await logTitles(g.user, feedId, 'Bucket slettet', g.bucketName, null)
     return {}
   } catch (e) {
     return { error: (e as Error).message }
@@ -349,6 +362,8 @@ export async function saveBucketFilters(
   if ('error' in g) return g
   try {
     await buckets.saveBucketFilters(feedId, bucketId, include, exclude)
+    const n = (c: svc.OptFilterConfig) => (c.rules ?? []).length
+    await logTitles(g.user, feedId, `Scope ændret i ${g.bucketName}`, null, `${n(include)} inkludér- og ${n(exclude)} ekskludér-regler`)
     return {}
   } catch (e) {
     return { error: (e as Error).message }
@@ -602,6 +617,13 @@ export async function setBucketCustomLabel(
   if ('error' in g) return g
   try {
     await buckets.setBucketCustomLabel(feedId, bucketId, index, value)
+    await logTitles(
+      g.user,
+      feedId,
+      `Custom label ændret i ${g.bucketName}`,
+      null,
+      index === null || !value ? 'Ingen' : `custom_label_${index} = ${value}`
+    )
     return {}
   } catch (e) {
     return { error: (e as Error).message }
@@ -664,6 +686,7 @@ export async function saveBucketReviewTitle(
   if ('error' in g) return g
   try {
     await svc.saveManualTitle(feedId, productRef, title)
+    await logTitles(g.user, feedId, `Titel godkendt i ${g.bucketName}`, null, title)
     return {}
   } catch (e) {
     return { error: (e as Error).message }
@@ -680,6 +703,7 @@ export async function rejectBucketReview(
   if ('error' in g) return g
   try {
     await svc.rejectOptimization(feedId, productRef)
+    await logTitles(g.user, feedId, `AI-titel afvist i ${g.bucketName}`, null, `Vare ${productRef} beholder sin titel`)
     return {}
   } catch (e) {
     return { error: (e as Error).message }
