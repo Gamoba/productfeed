@@ -13,6 +13,7 @@ export const RATE_LIMITS = {
   feed_regenerate:   { limit: 30, windowMs: HOUR }, // force feed XML rebuild
   shopify_scope_check: { limit: 60, windowMs: HOUR }, // read granted scopes (project page)
   google_ads_sync:   { limit: 12, windowMs: HOUR },
+  account_invite:    { limit: 30, windowMs: HOUR }, // invites + new invite links (Agency users)
   // Daily volume budget (per day): max products sent to the AI optimiser. The
   // catalogue is ~2263 products, so 20000/day allows running the whole catalogue
   // several times while iterating on instructions, while still capping a runaway.

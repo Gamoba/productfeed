@@ -4,7 +4,7 @@ export type IconName =
   | 'bolt' | 'overview' | 'box' | 'setup' | 'mapping' | 'filter' | 'titles' | 'tag'
   | 'eye' | 'chart' | 'megaphone' | 'drop' | 'settings' | 'feeds' | 'shops'
   | 'chevron' | 'chevron-down' | 'back' | 'logout' | 'check' | 'menu' | 'search'
-  | 'hash' | 'link' | 'image' | 'price' | 'truck' | 'text'
+  | 'hash' | 'link' | 'image' | 'price' | 'truck' | 'text' | 'users' | 'plus'
 
 const PATHS: Record<IconName, React.ReactNode> = {
   bolt: <path d="M13 2 4 14h7l-1 8 9-12h-7l1-8z" />,
@@ -97,6 +97,13 @@ const PATHS: Record<IconName, React.ReactNode> = {
     </>
   ),
   text: <path d="M5 6V4h14v2M12 4v16M9 20h6" />,
+  users: (
+    <>
+      <circle cx="9" cy="8" r="3.5" />
+      <path d="M2.5 20c.6-3.6 3.3-5.5 6.5-5.5s5.9 1.9 6.5 5.5M16 4.6a3.5 3.5 0 0 1 0 6.8M18 14.8c2 .7 3.2 2.4 3.5 5.2" />
+    </>
+  ),
+  plus: <path d="M12 5v14M5 12h14" />,
   search: (
     <>
       <circle cx="11" cy="11" r="6.5" />

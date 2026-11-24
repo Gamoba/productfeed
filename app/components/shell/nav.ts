@@ -116,7 +116,10 @@ export function shopNav(projectId: string): NavEntry[] {
 }
 
 export function accountNav(): NavEntry[] {
-  return [{ kind: 'link', label: 'Shops', href: '/', icon: 'shops', exact: true }]
+  return [
+    { kind: 'link', label: 'Shops', href: '/', icon: 'shops', exact: true },
+    { kind: 'link', label: 'Agency users', href: '/agency/users', icon: 'users' },
+  ]
 }
 
 // Breadcrumb label for the current feed page. Longest matching path wins, so

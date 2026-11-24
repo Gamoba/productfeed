@@ -1,0 +1,14 @@
+/* Invite landing (no shell). Design B + Kobolt. */
+.iv { min-height: 100vh; display: grid; place-items: center; padding: 24px 16px; background: var(--canvas); }
+.iv-card { width: min(400px, 100%); padding: 28px; gap: 14px; }
+.iv-brand { font-size: 13px; font-weight: 500; color: var(--muted); }
+.iv h1 { font-size: 24px; font-weight: 500; letter-spacing: -0.02em; margin: 0; }
+.iv-muted { margin: 0; font-size: 13px; color: var(--muted); line-height: 1.5; }
+.iv-form { display: flex; flex-direction: column; gap: 14px; }
+.iv-form label { display: flex; flex-direction: column; gap: 6px; font-size: 12.5px; color: var(--muted); }
+.iv-form input {
+  font: inherit; font-size: 13px; color: var(--card-fg); background: var(--card);
+  border: 1px solid var(--line); border-radius: 10px; padding: 9px 11px;
+}
+.iv-form input:focus-visible { outline: 2px solid var(--accent-ink); outline-offset: 1px; }
+.iv-form .wl-btn-primary { align-self: flex-start; }

@@ -5,7 +5,7 @@ import { useRouter } from 'next/navigation'
 import { useEffect, useRef } from 'react'
 import { Icon } from './icons'
 import { Popover } from './Popover'
-import { feedPageLabel, flagEmoji, isActive, samePageOnFeed, type NavLink } from './nav'
+import { accountNav, feedPageLabel, flagEmoji, isActive, samePageOnFeed, type NavLink } from './nav'
 import { navFor } from './Sidebar'
 import { UserMenu } from './UserMenu'
 import { ChannelIcon } from '../ChannelIcon'
@@ -64,9 +64,15 @@ function Crumbs({ shell, pathname }: { shell: Shell; pathname: string }) {
     <nav className="shell-crumbs" aria-label="Brødkrummer">
       {account && <span>{account.name}</span>}
       {account && <Sep />}
-      <b>Shops</b>
+      <b>{accountPageLabel(pathname)}</b>
     </nav>
   )
+}
+
+// The account-level page's menu label ("Shops", "Agency users").
+function accountPageLabel(pathname: string): string {
+  const link = accountNav().find((e): e is NavLink => e.kind === 'link' && isActive(pathname, e))
+  return link?.label ?? 'Shops'
 }
 
 function Sep() {

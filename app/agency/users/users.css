@@ -1,0 +1,78 @@
+/* Agency › Agency users (Design B + Kobolt). Reference: references/agency_users.jpg */
+
+/* Opacity only: an animated transform would trap position:fixed descendants. */
+.au { display: flex; flex-direction: column; gap: 14px; animation: au-fade .35s ease both; }
+@keyframes au-fade { from { opacity: 0; } to { opacity: 1; } }
+
+.au-head { display: flex; align-items: flex-end; justify-content: space-between; gap: 16px; flex-wrap: wrap; padding: 2px 2px 0; }
+.au-head h1 { font-size: clamp(24px, 2.4vw, 30px); font-weight: 500; letter-spacing: -0.02em; line-height: 1.1; margin: 0; }
+.au-lede { font-size: 13px; color: var(--on-canvas-muted); max-width: 78ch; margin: 6px 0 0; }
+.au-muted { color: var(--muted); }
+
+.au-stats { flex-direction: row; gap: 0; max-width: 640px; }
+.au-stats > div { flex: 1; display: flex; flex-direction: column; gap: 2px; padding: 2px 16px; min-width: 0; }
+.au-stats > div:first-child { padding-left: 0; }
+.au-stats > div + div { border-left: 1px solid var(--line); }
+.au-stats span { font-size: 12px; color: var(--muted); }
+.au-stats strong { font-size: 32px; font-weight: 400; letter-spacing: -0.02em; line-height: 1.15; }
+.au-stats strong small { font-size: 22px; color: var(--muted); }
+.au-stats > div > small { font-size: 12px; color: var(--muted); }
+.au-stats > div > small.neg { color: var(--bad); }
+
+.au-tablewrap { overflow-x: auto; }
+.au-table { width: 100%; border-collapse: collapse; font-size: 12.5px; }
+.au-table th {
+  font-size: 11px; font-weight: 500; color: var(--muted); letter-spacing: .02em;
+  text-align: left; white-space: nowrap; padding: 10px 12px; border-bottom: 1px solid var(--line);
+}
+.au-table th:first-child, .au-table td:first-child { padding-left: 16px; }
+.au-table th:last-child, .au-table td:last-child { padding-right: 16px; }
+.au-table td { padding: 10px 12px; border-bottom: 1px solid var(--line); vertical-align: middle; white-space: nowrap; }
+.au-table tbody tr:last-child td { border-bottom: 0; }
+.au-table tbody tr:hover { background: var(--card-2); }
+.au-table .r { text-align: right; }
+.au-name { font-weight: 500; }
+.au-you { margin-left: 8px; font-size: 11px; color: var(--muted); }
+.au-acts { display: inline-flex; justify-content: flex-end; align-items: center; gap: 10px; }
+.au-act { border: 0; background: none; padding: 0; font: inherit; font-size: 12.5px; color: var(--muted); cursor: pointer; }
+.au-act:hover:not(:disabled) { color: var(--card-fg); text-decoration: underline; }
+.au-act.link { color: var(--accent-ink); font-weight: 500; }
+.au-act.neg { color: var(--bad); }
+.au-act:disabled { opacity: .4; cursor: default; }
+
+.au-sel {
+  font: inherit; font-size: 12.5px; color: var(--card-fg); background: var(--card);
+  border: 1px solid var(--line); border-radius: 10px; padding: 6px 9px; min-width: 0;
+}
+.au-sel:focus-visible { outline: 2px solid var(--accent-ink); outline-offset: 1px; }
+
+.au-notes { display: flex; flex-direction: column; gap: 4px; font-size: 12px; color: var(--on-canvas-muted); max-width: 100ch; }
+.au-notes p { margin: 0; }
+.au-notes b { font-weight: 500; color: var(--on-canvas); }
+
+/* dialogs */
+.au-overlay {
+  position: fixed; inset: 0; z-index: 60; display: flex; align-items: flex-start; justify-content: center;
+  padding: 80px 16px; background: rgba(10, 14, 8, .45);
+}
+.au-dlg {
+  width: 100%; max-width: 460px; padding: 18px; background: var(--card); color: var(--card-fg);
+  border-radius: var(--r-lg); box-shadow: 0 20px 60px rgba(16, 19, 18, .18);
+  animation: au-fade .2s ease both;
+}
+.au-dlg h2 { font-size: 18px; font-weight: 500; margin: 0 0 12px; }
+.au-dlg-body { display: flex; flex-direction: column; gap: 12px; font-size: 13px; }
+.au-dlg-body p { margin: 0; line-height: 1.5; }
+.au-field { display: flex; flex-direction: column; gap: 6px; }
+.au-field > span { font-size: 12px; font-weight: 500; color: var(--muted); }
+.au-field .au-sel { padding: 8px 10px; }
+.au-dlg-foot { display: flex; justify-content: flex-end; gap: 8px; margin-top: 4px; }
+.au-url { display: flex; align-items: center; gap: 8px; padding: 8px 12px; border-radius: var(--r-md); background: var(--card-2); color: var(--muted); }
+.au-url input { flex: 1; min-width: 0; border: 0; background: none; font: inherit; font-size: 12.5px; color: var(--card-fg); outline: 0; }
+
+@media (max-width: 640px) {
+  .au-stats { flex-direction: column; gap: 10px; }
+  .au-stats > div { padding: 0; }
+  .au-stats > div + div { border-left: 0; border-top: 1px solid var(--line); padding-top: 10px; }
+}
+@media (prefers-reduced-motion: reduce) { .au, .au-dlg { animation: none; } }
