@@ -7,6 +7,9 @@
 # last 60 days of orders, so this one must never lapse — see
 # lib/orderSyncSchedule.ts.
 #
+# And the scheduled Google Ads performance fetch (/api/cron/google-ads), which
+# pulls each connected feed on its own schedule (Settings → Tidsplan).
+#
 # Needs in the repo settings:
 #   secrets.CRON_SECRET  — same value as CRON_SECRET in Vercel
 #   vars.APP_URL         — production URL, e.g. https://feed.example.com
@@ -26,8 +29,8 @@ concurrency:
 jobs:
   tick:
     runs-on: ubuntu-latest
-    # Two calls of up to ~5 min each.
-    timeout-minutes: 12
+    # Three calls of up to ~5 min each.
+    timeout-minutes: 17
     steps:
       - name: Call /api/cron/sync
         env:
@@ -48,3 +51,12 @@ jobs:
           curl --fail-with-body -sS --max-time 320 \
             -H "Authorization: Bearer $CRON_SECRET" \
             "$APP_URL/api/cron/orders"
+      - name: Call /api/cron/google-ads
+        if: always()
+        env:
+          CRON_SECRET: ${{ secrets.CRON_SECRET }}
+          APP_URL: ${{ vars.APP_URL }}
+        run: |
+          curl --fail-with-body -sS --max-time 320 \
+            -H "Authorization: Bearer $CRON_SECRET" \
+            "$APP_URL/api/cron/google-ads"

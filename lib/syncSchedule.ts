@@ -8,15 +8,19 @@ export const AUTO_SYNC_FREQUENCIES = ['off', 'hourly', '6h', '12h', 'daily'] as 
 export type AutoSyncFrequency = (typeof AUTO_SYNC_FREQUENCIES)[number]
 
 export const AUTO_SYNC_LABELS: Record<AutoSyncFrequency, string> = {
-  off: 'Off',
-  hourly: 'Every hour',
-  '6h': 'Every 6 hours',
-  '12h': 'Every 12 hours',
-  daily: 'Once a day',
+  off: 'Slået fra',
+  hourly: 'Hver time',
+  '6h': 'Hver 6. time',
+  '12h': 'Hver 12. time',
+  daily: 'Hver dag',
 }
 
 export const DEFAULT_AUTO_SYNC_FREQUENCY: AutoSyncFrequency = 'daily'
 export const DEFAULT_AUTO_SYNC_TIME = '00:01'
+
+// Google Ads performance fetch (migration 054). Same frequencies and clock.
+export const DEFAULT_ADS_SYNC_FREQUENCY: AutoSyncFrequency = 'daily'
+export const DEFAULT_ADS_SYNC_TIME = '05:00'
 
 // Schedules are written and read in Danish time — that is the clock the users
 // think in, and Vercel cron itself only speaks UTC.
