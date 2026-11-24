@@ -2,13 +2,8 @@ import { createClient } from '@supabase/supabase-js'
 import Anthropic from '@anthropic-ai/sdk'
 import type { SupabaseProduct } from '@/lib/sync'
 import { resolveField, applyFeedFilters, type FeedFilter } from '@/lib/feedFilters'
-import { applyTransforms, stripHtml, type FindReplacePair } from '@/lib/mappingTransforms'
-import {
-  selectBranchValue,
-  type CombineBlock,
-  type OnlyIf,
-} from '@/lib/mappingRules'
-import { applyExtract, extractWithPatterns, type ExtractConfig } from '@/lib/mappingExtract'
+import { extractWithPatterns, type ExtractConfig } from '@/lib/mappingExtract'
+import { createItemEvaluator, isFeedFieldRef, type ItemEvaluator } from '@/lib/mappingEval'
 
 // ── Types ──────────────────────────────────────────────────────────────────
 
@@ -99,110 +94,79 @@ function xmlEscape(str: string): string {
     .replace(/'/g, '&apos;')
 }
 
-// Binds resolveField to one product, giving the shared rule evaluator
-// (lib/mappingRules) the field-reading callback it needs.
-function fieldResolver(product: SupabaseProduct, marketUrl: string | null) {
-  return (field: string) => resolveField(field, product, marketUrl)
+// The per-item mapping evaluator (lib/mappingEval): source fields read through
+// resolveField, `feed:<field>` references read other mappings' final values,
+// and an accepted AI title is applied to the title mapping.
+function itemEvaluator(
+  mappings: FeedMapping[],
+  item: SupabaseProduct,
+  marketUrl: string | null,
+  aiTitle: string | null,
+  aiPlaceholder?: string
+): ItemEvaluator {
+  return createItemEvaluator({
+    mappings,
+    resolveSource: (field) => resolveField(field, item, marketUrl),
+    aiTitle,
+    aiPlaceholder,
+  })
 }
 
-async function applyMapping(
-  type: MappingType,
+// Every mapping type except AI is evaluated by lib/mappingEval (shared with the
+// editor preview). AI is the one main function that's async and server-only.
+async function aiMainValue(
   config: Config,
   product: SupabaseProduct,
-  anthropic: Anthropic | null,
-  marketUrl: string | null
+  anthropic: Anthropic | null
 ): Promise<string> {
-  switch (type) {
-    case 'FIELD':
-      return resolveField(String(config.field ?? ''), product, marketUrl)
-
-    case 'STATIC':
-      return String(config.value ?? '')
-
-    case 'COMBINE': {
-      const blocks = (config.blocks as CombineBlock[]) ?? []
-      return blocks
-        .map((b) => (b.type === 'field' ? resolveField(b.value, product, marketUrl) : b.value))
-        .join('')
-    }
-
-    case 'PREFIX_SUFFIX': {
-      const val = resolveField(String(config.field ?? ''), product, marketUrl)
-      if (!val) return ''
-      return `${config.prefix ?? ''}${val}${config.suffix ?? ''}`
-    }
-
-    case 'FIND_REPLACE': {
-      let val = resolveField(String(config.field ?? ''), product, marketUrl)
-      for (const pair of (config.pairs as FindReplacePair[]) ?? []) {
-        if (pair.find) val = val.split(pair.find).join(pair.replace)
-      }
-      return val
-    }
-
-    case 'TRUNCATE': {
-      const val = resolveField(String(config.field ?? ''), product, marketUrl)
-      return val.slice(0, Number(config.maxChars ?? 500))
-    }
-
-    case 'STRIP_HTML':
-      return stripHtml(resolveField(String(config.field ?? ''), product, marketUrl))
-
-    case 'EXTRACT':
-      return applyExtract(config, fieldResolver(product, marketUrl)).value
-
-    case 'AI': {
-      if (!anthropic) return ''
-      const prompt = String(config.prompt ?? '')
-      if (!prompt) return ''
-      const productData = {
-        id: product.shopify_id,
-        title: product.title,
-        vendor: product.vendor,
-        product_type: product.product_type,
-        tags: product.tags,
-        status: product.status,
-        variants: product.variants,
-        metafields: product.metafields.map((m) => ({
-          key: `${m.namespace}.${m.key}`,
-          value: m.value,
-        })),
-      }
-      const msg = await anthropic.messages.create({
-        model: 'claude-haiku-4-5-20251001',
-        max_tokens: 500,
-        messages: [
-          {
-            role: 'user',
-            content: `${prompt}\n\nProduktdata:\n${JSON.stringify(productData, null, 2)}`,
-          },
-        ],
-      })
-      const block = msg.content[0]
-      return block.type === 'text' ? block.text.trim() : ''
-    }
-
-    default:
-      return ''
+  if (!anthropic) return ''
+  const prompt = String(config.prompt ?? '')
+  if (!prompt) return ''
+  const productData = {
+    id: product.shopify_id,
+    title: product.title,
+    vendor: product.vendor,
+    product_type: product.product_type,
+    tags: product.tags,
+    status: product.status,
+    variants: product.variants,
+    metafields: product.metafields.map((m) => ({
+      key: `${m.namespace}.${m.key}`,
+      value: m.value,
+    })),
   }
+  const msg = await anthropic.messages.create({
+    model: 'claude-haiku-4-5-20251001',
+    max_tokens: 500,
+    messages: [
+      {
+        role: 'user',
+        content: `${prompt}\n\nProduktdata:\n${JSON.stringify(productData, null, 2)}`,
+      },
+    ],
+  })
+  const block = msg.content[0]
+  return block.type === 'text' ? block.text.trim() : ''
 }
 
-// Resolves one mapping for one product: run its main function, pick the branch
-// its rules select, then push the result through the transform layer.
+// Resolves one mapping for one item: main function → the branch its rules
+// select → the transform layer (lib/mappingEval.finishValue). Transforms run
+// LAST, on whichever branch won, so a "strip HTML" filter cleans the ELSE value
+// as well as the primary one.
 //
-// Order matters and is deliberate. Transforms run LAST, on whichever branch
-// won — so a "strip HTML" filter cleans the ELSE value just as it cleans the
-// primary one, and the user doesn't have to repeat the filter per branch.
+// Non-AI mappings come straight from the item evaluator (memoised, so a field
+// that other mappings reference is computed once). AI mappings get their main
+// value from the API here, then the same branch + transform step.
 async function resolvedValue(
+  ev: ItemEvaluator,
   mapping: FeedMapping,
-  product: SupabaseProduct,
-  anthropic: Anthropic | null,
-  marketUrl: string | null
+  item: SupabaseProduct,
+  anthropic: Anthropic | null
 ): Promise<string> {
-  const base = await applyMapping(mapping.mapping_type, mapping.config, product, anthropic, marketUrl)
-  const resolve = fieldResolver(product, marketUrl)
-  const value = selectBranchValue(mapping.config.onlyIf as OnlyIf | undefined, base, resolve)
-  return applyTransforms(value, mapping.config.transforms)
+  const v = ev.value(mapping.google_field)
+  if (v !== null) return v
+  const base = await aiMainValue(mapping.config, item, anthropic)
+  return ev.finish(mapping.google_field, base)
 }
 
 function xmlLine(field: string, value: string): string {
@@ -235,14 +199,14 @@ function withFeedItemId(product: SupabaseProduct, id: string): SupabaseProduct {
 // mapping, or one that resolves empty, the auto id is used. The default mapping
 // (FIELD "id") resolves to exactly the auto id, so existing feeds are unchanged.
 async function resolveItemId(
+  ev: ItemEvaluator,
   idMapping: FeedMapping | undefined,
   product: SupabaseProduct,
-  anthropic: Anthropic | null,
-  marketUrl: string | null
+  anthropic: Anthropic | null
 ): Promise<string> {
   const auto = String((product as Record<string, unknown>).feed_item_id ?? '')
   if (!idMapping) return auto
-  const value = (await resolvedValue(idMapping, product, anthropic, marketUrl)).trim()
+  const value = (await resolvedValue(ev, idMapping, product, anthropic)).trim()
   return value || auto
 }
 
@@ -311,14 +275,23 @@ export async function extractCoverage(feedId: string, config: ExtractConfig): Pr
   const db = adminClient()
   const field = config.field ?? ''
 
-  const [{ data: settingsData }, { data: shopSettingsData }, { data: filtersData }] = await Promise.all([
-    db.from('feed_settings').select('feed_mode').eq('feed_id', feedId).maybeSingle(),
-    db.from('shop_settings').select('market_url').eq('feed_id', feedId).maybeSingle(),
-    db.from('feed_filters').select('filter_type, operator, rules').eq('feed_id', feedId),
-  ])
+  // A `feed:<field>` source reads another mapping's value, so the SAVED
+  // mappings are needed (unsaved edits to that other field aren't seen).
+  const fromMapping = isFeedFieldRef(field)
+  const [{ data: settingsData }, { data: shopSettingsData }, { data: filtersData }, { data: mappingsData }] =
+    await Promise.all([
+      db.from('feed_settings').select('feed_mode').eq('feed_id', feedId).maybeSingle(),
+      db.from('shop_settings').select('market_url').eq('feed_id', feedId).maybeSingle(),
+      db.from('feed_filters').select('filter_type, operator, rules').eq('feed_id', feedId),
+      fromMapping
+        ? db.from('feed_mappings').select('google_field, mapping_type, config').eq('feed_id', feedId)
+        : Promise.resolve({ data: [] as FeedMapping[] }),
+    ])
   const feedMode = (settingsData?.feed_mode as 'product' | 'variant') ?? 'product'
   const filterRows = (filtersData ?? []) as FeedFilter[]
+  const mappings = ((mappingsData ?? []) as FeedMapping[]).filter((m) => m.mapping_type)
   const needsMetafields =
+    fromMapping || // can't tell cheaply what the referenced mapping reads
     field.startsWith('metafield:') ||
     filterRows.some((f) => (f.rules ?? []).some((r) => r.field?.startsWith('metafield:')))
 
@@ -338,7 +311,9 @@ export async function extractCoverage(feedId: string, config: ExtractConfig): Pr
 
   const check = (item: SupabaseProduct, id: string) => {
     total++
-    const input = resolveField(field, item, marketUrl)
+    const input = fromMapping
+      ? itemEvaluator(mappings, item, marketUrl, aiTitleFor(item)).resolve(field)
+      : resolveField(field, item, marketUrl)
     const r = extractWithPatterns(input, patterns, config.lookup)
     if (r.patternIndex >= 0) {
       matched++
@@ -620,20 +595,21 @@ export async function generateFeed(feedId: string, input: FeedInput = {}): Promi
     for (const rawProduct of products) {
       const product = withFeedItemId(rawProduct, String(rawProduct.shopify_id ?? ''))
       const lines: string[] = []
+      // The accepted AI title is applied inside the evaluator: it replaces the
+      // title mapping (an AI-type one costs no API call), except a skip-empty
+      // Combine, which builds on it — see lib/mappingEval.
+      const ev = itemEvaluator(mappings, product, marketUrl, aiTitleFor(product))
 
       // g:id: the id mapping if any, else shopify_id. item_group_id mappings are
       // skipped — no meaning in product mode (no variant grouping).
       if (product.shopify_id) {
-        const id = await resolveItemId(idMapping, product, anthropic, marketUrl)
+        const id = await resolveItemId(ev, idMapping, product, anthropic)
         if (id) lines.push(xmlLine('id', id))
       }
 
       for (const mapping of mappings) {
         if (mapping.google_field === 'id' || mapping.google_field === 'item_group_id') continue
-        // An accepted AI title wins over the title mapping. Short-circuits the
-        // mapping entirely, so an AI-type title mapping costs no API call.
-        const aiTitle = mapping.google_field === 'title' ? aiTitleFor(product) : null
-        const value = aiTitle ?? (await resolvedValue(mapping, product, anthropic, marketUrl))
+        const value = await resolvedValue(ev, mapping, product, anthropic)
         if (value !== '') lines.push(xmlLine(mapping.google_field, value))
       }
 
@@ -662,13 +638,13 @@ export async function generateFeed(feedId: string, input: FeedInput = {}): Promi
         // always the product's shopify_id
         const mappedLines: string[] = []
         const addedFields = new Set<string>()
+        // Same AI-title handling as product mode. The AI title is
+        // product-level, so every variant of the product carries it.
+        const ev = itemEvaluator(mappings, vProduct, marketUrl, aiTitleFor(product))
 
         for (const mapping of mappings) {
           if (mapping.google_field === 'id' || mapping.google_field === 'item_group_id') continue
-          // Same override as product mode. The AI title is product-level, so
-          // every variant of the product carries it.
-          const aiTitle = mapping.google_field === 'title' ? aiTitleFor(product) : null
-          const value = aiTitle ?? (await resolvedValue(mapping, vProduct, anthropic, marketUrl))
+          const value = await resolvedValue(ev, mapping, vProduct, anthropic)
           if (value !== '') {
             mappedLines.push(xmlLine(mapping.google_field, value))
             addedFields.add(mapping.google_field)
@@ -681,7 +657,7 @@ export async function generateFeed(feedId: string, input: FeedInput = {}): Promi
 
         // Always-inject: id (mapping-aware) and item_group_id
         const autoLines: string[] = [
-          xmlLine('id', await resolveItemId(idMapping, vProduct, anthropic, marketUrl)),
+          xmlLine('id', await resolveItemId(ev, idMapping, vProduct, anthropic)),
           xmlLine('item_group_id', product.shopify_id),
         ]
 
@@ -791,27 +767,19 @@ export async function generatePreview(
     for (const rawProduct of filteredProducts.slice(0, limit)) {
       const product = withFeedItemId(rawProduct, String(rawProduct.shopify_id ?? ''))
       const fields: Record<string, string> = {}
+      // '__AI__' stands in for AI mappings (no API call in a preview). The
+      // evaluator applies the AI title first, so an AI-mapped title shows the
+      // optimised title the feed really emits, not the placeholder.
+      const ev = itemEvaluator(mappings, product, marketUrl, aiTitleFor(product), '__AI__')
       for (const mapping of mappings) {
         if (mapping.google_field === 'id') {
           // AI-type id mappings would need an API call; show the auto id then.
           fields['id'] = await resolveItemId(
-            mapping.mapping_type === 'AI' ? undefined : mapping, product, null, marketUrl
+            ev, mapping.mapping_type === 'AI' ? undefined : mapping, product, null
           )
           continue
         }
-        // Mirror the generator's AI-title override, ahead of the '__AI__'
-        // placeholder — otherwise a preview of an AI-mapped title would show a
-        // placeholder where the feed emits a real optimized title.
-        const aiTitle = mapping.google_field === 'title' ? aiTitleFor(product) : null
-        if (aiTitle) {
-          fields[mapping.google_field] = aiTitle
-          continue
-        }
-        if (mapping.mapping_type === 'AI') {
-          fields[mapping.google_field] = '__AI__'
-          continue
-        }
-        fields[mapping.google_field] = await resolvedValue(mapping, product, null, marketUrl)
+        fields[mapping.google_field] = ev.value(mapping.google_field) ?? ''
       }
       rows.push({ productId: product.shopify_id, title: product.title ?? product.shopify_id, fields })
     }
@@ -831,9 +799,10 @@ export async function generatePreview(
           `${product.shopify_id}_${variant.id}`
         )
         const fields: Record<string, string> = {}
+        const ev = itemEvaluator(mappings, vProduct, marketUrl, aiTitleFor(product), '__AI__')
 
         fields['id'] = await resolveItemId(
-          idMapping?.mapping_type === 'AI' ? undefined : idMapping, vProduct, null, marketUrl
+          ev, idMapping?.mapping_type === 'AI' ? undefined : idMapping, vProduct, null
         )
         fields['item_group_id'] = product.shopify_id
         const suffix = variant.title && variant.title !== 'Default Title' ? ` - ${variant.title}` : ''
@@ -842,16 +811,7 @@ export async function generatePreview(
 
         for (const mapping of mappings) {
           if (['id', 'item_group_id'].includes(mapping.google_field)) continue
-          const aiTitle = mapping.google_field === 'title' ? aiTitleFor(product) : null
-          if (aiTitle) {
-            fields[mapping.google_field] = aiTitle
-            continue
-          }
-          if (mapping.mapping_type === 'AI') {
-            fields[mapping.google_field] = '__AI__'
-            continue
-          }
-          const value = await resolvedValue(mapping, vProduct, null, marketUrl)
+          const value = ev.value(mapping.google_field) ?? ''
           if (value !== '') fields[mapping.google_field] = value
         }
 

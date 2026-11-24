@@ -8,7 +8,15 @@
 // so one missing name shifts every entity after it and turns "maaneder" into
 // mojibake in every feed.
 import { stripHtml, applyTransforms, LATIN1_ANCHORS } from '../lib/mappingTransforms'
-import { selectBranchValue, type OnlyIf } from '../lib/mappingRules'
+import {
+  selectBranchValue,
+  combineBlocks,
+  containsWord,
+  evalCondition,
+  type CombineBlock,
+  type OnlyIf,
+} from '../lib/mappingRules'
+import { createItemEvaluator, type EvalMapping } from '../lib/mappingEval'
 import { extractWithPatterns, patternError, patternProblems, type ExtractPattern } from '../lib/mappingExtract'
 
 let fails = 0
@@ -225,6 +233,153 @@ eq(
   ),
   'One size'
 )
+
+// ── combine: skip empty fields ─────────────────────────────────────────────
+{
+  const vals: Record<string, string> = { title: 'BARE Sports 7mm Reactive Full V3. Mens', color: 'Sort', size: 'L' }
+  const r = (f: string) => vals[f] ?? ''
+  const blocks: CombineBlock[] = [
+    { type: 'field', value: 'title' },
+    { type: 'text', value: ' – ' },
+    { type: 'field', value: 'color' },
+    { type: 'text', value: ' – ' },
+    { type: 'field', value: 'size' },
+  ]
+  eq('combine skip: both filled', combineBlocks(blocks, r, true), 'BARE Sports 7mm Reactive Full V3. Mens – Sort – L')
+  vals.color = ''
+  eq('combine skip: only size', combineBlocks(blocks, r, true), 'BARE Sports 7mm Reactive Full V3. Mens – L')
+  vals.color = 'Sort'; vals.size = ''
+  eq('combine skip: only colour', combineBlocks(blocks, r, true), 'BARE Sports 7mm Reactive Full V3. Mens – Sort')
+  vals.color = ''
+  eq('combine skip: neither', combineBlocks(blocks, r, true), 'BARE Sports 7mm Reactive Full V3. Mens')
+  eq('combine legacy: unchanged concatenation', combineBlocks(blocks, r, false), 'BARE Sports 7mm Reactive Full V3. Mens –  – ')
+  vals.size = 'L'
+  eq(
+    'combine skip: no leading separator when the first field is empty',
+    combineBlocks([{ type: 'field', value: 'color' }, { type: 'text', value: ' – ' }, { type: 'field', value: 'size' }], r, true),
+    'L'
+  )
+  eq(
+    'combine skip: a real prefix is kept',
+    combineBlocks([{ type: 'text', value: 'Size: ' }, { type: 'field', value: 'size' }], r, true),
+    'Size: L'
+  )
+  eq(
+    'combine skip: prefix and suffix vanish with an empty field',
+    combineBlocks([{ type: 'text', value: 'Colour: ' }, { type: 'field', value: 'color' }, { type: 'text', value: '!' }], r, true),
+    ''
+  )
+  eq(
+    'combine skip: double spaces collapse',
+    combineBlocks([{ type: 'text', value: 'a  ' }, { type: 'text', value: ' b' }], r, true),
+    'a b'
+  )
+}
+
+// ── whole-word matching ────────────────────────────────────────────────────
+eq('word: "L" is not inside "Full"', containsWord('Reactive Full V3. Mens', 'L', true), false)
+eq('word: "L" as its own word', containsWord('Reactive Full V3. Mens L', 'L', true), true)
+eq('word: ignores case', containsWord('Wetsuit SORT', 'sort', true), true)
+eq('word: case-sensitive when asked', containsWord('Wetsuit SORT', 'sort', false), false)
+eq('word: "Sort" not inside "Sortiment"', containsWord('Sortiment', 'Sort', true), false)
+eq('word: Nordic letters are letters', containsWord('Grønne', 'Grøn', true), false)
+eq('word: 36/37 with punctuation around', containsWord('Fuga (36/37)', '36/37', true), true)
+eq('word: phrase', containsWord('Jakke Dark Blue L', 'dark blue', true), true)
+eq('word: empty needle never matches', containsWord('anything', '', true), false)
+
+// ── conditions: field comparison + case ───────────────────────────────────
+{
+  const vals: Record<string, string> = { title: 'Neopren Blue L', 'feed:color': 'blue', 'feed:size': 'L' }
+  const r = (f: string) => vals[f] ?? ''
+  const cond = (operator: string, value: string, caseSensitive?: boolean) =>
+    evalCondition({ field: 'title', operator, value, logic: null, caseSensitive }, r)
+  eq('cond: contains_field ignoring case', cond('contains_field', 'feed:color', false), true)
+  eq('cond: contains_field case-sensitive (legacy default)', cond('contains_field', 'feed:color'), false)
+  eq('cond: not_contains_word_field', cond('not_contains_word_field', 'feed:size', false), false)
+  vals.title = 'Reactive Full V3. Mens'
+  eq('cond: not_contains_word_field ignores "L" in "Full"', cond('not_contains_word_field', 'feed:size', false), true)
+  eq('cond: legacy equals still case-sensitive', cond('equals', 'reactive full v3. mens'), false)
+  eq('cond: equals ignoring case', cond('equals', 'reactive full v3. mens', false), true)
+  eq('cond: starts_with_field', evalCondition({ field: 'a', operator: 'starts_with_field', value: 'b', logic: null }, (f) => (f === 'a' ? 'abc' : 'ab')), true)
+}
+
+// ── item evaluator: feed fields, the title use case, AI title ─────────────
+{
+  const source: Record<string, string> = {
+    title: 'BARE Sports 7mm Reactive Full V3. Mens',
+    handle: 'bare-7mm-reactive-full-v3-mens-sort-l',
+  }
+  const mappings: EvalMapping[] = [
+    {
+      google_field: 'color',
+      mapping_type: 'EXTRACT',
+      config: { field: 'handle', patterns: [{ pattern: '-(sort|blaa|blue)-[a-z]+$', template: '$1', ignoreCase: true }], lookup: [{ from: 'sort', to: 'Sort' }] },
+    },
+    {
+      google_field: 'size',
+      mapping_type: 'EXTRACT',
+      config: { field: 'handle', patterns: [{ pattern: '-(xs|s|m|l|xl)$', template: '$1', ignoreCase: true }], lookup: [{ from: 'l', to: 'L' }] },
+    },
+    {
+      google_field: 'title',
+      mapping_type: 'COMBINE',
+      config: {
+        skipEmpty: true,
+        blocks: [
+          { type: 'field', value: 'title' },
+          { type: 'text', value: ' – ' },
+          { type: 'field', value: 'feed:color', skipIfPresent: true },
+          { type: 'text', value: ' – ' },
+          { type: 'field', value: 'feed:size', skipIfPresent: true },
+        ],
+      },
+    },
+  ]
+  const ev = (aiTitle: string | null = null, ms = mappings) =>
+    createItemEvaluator({ mappings: ms, resolveSource: (f) => source[f] ?? '', aiTitle })
+  eq('eval: title built from mapped colour + size', ev().value('title'), 'BARE Sports 7mm Reactive Full V3. Mens – Sort – L')
+  eq('eval: feed:color reads the final colour', ev().resolve('feed:color'), 'Sort')
+  source.title = 'BARE Sports 7mm Reactive Full V3. Mens Sort'
+  eq('eval: colour already in title is skipped (with its separator)', ev().value('title'), 'BARE Sports 7mm Reactive Full V3. Mens Sort – L')
+  source.title = 'BARE Sports 7mm Reactive Full V3. Mens'
+  source.handle = 'gavekort'
+  eq('eval: no colour, no size → plain title', ev().value('title'), 'BARE Sports 7mm Reactive Full V3. Mens')
+  source.handle = 'bare-7mm-reactive-full-v3-mens-sort-l'
+  eq('eval: AI title is built on by a skip-empty Combine', ev('Optimised Wetsuit').value('title'), 'Optimised Wetsuit – Sort – L')
+  const plainTitle: EvalMapping[] = [...mappings.slice(0, 2), { google_field: 'title', mapping_type: 'FIELD', config: { field: 'title' } }]
+  eq('eval: AI title still replaces other title mappings', ev('Optimised Wetsuit', plainTitle).value('title'), 'Optimised Wetsuit')
+  const cyclic: EvalMapping[] = [
+    { google_field: 'a', mapping_type: 'COMBINE', config: { blocks: [{ type: 'text', value: 'A' }, { type: 'field', value: 'feed:b' }] } },
+    { google_field: 'b', mapping_type: 'COMBINE', config: { blocks: [{ type: 'text', value: 'B' }, { type: 'field', value: 'feed:a' }] } },
+  ]
+  {
+    const e = ev(null, cyclic)
+    eq('eval: a reference cycle is cut, not infinite', [e.value('a'), e.value('b')], ['AB', 'BA'])
+    const e2 = ev(null, cyclic)
+    eq('eval: cycle result does not depend on evaluation order', [e2.value('b'), e2.value('a')], ['BA', 'AB'])
+  }
+  const withAi: EvalMapping[] = [{ google_field: 'x', mapping_type: 'AI', config: { prompt: 'p' } }]
+  eq('eval: an AI mapping reads as empty via feed:', ev(null, withAi).resolve('feed:x'), '')
+  eq('eval: AI mapping value() is null for the caller to resolve', ev(null, withAi).value('x'), null)
+  eq(
+    'eval: only-if can read a mapped field',
+    createItemEvaluator({
+      mappings: [
+        mappings[1],
+        {
+          google_field: 'size_system',
+          mapping_type: 'STATIC',
+          config: {
+            value: 'EU',
+            onlyIf: { conditions: [{ field: 'feed:size', operator: 'is_not_empty', value: '', logic: null }], else: { type: 'empty', value: '' } },
+          },
+        },
+      ],
+      resolveSource: (f) => source[f] ?? '',
+    }).value('size_system'),
+    'EU'
+  )
+}
 
 console.log(fails === 0 ? '\nAll checks passed.' : `\n${fails} check(s) FAILED.`)
 process.exit(fails === 0 ? 0 : 1)

@@ -3,16 +3,13 @@
 import { createContext, useContext, useEffect, useMemo, useState, useTransition } from 'react'
 import { saveMappings, type MappingEntry } from './actions'
 import {
-  applyTransforms,
   configTransforms,
-  stripHtml,
   TRANSFORM_LABELS,
   type Transform,
   type TransformType,
 } from '@/lib/mappingTransforms'
 import {
   collectRuleFields,
-  selectBranchValue,
   type CombineBlock,
   type Condition,
   type OnlyIf,
@@ -25,6 +22,13 @@ import {
   type ExtractPattern,
   type LookupEntry,
 } from '@/lib/mappingExtract'
+import {
+  createItemEvaluator,
+  FEED_FIELD_PREFIX,
+  isFeedFieldRef,
+  type EvalMapping,
+  type ItemEvaluator,
+} from '@/lib/mappingEval'
 
 // Lets all FieldSelect / ShopifyFieldsModal usages pick up the active feed
 // mode without prop-drilling through 8+ render sites.
@@ -44,6 +48,15 @@ const EditorContext = createContext<{
   previewProduct: PreviewProduct | null
   marketUrl: string | null
 }>({ feedId: '', previewProduct: null, marketUrl: null })
+
+// The whole editor state (google_field → mapping). Feeds the "Feed fields
+// (mapped)" group in every field picker and the previews that resolve
+// `feed:<field>` references.
+const MappingsContext = createContext<Record<string, FieldState>>({})
+
+// The google_field whose editor is rendering — a field picker inside it leaves
+// that field out of "Feed fields (mapped)" so a mapping can't read itself.
+const CurrentFieldContext = createContext<string>('')
 
 // Readable label for a "metafield:ns.key" token: the definition name when known,
 // else the raw "ns.key" (the token minus its "metafield:" prefix).
@@ -228,6 +241,9 @@ const OPERATORS = [
   { value: 'not_equals', label: '≠ does not equal' },
   { value: 'contains', label: 'contains' },
   { value: 'not_contains', label: 'does not contain' },
+  // Whole word: "L" doesn't match inside "Full" — use these for sizes/colours.
+  { value: 'contains_word', label: 'contains word' },
+  { value: 'not_contains_word', label: 'does not contain word' },
   { value: 'starts_with', label: 'starts with' },
   { value: 'ends_with', label: 'ends with' },
   { value: 'greater_than', label: '> greater than' },
@@ -244,9 +260,34 @@ const NO_VALUE_OPERATORS = ['is_empty', 'is_not_empty']
 const MODE_AWARE_OPERATORS = new Set([
   'equals',
   'not_equals',
+  'contains',
+  'not_contains',
+  'contains_word',
+  'not_contains_word',
+  'starts_with',
+  'ends_with',
   'greater_than',
   'less_than',
 ])
+
+// Operators where upper/lower case can matter (the "Aa" toggle). Numeric and
+// emptiness checks ignore it.
+const CASE_AWARE_OPERATORS = new Set([
+  'equals',
+  'not_equals',
+  'contains',
+  'not_contains',
+  'contains_word',
+  'not_contains_word',
+  'starts_with',
+  'ends_with',
+])
+
+// A fresh condition row. New rows ignore case — the common need; rows saved
+// before the option existed have no flag and stay case-sensitive.
+function newCondition(logic: Condition['logic']): Condition {
+  return { field: '', operator: 'equals', value: '', logic, caseSensitive: false }
+}
 
 // Strips the "_field" suffix so the dropdown can render and select a single
 // option for both `less_than` and `less_than_field`.
@@ -382,67 +423,37 @@ function resolveClientField(
 // render "__AI__" chopped in half.
 const AI_PLACEHOLDER = '__AI__'
 
-function applyClientMapping(
-  type: MappingType,
-  config: Config,
+// One evaluator per preview product, over the CURRENT (unsaved) editor state —
+// the same lib/mappingEval code the generator runs, so `feed:color` in a title
+// Combine previews exactly as it will be emitted. AI mappings show the
+// placeholder; an accepted AI title isn't known client-side, so the preview
+// shows the mapping as if there were none.
+function previewEvaluator(
+  all: Record<string, FieldState>,
   product: PreviewProduct,
   marketUrl: string | null,
   feedMode: 'product' | 'variant'
-): string {
-  switch (type) {
-    case 'FIELD':
-      return resolveClientField(String(config.field ?? ''), product, marketUrl, feedMode)
-    case 'STATIC':
-      return String(config.value ?? '')
-    case 'COMBINE': {
-      const blocks = (config.blocks as CombineBlock[]) ?? []
-      return blocks
-        .map((b) => (b.type === 'field' ? resolveClientField(b.value, product, marketUrl, feedMode) : b.value))
-        .join('')
-    }
-    case 'PREFIX_SUFFIX': {
-      const val = resolveClientField(String(config.field ?? ''), product, marketUrl, feedMode)
-      if (!val) return ''
-      return `${config.prefix ?? ''}${val}${config.suffix ?? ''}`
-    }
-    case 'FIND_REPLACE': {
-      let val = resolveClientField(String(config.field ?? ''), product, marketUrl, feedMode)
-      for (const pair of (config.pairs as { find: string; replace: string }[]) ?? []) {
-        if (pair.find) val = val.split(pair.find).join(pair.replace)
-      }
-      return val
-    }
-    case 'TRUNCATE': {
-      const val = resolveClientField(String(config.field ?? ''), product, marketUrl, feedMode)
-      return val.slice(0, Number(config.maxChars ?? 500))
-    }
-    case 'STRIP_HTML':
-      return stripHtml(resolveClientField(String(config.field ?? ''), product, marketUrl, feedMode))
-    case 'EXTRACT':
-      return applyExtract(config, (f) => resolveClientField(f, product, marketUrl, feedMode)).value
-    case 'AI':
-      return AI_PLACEHOLDER
-    default:
-      return ''
+): ItemEvaluator {
+  const mappings: EvalMapping[] = []
+  for (const [google_field, s] of Object.entries(all)) {
+    if (s?.type) mappings.push({ google_field, mapping_type: s.type, config: s.config })
   }
+  return createItemEvaluator({
+    mappings,
+    resolveSource: (f) => resolveClientField(f, product, marketUrl, feedMode),
+    aiPlaceholder: AI_PLACEHOLDER,
+  })
 }
 
 function computePreviewValue(
-  state: FieldState,
+  field: string,
+  all: Record<string, FieldState>,
   product: PreviewProduct,
   marketUrl: string | null,
   feedMode: 'product' | 'variant'
 ): string {
-  if (!state.type) return ''
-  const base = applyClientMapping(state.type, state.config, product, marketUrl, feedMode)
-  if (base === AI_PLACEHOLDER) return base
-
-  // Same order as lib/feedGenerator's resolvedValue: main function → rule
-  // branch → transforms. Both sides call the same lib/mappingRules code, so the
-  // preview can't drift from the generated feed.
-  const resolve = (field: string) => resolveClientField(field, product, marketUrl, feedMode)
-  const value = selectBranchValue(state.config.onlyIf as OnlyIf | undefined, base, resolve)
-  return applyTransforms(value, state.config.transforms)
+  if (!all[field]?.type) return ''
+  return previewEvaluator(all, product, marketUrl, feedMode).value(field) ?? ''
 }
 
 // ── FieldSelect ────────────────────────────────────────────────────────────
@@ -464,6 +475,27 @@ function getFieldLabels(feedMode: 'product' | 'variant'): Record<string, string>
   }
 }
 
+// "feed:color" → "color (feed)"; custom fields read without their prefix.
+function feedFieldLabel(token: string): string {
+  return `${token.slice(FEED_FIELD_PREFIX.length).replace(/^custom:/, '')} (feed)`
+}
+
+// `feed:` tokens for every mapped field a picker may offer: not the field being
+// edited (it can't read itself) and not AI mappings (they aren't computed per
+// item without an API call, so they read as empty).
+function useMappedFeedFields(): string[] {
+  const all = useContext(MappingsContext)
+  const current = useContext(CurrentFieldContext)
+  return useMemo(
+    () =>
+      Object.entries(all)
+        .filter(([f, s]) => s?.type && s.type !== 'AI' && f !== current)
+        .map(([f]) => `${FEED_FIELD_PREFIX}${f}`)
+        .sort(),
+    [all, current]
+  )
+}
+
 function FieldSelect({
   value,
   onChange,
@@ -478,9 +510,31 @@ function FieldSelect({
   const labels = useMemo(() => getFieldLabels(feedMode), [feedMode])
   const standard = allFields.filter((f) => !f.startsWith('metafield:'))
   const meta = allFields.filter((f) => f.startsWith('metafield:'))
+  const feedFields = useMappedFeedFields()
+  // A saved value that isn't among the options yet — metafields still loading,
+  // or a feed field that has since been unmapped — must still show, or the
+  // select renders "— Select field —" and touching it would overwrite the value.
+  const known =
+    !value || standard.includes(value) || meta.includes(value) || feedFields.includes(value)
   return (
     <select value={value} onChange={(e) => onChange(e.target.value)} className={sel}>
       <option value="">— Select field —</option>
+      {!known && (
+        <option value={value}>
+          {isFeedFieldRef(value)
+            ? `${feedFieldLabel(value)} (not mapped)`
+            : value.startsWith('metafield:')
+              ? metafieldDisplayName(value, metafieldLabels)
+              : labels[value] ?? value}
+        </option>
+      )}
+      {feedFields.length > 0 && (
+        <optgroup label="Feed fields (mapped)">
+          {feedFields.map((f) => (
+            <option key={f} value={f}>{feedFieldLabel(f)}</option>
+          ))}
+        </optgroup>
+      )}
       <optgroup label="Shopify fields">
         {standard.map((f) => (
           <option key={f} value={f}>{labels[f] ?? f}</option>
@@ -503,10 +557,15 @@ function CombineChipsEditor({
   blocks,
   allFields,
   onChange,
+  skipEmpty,
+  onSkipEmptyChange,
 }: {
   blocks: CombineBlock[]
   allFields: string[]
   onChange: (next: CombineBlock[]) => void
+  // lib/mappingRules.combineBlocks: an empty field drops the text in front of it.
+  skipEmpty: boolean
+  onSkipEmptyChange: (v: boolean) => void
 }) {
   const feedMode = useContext(FeedModeContext)
   const metafieldLabels = useContext(MetafieldLabelsContext)
@@ -528,6 +587,19 @@ function CombineChipsEditor({
   }
   function removeBlock(i: number) {
     onChange(blocks.filter((_, j) => j !== i))
+  }
+  function toggleSkipIfPresent(i: number) {
+    onChange(
+      blocks.map((b, j) => {
+        if (j !== i) return b
+        if (b.skipIfPresent) {
+          const next = { ...b }
+          delete next.skipIfPresent
+          return next
+        }
+        return { ...b, skipIfPresent: true }
+      })
+    )
   }
 
   // HTML5 DnD. dataTransfer.setData is required for Firefox to fire drop.
@@ -577,6 +649,7 @@ function CombineChipsEditor({
   function chipLabel(b: CombineBlock): string {
     if (b.type === 'text') return b.value
     if (!b.value) return ''
+    if (isFeedFieldRef(b.value)) return feedFieldLabel(b.value)
     if (b.value.startsWith('metafield:')) return metafieldDisplayName(b.value, metafieldLabels)
     return labels[b.value] ?? b.value
   }
@@ -612,6 +685,7 @@ function CombineChipsEditor({
             isDragging={draggedIdx === i}
             dropSide={dropZone?.idx === i ? dropZone.side : null}
             onRemove={() => removeBlock(i)}
+            onToggleSkipIfPresent={block.type === 'field' && i > 0 ? () => toggleSkipIfPresent(i) : undefined}
             onDragStart={(e) => onDragStart(e, i)}
             onDragOver={(e) => onDragOver(e, i)}
             onDrop={(e) => onDrop(e, i)}
@@ -637,7 +711,26 @@ function CombineChipsEditor({
         >
           + Text
         </button>
+        <label
+          className="ml-auto inline-flex items-center gap-1.5 cursor-pointer select-none"
+          style={{ fontSize: '11px', color: 'var(--ink-secondary)' }}
+          title="When a field is empty, the text in front of it is left out too — no stray separators or double spaces"
+        >
+          <input
+            type="checkbox"
+            checked={skipEmpty}
+            onChange={(e) => onSkipEmptyChange(e.target.checked)}
+            style={{ accentColor: 'var(--accent-purple)' }}
+          />
+          Skip empty fields
+        </label>
       </div>
+      {blocks.some((b, i) => i > 0 && b.type === 'field') && (
+        <p style={{ fontSize: '10px', color: 'var(--ink-muted)' }}>
+          Click <span className="ff-mono">≠</span> on a field to leave it out when the text before it already contains
+          that value as a whole word (ignoring case).
+        </p>
+      )}
 
       {picker === 'field' && (
         <FieldPickerPanel
@@ -660,6 +753,7 @@ function CombineChip({
   isDragging,
   dropSide,
   onRemove,
+  onToggleSkipIfPresent,
   onDragStart,
   onDragOver,
   onDrop,
@@ -670,6 +764,8 @@ function CombineChip({
   isDragging: boolean
   dropSide: 'left' | 'right' | null
   onRemove: () => void
+  // Field chips after the first: toggles `skipIfPresent`.
+  onToggleSkipIfPresent?: () => void
   onDragStart: (e: React.DragEvent) => void
   onDragOver: (e: React.DragEvent) => void
   onDrop: (e: React.DragEvent) => void
@@ -716,6 +812,36 @@ function CombineChip({
       <span style={{ fontWeight: 500, whiteSpace: 'pre' }}>
         {empty ? <em style={{ opacity: 0.6, fontStyle: 'italic' }}>empty</em> : label}
       </span>
+      {onToggleSkipIfPresent && (
+        <button
+          type="button"
+          onMouseDown={(e) => e.stopPropagation()}
+          onClick={(e) => {
+            e.stopPropagation()
+            onToggleSkipIfPresent()
+          }}
+          aria-pressed={!!block.skipIfPresent}
+          aria-label={block.skipIfPresent ? 'Always include this field' : 'Skip this field if it is already in the text'}
+          title={
+            block.skipIfPresent
+              ? 'Skipped when the text before it already contains this value — click to always include'
+              : 'Click to skip this field when the text before it already contains its value'
+          }
+          className="ff-mono"
+          style={{
+            padding: '0 5px',
+            fontSize: '10px',
+            lineHeight: '16px',
+            borderRadius: '3px',
+            border: block.skipIfPresent ? '1px solid rgba(124,92,252,0.55)' : '1px solid transparent',
+            background: block.skipIfPresent ? '#ffffff' : 'transparent',
+            color: block.skipIfPresent ? '#5b3fd6' : 'rgba(91,63,214,0.45)',
+            cursor: 'pointer',
+          }}
+        >
+          ≠
+        </button>
+      )}
       <button
         type="button"
         className="ff-chip-close"
@@ -775,7 +901,10 @@ function FieldPickerPanel({
     [allFields]
   )
 
+  const feedFields = useMappedFeedFields()
+
   const q = search.toLowerCase()
+  const filteredFeed = q ? feedFields.filter((f) => f.toLowerCase().includes(q)) : feedFields
   const filteredStandard = q
     ? standard.filter(
         (f) =>
@@ -817,6 +946,24 @@ function FieldPickerPanel({
         />
       </div>
       <div style={{ overflowY: 'auto', flex: 1 }}>
+        {filteredFeed.length > 0 && (
+          <>
+            <div
+              className="ff-label"
+              style={{ padding: '6px 10px', background: 'var(--bg-surface)' }}
+            >
+              Feed fields (mapped)
+            </div>
+            {filteredFeed.map((f) => (
+              <PickerOption
+                key={f}
+                onClick={() => onSelect(f)}
+                primary={feedFieldLabel(f)}
+                secondary="value from that field's mapping"
+              />
+            ))}
+          </>
+        )}
         {filteredStandard.length > 0 && (
           <>
             <div
@@ -858,7 +1005,7 @@ function FieldPickerPanel({
             })}
           </>
         )}
-        {filteredStandard.length === 0 && filteredMeta.length === 0 && (
+        {filteredFeed.length === 0 && filteredStandard.length === 0 && filteredMeta.length === 0 && (
           <p
             className="text-center"
             style={{ padding: '12px', fontSize: '11px', color: 'var(--ink-muted)' }}
@@ -1363,6 +1510,8 @@ function ConfigEditor({
           blocks={blocks}
           allFields={allFields}
           onChange={(next) => onChange({ ...config, blocks: next })}
+          skipEmpty={config.skipEmpty === true}
+          onSkipEmptyChange={(v) => onChange(v ? { ...config, skipEmpty: true } : withoutKey(config, 'skipEmpty'))}
         />
       )
     }
@@ -1634,6 +1783,26 @@ function ConditionRows({
                     />
                   )}
                 </div>
+                {CASE_AWARE_OPERATORS.has(base) && (
+                  <button
+                    type="button"
+                    onClick={() => patch({ caseSensitive: cond.caseSensitive === false })}
+                    aria-pressed={cond.caseSensitive === false}
+                    title={
+                      cond.caseSensitive === false
+                        ? 'Ignoring upper/lower case — click to match case'
+                        : 'Case-sensitive — click to ignore upper/lower case'
+                    }
+                    className={`${btnSm} shrink-0`}
+                    style={
+                      cond.caseSensitive === false
+                        ? { color: 'var(--accent-purple)', borderColor: 'rgba(124,92,252,0.35)', background: 'rgba(124,92,252,0.08)' }
+                        : undefined
+                    }
+                  >
+                    Aa
+                  </button>
+                )}
               </div>
             )}
             {conditions.length > 1 && (
@@ -1653,14 +1822,14 @@ function ConditionRows({
       <div className="flex gap-2 pl-16">
         <button
           type="button"
-          onClick={() => onChange([...conditions, { field: '', operator: 'equals', value: '', logic: 'AND' }])}
+          onClick={() => onChange([...conditions, newCondition('AND')])}
           className={`${btnSm} bg-gray-100 text-gray-600 hover:bg-gray-200`}
         >
           + AND
         </button>
         <button
           type="button"
-          onClick={() => onChange([...conditions, { field: '', operator: 'equals', value: '', logic: 'OR' }])}
+          onClick={() => onChange([...conditions, newCondition('OR')])}
           className={`${btnSm} bg-gray-100 text-gray-600 hover:bg-gray-200`}
         >
           + OR
@@ -1692,7 +1861,7 @@ function ValueSpecEditor({
         value={value.type}
         onChange={(e) => {
           const next = e.target.value as ValueSpec['type']
-          onChange(next === 'combine' ? { type: 'combine', blocks: [] } : { type: next, value: '' })
+          onChange(next === 'combine' ? { type: 'combine', blocks: [], skipEmpty: true } : { type: next, value: '' })
         }}
         className={miniSel}
         style={{ flex: '0 0 120px' }}
@@ -1726,7 +1895,9 @@ function ValueSpecEditor({
           <CombineChipsEditor
             blocks={value.blocks ?? []}
             allFields={allFields}
-            onChange={(next) => onChange({ type: 'combine', blocks: next })}
+            onChange={(next) => onChange({ ...value, blocks: next })}
+            skipEmpty={!!value.skipEmpty}
+            onSkipEmptyChange={(v) => onChange({ type: 'combine', blocks: value.blocks ?? [], ...(v ? { skipEmpty: true } : {}) })}
           />
         )}
       </div>
@@ -1847,7 +2018,7 @@ function OnlyIfEditor({
             setRules([
               ...rules,
               {
-                conditions: [{ field: '', operator: 'equals', value: '', logic: null }],
+                conditions: [newCondition(null)],
                 value: { type: 'static', value: '' },
               },
             ])
@@ -2312,7 +2483,7 @@ function FieldRow({
       onConfigChange({
         ...state.config,
         onlyIf: {
-          conditions: [{ field: '', operator: 'equals', value: '', logic: null }],
+          conditions: [newCondition(null)],
           else: { type: 'empty', value: '' },
         } satisfies OnlyIf,
       })
@@ -2331,6 +2502,7 @@ function FieldRow({
   }
 
   return (
+    <CurrentFieldContext.Provider value={field}>
     <div className="px-4 py-3.5 group">
       <div className="flex items-start gap-3">
         <div className="w-52 pt-1.5 shrink-0">
@@ -2530,6 +2702,7 @@ function FieldRow({
         </div>
       )}
     </div>
+    </CurrentFieldContext.Provider>
   )
 }
 
@@ -2566,7 +2739,8 @@ function collectUsedFields(state: FieldState): string[] {
   // Conditions, ELSE IF rules and the fallback all reference fields too.
   used.push(...collectRuleFields(cfg.onlyIf as OnlyIf | undefined))
 
-  return used
+  // `feed:` references point at other mappings, not Shopify fields.
+  return used.filter((f) => !isFeedFieldRef(f))
 }
 
 // ── ShopifyFieldsModal ─────────────────────────────────────────────────────
@@ -3594,6 +3768,8 @@ function FieldPreviewSidebar({
   marketUrl: string | null
   onClose: () => void
 }) {
+  // Every field's current state, so `feed:` references preview correctly.
+  const allMappings = useContext(MappingsContext)
   const [search, setSearch] = useState('')
   const [debouncedSearch, setDebouncedSearch] = useState('')
   const [filters, setFilters] = useState<Partial<Record<FilterKey, string>>>({})
@@ -3905,7 +4081,7 @@ function FieldPreviewSidebar({
           ) : (
             products.map((p) => {
               const value = hasMapping
-                ? computePreviewValue(state, p, marketUrl, feedMode)
+                ? computePreviewValue(field, { ...allMappings, [field]: state }, p, marketUrl, feedMode)
                 : ''
               return (
                 <div
@@ -4357,11 +4533,9 @@ export default function MappingClient({
     if (!previewProduct) return {}
     const result: Record<string, string | null> = {}
     const fieldsToPreview = [...ALL_FIELDS, ...customFields]
+    const ev = previewEvaluator(mappings, previewProduct, marketUrl, feedMode)
     for (const field of fieldsToPreview) {
-      const state = mappings[field]
-      result[field] = state?.type
-        ? computePreviewValue(state, previewProduct, marketUrl, feedMode)
-        : null
+      result[field] = mappings[field]?.type ? ev.value(field) ?? '' : null
     }
     return result
   }, [mappings, previewProduct, marketUrl, feedMode, customFields])
@@ -4418,6 +4592,9 @@ export default function MappingClient({
       if (existing?.config?.onlyIf) carried.onlyIf = existing.config.onlyIf
       const transforms = configTransforms(existing?.config)
       if (transforms.length > 0) carried.transforms = transforms
+      // New Combines skip empty fields (no stray separators). Saved Combines
+      // without the key keep plain concatenation, so no live feed changes.
+      if (type === 'COMBINE') carried.skipEmpty = true
       return { ...prev, [field]: { type, config: carried } }
     })
     if (status !== 'idle') setStatus('idle')
@@ -4464,6 +4641,7 @@ export default function MappingClient({
   return (
     <FeedModeContext.Provider value={feedMode}>
     <MetafieldLabelsContext.Provider value={metafieldLabels}>
+    <MappingsContext.Provider value={mappings}>
     <EditorContext.Provider value={editorContext}>
     <div className="min-h-screen" style={{ background: 'var(--bg-base)' }}>
       <main className="max-w-6xl mx-auto px-6 py-9 space-y-5">
@@ -4715,6 +4893,7 @@ export default function MappingClient({
       )}
     </div>
     </EditorContext.Provider>
+    </MappingsContext.Provider>
     </MetafieldLabelsContext.Provider>
     </FeedModeContext.Provider>
   )
