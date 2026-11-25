@@ -29,7 +29,7 @@ import { enforceRateLimit } from '@/lib/rateLimit'
 import { AppError, clientMessage } from '@/lib/errors'
 import { formatNumber } from '@/lib/formatDa'
 import { ADVANCED_CATEGORIES, COLLAPSIBLE_SECTIONS, REQUIRED_FIELDS, STANDARD_FIELDS } from '@/lib/mappingFields'
-import { scheduleLabel, type FilterConfig, type MappingEntry } from '@/lib/ops/feedConfig'
+import { extractWarnings, scheduleLabel, type FilterConfig, type MappingEntry } from '@/lib/ops/feedConfig'
 import { clientName, listChanges, proposeChange, type ChangeDetail, type ProposeResult } from '@/lib/mcp/changes'
 import type { McpCaller } from '@/lib/mcp/auth'
 
@@ -80,15 +80,18 @@ const MAPPING_HELP = `Each field: { google_field, mapping_type, config }.
 mapping_type and config:
 - FIELD: { field: <source> }
 - STATIC: { value: "text" }
-- COMBINE: { blocks: [{ type: "field", value: <source> } | { type: "text", value: "text" }] }
+- COMBINE: { blocks: [{ type: "field", value: <source>, skipIfPresent?: true } | { type: "text", value: "text" }], skipEmpty?: true }
+  (skipEmpty leaves out a text block next to an empty field; skipIfPresent leaves out a field already contained, as a whole word, in the text built so far)
 - PREFIX_SUFFIX: { field: <source>, prefix?: "", suffix?: "" }
 - FIND_REPLACE: { field: <source>, pairs: [{ find, replace }] }
 - TRUNCATE: { field: <source>, maxChars: 150 }
 - STRIP_HTML: { field: <source> }
 - LOOKUP: { field: <source>, rows: [{ from, to }], match: "exact"|"contains", caseSensitive?: false, fallback: "source"|"empty"|"static", fallbackValue?: "" }
+- EXTRACT: { field: <source>, patterns: [{ pattern: "<JavaScript regex>", template: "$1/$2", ignoreCase: true }], lookup?: [{ from, to }] }
+  Patterns are tried top-down; the first match wins and fills the template ($1, $2 … = groups). lookup rewrites each captured group first (ml → M/L). No match gives an empty value. Max 2000 characters per pattern; nested repetition such as (a+)+ is refused.
 - REMOVE: {} removes the field's mapping.
-Any type may add config.onlyIf = { conditions: [{ field: <source>, operator, value, logic: null|"AND"|"OR" }], rules?: [{ conditions, value: ValueSpec }], else: ValueSpec } where ValueSpec = { type: "empty"|"static"|"field", value } or { type: "combine", blocks }. Condition operators: equals, not_equals, contains, not_contains, starts_with, ends_with, greater_than, less_than, is_empty, is_not_empty, equals_field, not_equals_field, greater_than_field, less_than_field.
-<source> is a standard field (see get_mapping → sources), "metafield:<namespace>.<key>", "ai_optimized_title" or "url".
+Any type may add config.onlyIf = { conditions: [{ field: <source>, operator, value, logic: null|"AND"|"OR", ignoreCase?: true }], rules?: [{ conditions, value: ValueSpec }], else: ValueSpec } where ValueSpec = { type: "empty"|"static"|"field", value } or { type: "combine", blocks, skipEmpty? }. Condition operators: equals, not_equals, contains, not_contains, contains_word, not_contains_word, starts_with, ends_with, greater_than, less_than, is_empty, is_not_empty; each comparing operator also has a "<operator>_field" form whose value is another <source> instead of text (e.g. price less_than_field compare_at_price).
+<source> is a standard field (see get_mapping → sources), "metafield:<namespace>.<key>", "ai_optimized_title", "url", or "feed:<feed field>" to reuse another mapped field's final value (e.g. feed:color).
 Keep the config of the other kind of keys exactly as get_mapping shows them; only send the fields you change.`
 
 export function createFeedFlowServer(caller: McpCaller): McpServer {
@@ -382,7 +385,7 @@ export function createFeedFlowServer(caller: McpCaller): McpServer {
           .array(
             z.object({
               google_field: z.string().regex(/^[a-z0-9_]+$/).describe('Feed field, e.g. title, brand, custom_label_0'),
-              mapping_type: z.enum(['FIELD', 'STATIC', 'COMBINE', 'PREFIX_SUFFIX', 'FIND_REPLACE', 'TRUNCATE', 'STRIP_HTML', 'LOOKUP', 'REMOVE']),
+              mapping_type: z.enum(['FIELD', 'STATIC', 'COMBINE', 'PREFIX_SUFFIX', 'FIND_REPLACE', 'TRUNCATE', 'STRIP_HTML', 'LOOKUP', 'EXTRACT', 'REMOVE']),
               config: z.record(z.string(), z.unknown()).default({}),
             })
           )
@@ -418,7 +421,9 @@ export function createFeedFlowServer(caller: McpCaller): McpServer {
       })
       const names = entries.map((e) => e.google_field)
       const summary = `Mapping: ${names.slice(0, 4).join(', ')}${names.length > 4 ? ` og ${names.length - 4} mere` : ''}`
-      return text(await propose(f, { kind: 'mapping', entries }, summary, details))
+      const outcome = await propose(f, { kind: 'mapping', entries }, summary, details)
+      const warnings = extractWarnings(entries)
+      return text(warnings.length ? `${outcome}\nAdvarsel, disse mønstre springes over:\n${warnings.join('\n')}` : outcome)
     })
   )
 
@@ -562,6 +567,8 @@ function checkMapping(type: string, config: Record<string, unknown>): string | n
       return str('field') && Number(config.maxChars) > 0 ? null : 'config.field and config.maxChars are required'
     case 'LOOKUP':
       return str('field') && Array.isArray(config.rows) ? null : 'config.field and config.rows are required'
+    case 'EXTRACT':
+      return str('field') && Array.isArray(config.patterns) && config.patterns.length ? null : 'config.field and config.patterns are required'
     case 'REMOVE':
       return null
     default:

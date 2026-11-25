@@ -25,20 +25,28 @@
 // shadows it. `rules` is optional; a config without it behaves exactly as
 // before, which is what keeps every saved mapping working untouched.
 
-export type CombineBlock = { type: 'field' | 'text'; value: string }
+// `skipIfPresent` (field blocks only): leave this block out when the text built
+// so far already contains its value as a whole word, ignoring case — "add the
+// colour to the title unless the title already says it".
+export type CombineBlock = { type: 'field' | 'text'; value: string; skipIfPresent?: boolean }
 
 export type Condition = {
   field: string
   operator: string
   value: string
   logic: 'AND' | 'OR' | null
+  // Text comparisons only. Undefined = case-sensitive, which is how every
+  // condition saved before this existed behaved; the editor sets false
+  // ("Ignore case") on new conditions. Same convention as feed filters.
+  caseSensitive?: boolean
 }
 
 // The four ways a branch can produce a value. `empty` / `static` / `field` use
-// `value`; `combine` reuses the same block list as a top-level COMBINE mapping.
+// `value`; `combine` reuses the same block list as a top-level COMBINE mapping
+// (and the same `skipEmpty` switch — see combineBlocks).
 export type ValueSpec =
   | { type: 'empty' | 'static' | 'field'; value: string }
-  | { type: 'combine'; blocks: CombineBlock[] }
+  | { type: 'combine'; blocks: CombineBlock[]; skipEmpty?: boolean }
 
 export type Rule = { conditions: Condition[]; value: ValueSpec }
 
@@ -54,27 +62,62 @@ export type FieldResolver = (field: string) => string
 
 // ── Condition evaluation ───────────────────────────────────────────────────
 
+// ── Whole-word matching ────────────────────────────────────────────────────
+
+// Plain `includes` is useless for short values: size "L" is "contained" in
+// "Full", colour "Sort" in "Sortiment". A word match requires the needle to
+// stand on its own — no letter or digit directly before or after it — so
+// "36/37", "Dark Blue" and "L" all match as written and nothing inside a word.
+const wordReCache = new Map<string, RegExp>()
+
+function wordRegex(needle: string, ignoreCase: boolean): RegExp {
+  const key = `${ignoreCase ? 'i' : '-'}:${needle}`
+  let re = wordReCache.get(key)
+  if (!re) {
+    const escaped = needle.replace(/[.*+?^${}()|[\]\\/]/g, '\\$&')
+    re = new RegExp(`(?<![\\p{L}\\p{N}])${escaped}(?![\\p{L}\\p{N}])`, ignoreCase ? 'iu' : 'u')
+    if (wordReCache.size >= 1000) wordReCache.clear()
+    wordReCache.set(key, re)
+  }
+  return re
+}
+
+/** Whether `needle` occurs in `haystack` as a whole word. An empty needle never does. */
+export function containsWord(haystack: string, needle: string, ignoreCase: boolean): boolean {
+  const n = needle.trim()
+  if (!n || !haystack) return false
+  return wordRegex(n, ignoreCase).test(haystack)
+}
+
+// ── Condition evaluation ───────────────────────────────────────────────────
+
+// Every text operator has a `<op>_field` twin whose right-hand side is another
+// field's value instead of a literal (e.g. price less_than_field
+// compare_at_price for sale detection, title not_contains_word_field
+// feed:color). The suffix is stripped once and the same table serves both.
 export function evalCondition(cond: Condition, resolve: FieldResolver): boolean {
-  const v = resolve(cond.field)
-  switch (cond.operator) {
-    case 'equals':       return v === cond.value
-    case 'not_equals':   return v !== cond.value
-    case 'contains':     return v.includes(cond.value)
-    case 'not_contains': return !v.includes(cond.value)
-    case 'starts_with':  return v.startsWith(cond.value)
-    case 'ends_with':    return v.endsWith(cond.value)
-    case 'greater_than': return parseFloat(v) > parseFloat(cond.value)
-    case 'less_than':    return parseFloat(v) < parseFloat(cond.value)
-    case 'is_empty':     return !v
-    case 'is_not_empty': return !!v
-    // *_field variants resolve the RHS as a field reference instead of a
-    // literal — used by the default mappings that compare two product fields
-    // (e.g. price < compare_at_price for sale detection).
-    case 'less_than_field':    return parseFloat(v) < parseFloat(resolve(cond.value))
-    case 'greater_than_field': return parseFloat(v) > parseFloat(resolve(cond.value))
-    case 'equals_field':       return v === resolve(cond.value)
-    case 'not_equals_field':   return v !== resolve(cond.value)
-    default:             return true
+  const op = cond.operator ?? ''
+  const isField = op.endsWith('_field')
+  const base = isField ? op.slice(0, -'_field'.length) : op
+  const rawL = resolve(cond.field)
+  const rawR = isField ? resolve(cond.value) : (cond.value ?? '')
+  const ignoreCase = cond.caseSensitive === false
+  const l = ignoreCase ? rawL.toLowerCase() : rawL
+  const r = ignoreCase ? rawR.toLowerCase() : rawR
+  switch (base) {
+    case 'equals':            return l === r
+    case 'not_equals':        return l !== r
+    case 'contains':          return l.includes(r)
+    case 'not_contains':      return !l.includes(r)
+    case 'starts_with':       return l.startsWith(r)
+    case 'ends_with':         return l.endsWith(r)
+    case 'contains_word':     return containsWord(rawL, rawR, ignoreCase)
+    case 'not_contains_word': return !containsWord(rawL, rawR, ignoreCase)
+    case 'greater_than':      return parseFloat(rawL) > parseFloat(rawR)
+    case 'less_than':         return parseFloat(rawL) < parseFloat(rawR)
+    case 'is_empty':          return !rawL
+    case 'is_not_empty':      return !!rawL
+    default:                  return true
   }
 }
 
@@ -92,15 +135,70 @@ export function evaluateConditions(conditions: Condition[], resolve: FieldResolv
 
 // ── Value resolution ───────────────────────────────────────────────────────
 
+/**
+ * Joins Combine blocks into one string.
+ *
+ * With `skipEmpty` off (every Combine saved before the option existed) blocks
+ * are concatenated as written.
+ *
+ * With `skipEmpty` on, text blocks act as separators that belong to the field
+ * AFTER them: `[title][" – "][color][" – "][size]`
+ *   - an empty field takes the text in front of it along with it
+ *       color empty → "Title – L", both empty → "Title"
+ *   - a separator never starts the result: when the first field(s) are empty,
+ *     the text before the first value that IS emitted is dropped too
+ *       `[color][" – "][size]`, color empty → "L" (not " – L")
+ *     — unless no field came before it at all, i.e. it's a real prefix
+ *   - text after the last field is kept only when something was emitted
+ *   - runs of spaces collapse to one and the ends are trimmed.
+ *
+ * `skipIfPresent` on a field block treats it as empty when the text built so far
+ * already contains its value as a whole word (ignoring case), so it disappears
+ * with its separator. Applied in both modes.
+ */
+export function combineBlocks(
+  blocks: CombineBlock[] | undefined,
+  resolve: FieldResolver,
+  skipEmpty = false
+): string {
+  const list = Array.isArray(blocks) ? blocks : []
+  if (!skipEmpty) {
+    let out = ''
+    for (const b of list) {
+      if (b.type !== 'field') { out += b.value ?? ''; continue }
+      const v = b.value ? resolve(b.value) : ''
+      out += b.skipIfPresent && containsWord(out, v, true) ? '' : v
+    }
+    return out
+  }
+
+  let out = ''
+  let pending = '' // text waiting for the next field to decide its fate
+  let sawField = false
+  for (const b of list) {
+    if (b.type !== 'field') { pending += b.value ?? ''; continue }
+    let v = b.value ? resolve(b.value) : ''
+    if (v.trim() && b.skipIfPresent && containsWord(out, v, true)) v = ''
+    if (!v.trim()) {
+      pending = ''
+      sawField = true
+      continue
+    }
+    if (out || !sawField) out += pending
+    out += v
+    pending = ''
+    sawField = true
+  }
+  if (out || !sawField) out += pending
+  return out.replace(/[ \t ]{2,}/g, ' ').trim()
+}
+
 export function resolveValueSpec(spec: ValueSpec | undefined, resolve: FieldResolver): string {
   if (!spec) return ''
   switch (spec.type) {
     case 'static': return spec.value ?? ''
     case 'field':  return spec.value ? resolve(spec.value) : ''
-    case 'combine':
-      return (spec.blocks ?? [])
-        .map((b) => (b.type === 'field' ? resolve(b.value) : b.value))
-        .join('')
+    case 'combine': return combineBlocks(spec.blocks, resolve, !!spec.skipEmpty)
     default: return ''
   }
 }
