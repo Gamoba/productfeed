@@ -633,7 +633,7 @@ function CombineChipsEditor({
             type="checkbox"
             checked={skipEmpty}
             onChange={(e) => onSkipEmptyChange(e.target.checked)}
-            style={{ accentColor: 'var(--accent-purple)' }}
+            style={{ accentColor: 'var(--accent-ink)' }}
           />
           Skip empty fields
         </label>
@@ -746,9 +746,9 @@ function CombineChip({
             fontSize: '10px',
             lineHeight: '16px',
             borderRadius: '3px',
-            border: block.skipIfPresent ? '1px solid rgba(124,92,252,0.55)' : '1px solid transparent',
-            background: block.skipIfPresent ? '#ffffff' : 'transparent',
-            color: block.skipIfPresent ? '#5b3fd6' : 'rgba(91,63,214,0.45)',
+            border: '1px solid transparent',
+            background: block.skipIfPresent ? 'var(--tint)' : 'transparent',
+            color: block.skipIfPresent ? 'var(--tint-fg)' : 'var(--muted)',
             cursor: 'pointer',
           }}
         >
@@ -1040,7 +1040,7 @@ type ExtractCoverageResult = {
   patternErrors?: { index: number; error: string }[]
 }
 
-const nf = new Intl.NumberFormat('en-US')
+const nf = new Intl.NumberFormat('en-GB')
 
 function ExtractEditor({
   config,
@@ -1123,39 +1123,30 @@ function ExtractEditor({
   }
 
   const itemNoun = (coverage?.feedMode ?? feedMode) === 'variant' ? 'variants' : 'products'
-  const iconBtn =
-    'w-7 h-7 shrink-0 inline-flex items-center justify-center rounded-md border border-[var(--hairline)] bg-white text-[11px] text-[var(--ink-muted)] hover:bg-[var(--bg-surface)] disabled:opacity-30 disabled:cursor-default'
 
   return (
-    <div className="space-y-3">
-      <FieldSelect value={field} onChange={(v) => set('field', v)} allFields={allFields} />
+    <div className="ex">
+      <div className="lk-line">
+        <span className="lk-kw">FROM</span>
+        <FieldSelect value={field} onChange={(v) => set('field', v)} allFields={allFields} />
+      </div>
 
-      {previewInput !== null && (
-        <p className="ff-mono truncate" style={{ fontSize: '11px', color: 'var(--ink-muted)' }} title={previewInput}>
-          <span style={{ fontFamily: 'inherit', textTransform: 'uppercase', letterSpacing: '0.08em', fontSize: '10px' }}>
-            Input
-          </span>{' '}
-          {previewInput || '—'}
-        </p>
-      )}
+      <div className="ex-body">
+        {previewInput !== null && (
+          <p className="ex-input" title={previewInput}>
+            <b>Input</b> {previewInput || '—'}
+          </p>
+        )}
+        <p className="ex-help">Patterns are tried top to bottom. The first that matches is used; if none matches, the field is left empty.</p>
 
-      <div className="space-y-2">
-        <p style={{ fontSize: '11px', color: 'var(--ink-muted)' }}>
-          Patterns are tried top to bottom — the first that matches is used. No match leaves the field empty.
-        </p>
         {patterns.map((p, i) => {
           const err = patternError(p.pattern, !!p.ignoreCase)
           const isHit = previewHit?.patternIndex === i
           const count = coverage && !stale ? coverage.perPattern[i] : undefined
           return (
-            <div key={i} className="space-y-1">
-              <div className="flex gap-2 items-center">
-                <span
-                  className="ff-mono shrink-0 text-center"
-                  style={{ width: '18px', fontSize: '11px', color: 'var(--ink-muted)' }}
-                >
-                  {i + 1}
-                </span>
+            <div key={i} className="ex-item">
+              <div className="ex-pat">
+                <span className="ex-num">{i + 1}</span>
                 <input
                   type="text"
                   value={p.pattern}
@@ -1164,10 +1155,9 @@ function ExtractEditor({
                   spellCheck={false}
                   aria-label={`Pattern ${i + 1}`}
                   aria-invalid={!!err}
-                  className={`${inpSm} ff-mono flex-1 min-w-0`}
-                  style={err ? { borderColor: 'var(--accent-red)' } : undefined}
+                  className="ff-input ex-code"
                 />
-                <span className="text-gray-400 text-sm shrink-0">→</span>
+                <span className="ex-arrow" aria-hidden="true">→</span>
                 <input
                   type="text"
                   value={p.template}
@@ -1175,51 +1165,47 @@ function ExtractEditor({
                   placeholder="$1/$2"
                   spellCheck={false}
                   aria-label={`Output for pattern ${i + 1}`}
-                  className={`${inpSm} ff-mono`}
-                  style={{ maxWidth: '9rem' }}
+                  className="ff-input ex-code"
                 />
-                <button
-                  type="button"
-                  onClick={() => updatePattern(i, { ignoreCase: !p.ignoreCase })}
-                  aria-pressed={!!p.ignoreCase}
-                  title={p.ignoreCase ? 'Ignoring upper/lower case' : 'Case-sensitive'}
-                  className={iconBtn}
-                  style={
-                    p.ignoreCase
-                      ? { color: 'var(--accent-purple)', borderColor: 'rgba(124,92,252,0.35)', background: 'rgba(124,92,252,0.08)' }
-                      : undefined
-                  }
-                >
-                  Aa
-                </button>
-                <button type="button" onClick={() => movePattern(i, -1)} disabled={i === 0} aria-label="Move up" className={iconBtn}>
-                  ↑
-                </button>
-                <button
-                  type="button"
-                  onClick={() => movePattern(i, 1)}
-                  disabled={i === patterns.length - 1}
-                  aria-label="Move down"
-                  className={iconBtn}
-                >
-                  ↓
-                </button>
-                <button
-                  type="button"
-                  onClick={() => setPatterns(patterns.filter((_, j) => j !== i))}
-                  disabled={patterns.length <= 1}
-                  aria-label={`Remove pattern ${i + 1}`}
-                  className={iconBtn}
-                >
-                  ×
-                </button>
+                <span className="ex-btns">
+                  <button
+                    type="button"
+                    className="ex-ib"
+                    onClick={() => updatePattern(i, { ignoreCase: !p.ignoreCase })}
+                    aria-pressed={!!p.ignoreCase}
+                    title={p.ignoreCase ? 'Ignoring upper/lower case' : 'Case-sensitive'}
+                  >
+                    Aa
+                  </button>
+                  <button type="button" className="ex-ib" onClick={() => movePattern(i, -1)} disabled={i === 0} aria-label="Move up">
+                    ↑
+                  </button>
+                  <button
+                    type="button"
+                    className="ex-ib"
+                    onClick={() => movePattern(i, 1)}
+                    disabled={i === patterns.length - 1}
+                    aria-label="Move down"
+                  >
+                    ↓
+                  </button>
+                  <button
+                    type="button"
+                    className="ex-ib x"
+                    onClick={() => setPatterns(patterns.filter((_, j) => j !== i))}
+                    disabled={patterns.length <= 1}
+                    aria-label={`Remove pattern ${i + 1}`}
+                  >
+                    ×
+                  </button>
+                </span>
               </div>
               {(err || isHit || count !== undefined) && (
-                <div className="flex items-center gap-2 flex-wrap" style={{ paddingLeft: '26px' }}>
-                  {err && <span style={{ fontSize: '11px', color: 'var(--accent-red)' }}>{err}</span>}
-                  {isHit && <span className="ff-badge ff-badge-success">Matches preview product</span>}
+                <div className="ex-meta">
+                  {err && <span className="ex-err">{err}</span>}
+                  {isHit && <span className="st">Matches the example product</span>}
                   {count !== undefined && (
-                    <span className="ff-badge ff-badge-neutral">
+                    <span>
                       {nf.format(count)} {itemNoun}
                     </span>
                   )}
@@ -1228,153 +1214,139 @@ function ExtractEditor({
             </div>
           )
         })}
-        <div className="flex gap-2 flex-wrap" style={{ paddingLeft: '26px' }}>
+
+        <div className="ex-tools">
           <button
             type="button"
+            className="ff-btn-ghost"
             onClick={() => setPatterns([...patterns, { pattern: '', template: '$1', ignoreCase: true }])}
-            className={`${btnSm} bg-[rgba(124,92,252,0.08)] text-[var(--accent-purple)] hover:bg-[rgba(124,92,252,0.14)]`}
           >
-            + Add pattern
+            + Pattern
           </button>
           {!showLookup && (
-            <button type="button" onClick={() => setShowLookup(true)} className={btnSm}>
+            <button type="button" className="ff-btn-ghost" onClick={() => setShowLookup(true)}>
               + Lookup table
             </button>
           )}
         </div>
-      </div>
 
-      {showLookup && (
-        <div className="space-y-2 pt-3" style={{ borderTop: '1px dashed var(--hairline)' }}>
-          <div className="flex items-center justify-between gap-2">
-            <p style={{ fontSize: '11px', color: 'var(--ink-muted)' }}>
-              Lookup — rewrites each captured value before it goes into the output (ignores case).
-            </p>
-            <button
-              type="button"
-              onClick={() => {
-                onChange(withoutKey(config, 'lookup'))
-                setShowLookup(false)
-              }}
-              className={btnSm}
-            >
-              Remove
-            </button>
-          </div>
-          {(lookup.length ? lookup : [{ from: '', to: '' }]).map((row, i, rows) => (
-            <div key={i} className="flex gap-2 items-center">
-              <input
-                type="text"
-                value={row.from}
-                onChange={(e) => {
-                  const next = [...rows]
-                  next[i] = { ...row, from: e.target.value }
-                  setLookup(next)
-                }}
-                placeholder="Captured, e.g. ml"
-                aria-label={`Lookup ${i + 1} from`}
-                className={inpSm}
-              />
-              <span className="text-gray-400 text-sm shrink-0">→</span>
-              <input
-                type="text"
-                value={row.to}
-                onChange={(e) => {
-                  const next = [...rows]
-                  next[i] = { ...row, to: e.target.value }
-                  setLookup(next)
-                }}
-                placeholder="Output, e.g. M/L"
-                aria-label={`Lookup ${i + 1} to`}
-                className={inpSm}
-              />
+        {showLookup && (
+          <div className="ex-sec">
+            <div className="ex-sec-h">
+              <p className="ex-help">
+                <b>Lookup</b> Rewrites each captured value before it goes into the output. Ignores upper/lower case.
+              </p>
               <button
                 type="button"
-                onClick={() => setLookup(rows.filter((_, j) => j !== i))}
-                disabled={rows.length <= 1}
-                aria-label={`Remove lookup ${i + 1}`}
-                className={iconBtn}
+                className="ff-btn-ghost"
+                onClick={() => {
+                  onChange(withoutKey(config, 'lookup'))
+                  setShowLookup(false)
+                }}
               >
-                ×
+                Remove
               </button>
             </div>
-          ))}
-          <button
-            type="button"
-            onClick={() => setLookup([...(lookup.length ? lookup : [{ from: '', to: '' }]), { from: '', to: '' }])}
-            className={`${btnSm} bg-[rgba(124,92,252,0.08)] text-[var(--accent-purple)] hover:bg-[rgba(124,92,252,0.14)]`}
-          >
-            + Add row
-          </button>
-        </div>
-      )}
-
-      {/* Coverage over the whole feed */}
-      <div className="space-y-2 pt-3" style={{ borderTop: '1px dashed var(--hairline)' }}>
-        <div className="flex items-center gap-3 flex-wrap">
-          <button
-            type="button"
-            onClick={runCoverage}
-            disabled={testing || !feedId}
-            className="ff-btn-secondary"
-            style={{ fontSize: '11px' }}
-          >
-            {testing ? 'Testing…' : coverage ? 'Test again' : `Test on all ${itemNoun}`}
-          </button>
-          {coverage && (
-            <span style={{ fontSize: '12px', color: stale ? 'var(--ink-muted)' : 'var(--ink)' }}>
-              <span style={{ fontWeight: 500 }}>{nf.format(coverage.matched)}</span> of{' '}
-              {nf.format(coverage.total)} {itemNoun} matched
-              {coverage.total > 0 && ` (${((coverage.matched / coverage.total) * 100).toFixed(1)}%)`}
-              {stale && ' · edited since, test again'}
-            </span>
-          )}
-          {testError && <span style={{ fontSize: '11px', color: 'var(--accent-red)' }}>{testError}</span>}
-        </div>
-
-        {coverage && !stale && (coverage.patternErrors?.length ?? 0) > 0 && (
-          <p style={{ fontSize: '11px', color: 'var(--accent-red)' }}>
-            Skipped in this test:{' '}
-            {coverage.patternErrors!.map((e) => `pattern ${e.index + 1} (${e.error})`).join(' · ')}
-          </p>
-        )}
-
-        {coverage && !stale && coverage.topValues.length > 0 && (
-          <div className="flex flex-wrap gap-1.5">
-            {coverage.topValues.map((v) => (
-              <span key={v.value} className="ff-badge ff-badge-accent ff-mono" title={`${v.count} ${itemNoun}`}>
-                {v.value || '(empty)'} · {nf.format(v.count)}
-              </span>
+            {(lookup.length ? lookup : [{ from: '', to: '' }]).map((row, i, rows) => (
+              <div key={i} className="ex-lk">
+                <input
+                  type="text"
+                  className="ff-input"
+                  value={row.from}
+                  onChange={(e) => {
+                    const next = [...rows]
+                    next[i] = { ...row, from: e.target.value }
+                    setLookup(next)
+                  }}
+                  placeholder="Captured, e.g. ml"
+                  aria-label={`Lookup ${i + 1} from`}
+                />
+                <span className="ex-arrow" aria-hidden="true">→</span>
+                <input
+                  type="text"
+                  className="ff-input"
+                  value={row.to}
+                  onChange={(e) => {
+                    const next = [...rows]
+                    next[i] = { ...row, to: e.target.value }
+                    setLookup(next)
+                  }}
+                  placeholder="Output, e.g. M/L"
+                  aria-label={`Lookup ${i + 1} to`}
+                />
+                <button
+                  type="button"
+                  className="ex-ib x"
+                  onClick={() => setLookup(rows.filter((_, j) => j !== i))}
+                  disabled={rows.length <= 1}
+                  aria-label={`Remove lookup ${i + 1}`}
+                >
+                  ×
+                </button>
+              </div>
             ))}
+            <div className="ex-tools">
+              <button
+                type="button"
+                className="ff-btn-ghost"
+                onClick={() => setLookup([...(lookup.length ? lookup : [{ from: '', to: '' }]), { from: '', to: '' }])}
+              >
+                + Row
+              </button>
+            </div>
           </div>
         )}
 
-        {coverage && !stale && coverage.unmatched.length > 0 && (
-          <details>
-            <summary style={{ fontSize: '11px', color: 'var(--ink-secondary)', cursor: 'pointer' }}>
-              {nf.format(coverage.total - coverage.matched)} without a match — show {coverage.unmatched.length}
-            </summary>
-            <div
-              className="mt-2 rounded-lg"
-              style={{ border: '1px solid var(--hairline)', maxHeight: '240px', overflowY: 'auto' }}
-            >
-              {coverage.unmatched.map((u) => (
-                <div
-                  key={u.id}
-                  className="px-3 py-1.5"
-                  style={{ borderBottom: '1px solid var(--hairline)' }}
-                >
-                  <p className="truncate" style={{ fontSize: '11px', color: 'var(--ink)' }}>
-                    {u.title || u.id}
-                  </p>
-                  <p className="ff-mono truncate" style={{ fontSize: '10px', color: 'var(--ink-muted)' }} title={u.input}>
-                    {u.input || '(source field is empty)'}
-                  </p>
-                </div>
+        {/* Coverage over the whole feed */}
+        <div className="ex-sec">
+          <div className="ex-cov">
+            <button type="button" className="ff-btn-secondary" onClick={runCoverage} disabled={testing || !feedId}>
+              {testing ? 'Testing…' : coverage ? 'Test again' : `Test on all ${itemNoun}`}
+            </button>
+            {coverage && (
+              <span className={stale ? 'ex-stale' : undefined}>
+                <b>{nf.format(coverage.matched)}</b> of {nf.format(coverage.total)} {itemNoun} matched
+                {coverage.total > 0 && ` (${((coverage.matched / coverage.total) * 100).toFixed(1)} %)`}
+                {stale && ' · edited since, test again'}
+              </span>
+            )}
+            {testError && <span className="ex-err">{testError}</span>}
+          </div>
+
+          {coverage && !stale && (coverage.patternErrors?.length ?? 0) > 0 && (
+            <p className="ex-err">
+              Skipped in this test:{' '}
+              {coverage.patternErrors!.map((e) => `pattern ${e.index + 1} (${e.error})`).join(' · ')}
+            </p>
+          )}
+
+          {coverage && !stale && coverage.topValues.length > 0 && (
+            <div className="ex-vals">
+              {coverage.topValues.map((v) => (
+                <span key={v.value} className="ex-val" title={`${v.count} ${itemNoun}`}>
+                  {v.value || '(empty)'}
+                  <small>{nf.format(v.count)}</small>
+                </span>
               ))}
             </div>
-          </details>
-        )}
+          )}
+
+          {coverage && !stale && coverage.unmatched.length > 0 && (
+            <details className="ex-miss">
+              <summary>
+                {nf.format(coverage.total - coverage.matched)} without a match. Show {coverage.unmatched.length}
+              </summary>
+              <div className="ex-miss-list">
+                {coverage.unmatched.map((u) => (
+                  <div key={u.id}>
+                    <p>{u.title || u.id}</p>
+                    <p title={u.input}>{u.input || '(source field is empty)'}</p>
+                  </div>
+                ))}
+              </div>
+            </details>
+          )}
+        </div>
       </div>
     </div>
   )
@@ -1855,7 +1827,7 @@ function ConditionRows({
                     className={`${btnSm} shrink-0`}
                     style={
                       cond.caseSensitive === false
-                        ? { color: 'var(--accent-purple)', borderColor: 'rgba(124,92,252,0.35)', background: 'rgba(124,92,252,0.08)' }
+                        ? { color: 'var(--tint-fg)', borderColor: 'transparent', background: 'var(--tint)' }
                         : undefined
                     }
                   >
