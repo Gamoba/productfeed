@@ -112,7 +112,17 @@ const isGhost = (id: string) => id.startsWith(GHOST_PREFIX)
 type Compose = { labelId: string; name: string; value: string; touched: boolean; fallback: boolean } | null
 
 export function LabelsClient(props: Props) {
-  const { feedId, connected, feedMode, roasActions, poasActions, labels, tables } = props
+  const { feedId, connected, feedMode, roasActions, poasActions, tables } = props
+  // A local copy of the labels: a save puts the saved version (from its
+  // response) and new counts (from its recalculation) in at once, instead of
+  // showing the old values until the background reload arrives. Fresh server
+  // data replaces the copy.
+  const [labels, setLabels] = useState(props.labels)
+  const [seenLabels, setSeenLabels] = useState(props.labels)
+  if (seenLabels !== props.labels) {
+    setSeenLabels(props.labels)
+    setLabels(props.labels)
+  }
   const router = useRouter()
 
   const [busy, setBusy] = useState<string | null>(null)
@@ -146,6 +156,48 @@ export function LabelsClient(props: Props) {
     setBucketDraft((d) => ({ ...d, [b.id]: { ...editedBucket(b), ...change } }))
   }
 
+  // ── Local copy, patched from save responses ─────────────────────────────────
+
+  function keepLabel(saved: CustomLabel | undefined) {
+    if (!saved?.id) return
+    setLabels((ls) => ls.map((v) => (v.label.id === saved.id ? { ...v, label: saved } : v)))
+  }
+  function keepBucket(saved: Bucket | undefined) {
+    if (!saved?.id) return
+    setLabels((ls) =>
+      ls.map((v) =>
+        v.label.id !== saved.label_id
+          ? v
+          : {
+              ...v,
+              buckets: orderBuckets(
+                v.buckets.some((b) => b.id === saved.id) ? v.buckets.map((b) => (b.id === saved.id ? saved : b)) : [...v.buckets, saved]
+              ),
+            }
+      )
+    )
+  }
+  function dropBucket(id: string) {
+    setLabels((ls) => ls.map((v) => ({ ...v, buckets: v.buckets.filter((b) => b.id !== id) })))
+  }
+  function keepCounts(result: unknown) {
+    const r = result as { labels?: { labelId: string; assigned: number; perBucket: { id: string; count: number }[] }[] } | undefined
+    for (const l of r?.labels ?? []) {
+      setLabels((ls) =>
+        ls.map((v) =>
+          v.label.id !== l.labelId
+            ? v
+            : {
+                ...v,
+                counts: Object.fromEntries(l.perBucket.map((b) => [b.id, b.count])),
+                assigned: l.assigned,
+                stale: { never: false, dataNewer: false, settingsNewer: false },
+              }
+        )
+      )
+    }
+  }
+
   async function call(url: string, init?: RequestInit): Promise<Record<string, unknown> | null> {
     const res = await fetch(url, init)
     const json = await res.json().catch(() => ({}))
@@ -172,6 +224,7 @@ export function LabelsClient(props: Props) {
   // Shows what a recalculation did (also when it ran inside a save request).
   function showRecompute(json: Record<string, unknown> | null) {
     if (!json?.result) return
+    keepCounts(json.result)
     const r = json.result as {
       labels: { name: string; assigned: number; entities: number; moved: number; warnings: string[] }[]
       warnings: string[]
@@ -197,6 +250,7 @@ export function LabelsClient(props: Props) {
     const ok = await post(`/api/google-ads/${feedId}/labels`, { action: 'save', label: after, recompute: remeasure })
     setBusy(null)
     if (!ok) return
+    keepLabel(ok.label as CustomLabel | undefined)
     setLabelDraft((d) => {
       const next = { ...d }
       delete next[before.id]
@@ -255,6 +309,7 @@ export function LabelsClient(props: Props) {
     const ok = await post(`/api/google-ads/${feedId}/buckets`, { bucket: after, recompute: moves })
     setBusy(null)
     if (!ok) return
+    keepBucket(ok.bucket as Bucket | undefined)
     setBucketDraft((d) => {
       const next = { ...d }
       delete next[b.id]
@@ -295,6 +350,7 @@ export function LabelsClient(props: Props) {
       setCompose({ labelId, name, value, touched: true, fallback })
       return
     }
+    keepBucket(ok.bucket as Bucket | undefined)
     if (fallback) {
       showRecompute(ok)
       router.refresh()
@@ -315,6 +371,7 @@ export function LabelsClient(props: Props) {
       })
       return
     }
+    dropBucket(b.id)
     setSelBucketId(null)
     showRecompute(ok)
     router.refresh()
