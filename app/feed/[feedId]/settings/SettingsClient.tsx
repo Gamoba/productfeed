@@ -110,6 +110,14 @@ export function SettingsClient({
   const [feedLabel, setFeedLabel] = useState(ads.feedLabel ?? '')
   const [roas, setRoas] = useState<string[]>(ads.roas)
   const [poas, setPoas] = useState<string[]>(ads.poas)
+  // The Google Ads values as last saved: updated by a save at once, so the form
+  // stops counting as changed without waiting for the page to reload.
+  const [savedAds, setSavedAds] = useState({
+    customerId: ads.customerId ?? '',
+    feedLabel: ads.feedLabel ?? '',
+    roas: ads.roas,
+    poas: ads.poas,
+  })
 
   // ── Save / sync ──
   const [saving, setSaving] = useState(false)
@@ -119,11 +127,11 @@ export function SettingsClient({
     !!shop &&
     (shop.selected_market_id !== savedShop?.selected_market_id || shop.selected_locale !== savedShop?.selected_locale)
   const feedSchedDirty = feedFreq !== saved.feedFreq || feedTime !== saved.feedTime
-  const perfSchedDirty = !!ads.customerId && (perfFreq !== saved.perfFreq || perfTime !== saved.perfTime)
+  const perfSchedDirty = !!savedAds.customerId && (perfFreq !== saved.perfFreq || perfTime !== saved.perfTime)
   const modeDirty = feedMode !== saved.feedMode
-  const accountChanged = customerId !== (ads.customerId ?? '')
-  const labelChanged = feedLabel.trim() !== (ads.feedLabel ?? '')
-  const adsDirty = !!customerId && (accountChanged || labelChanged || !sameSet(roas, ads.roas) || !sameSet(poas, ads.poas))
+  const accountChanged = customerId !== savedAds.customerId
+  const labelChanged = feedLabel.trim() !== savedAds.feedLabel
+  const adsDirty = !!customerId && (accountChanged || labelChanged || !sameSet(roas, savedAds.roas) || !sameSet(poas, savedAds.poas))
   const dirty = shopDirty || feedSchedDirty || perfSchedDirty || modeDirty || adsDirty
 
   const sync = useFeedSync(feedId, {
@@ -197,63 +205,100 @@ export function SettingsClient({
   }
 
   async function save(): Promise<boolean> {
+    // Optimistic: the form counts as saved at once and the requests run side by
+    // side. If one fails, the unsaved state comes back with the error. A new
+    // account fetches its figures from Google, which takes a while: the note
+    // says so until the answer is in.
+    const before = { saved, savedShop, savedAds }
+    const doShop = shopDirty && !!shop
+    const doMode = modeDirty
+    const doSched = feedSchedDirty
+    const doAds = adsDirty
+    const doPerf = perfSchedDirty
+    const refetch = accountChanged || labelChanged
+    const account = accounts?.find((a) => a.customerId === customerId)
+    setSaved({ feedFreq, feedTime, perfFreq, perfTime, feedMode })
+    if (doShop) setSavedShop(shop)
+    if (doAds) setSavedAds({ customerId, feedLabel: feedLabel.trim(), roas, poas })
+    setStatus({ kind: 'ok', text: doAds && refetch ? 'Saved. Fetching the figures from Google Ads…' : 'Saved.' })
     setSaving(true)
-    setStatus(null)
     try {
-      if (shopDirty && shop) {
-        const res = await fetch('/api/settings', {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ feed_id: feedId, ...shop }),
-        })
-        const data = (await res.json()) as { error?: string }
-        if (data.error) throw new Error(data.error)
-        setSavedShop(shop)
+      const tasks: Promise<string>[] = []
+      if (doShop && shop) {
+        tasks.push(
+          fetch('/api/settings', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ feed_id: feedId, ...shop }),
+          }).then(async (res) => {
+            const data = (await res.json()) as { error?: string }
+            if (data.error) throw new Error(data.error)
+            return ''
+          })
+        )
       }
-      if (modeDirty) {
-        const r = await saveFeedMode(feedId, feedMode)
-        if (r.error) throw new Error(r.error)
-        markFeedEdited(feedId)
+      if (doMode) {
+        tasks.push(
+          saveFeedMode(feedId, feedMode).then((r) => {
+            if (r.error) throw new Error(r.error)
+            markFeedEdited(feedId)
+            return ''
+          })
+        )
       }
-      if (feedSchedDirty) {
-        const r = await saveAutoSyncSchedule(feedId, feedFreq, feedTime)
-        if (r.error) throw new Error(r.error)
+      if (doSched) {
+        tasks.push(
+          saveAutoSyncSchedule(feedId, feedFreq, feedTime).then((r) => {
+            if (r.error) throw new Error(r.error)
+            return ''
+          })
+        )
       }
-      let note = ''
-      if (adsDirty) {
-        const account = accounts?.find((a) => a.customerId === customerId)
-        // A different account or filter means different numbers, so fetch
-        // them now rather than at the next scheduled run.
-        const refetch = accountChanged || labelChanged
-        const res = await fetch(`/api/google-ads/${feedId}/settings`, {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          // The route replaces every field, so send all of them.
-          body: JSON.stringify({
-            customerId,
-            customerName: account?.name ?? ads.customerName,
-            currencyCode: account?.currencyCode ?? ads.currencyCode,
-            loginCustomerId: account?.viaManager ?? null,
-            feedLabel: feedLabel.trim() || null,
-            roasConversionActions: roas,
-            poasConversionActions: poas,
-            syncNow: refetch,
-          }),
-        })
-        const json = await res.json()
-        if (!res.ok) throw new Error(json.error ?? 'Could not save the Google Ads account')
-        if (json.syncError) note = ` The figures could not be fetched: ${json.syncError}`
+      // The account and its schedule write the same row, so these two in order.
+      if (doAds || doPerf) {
+        tasks.push(
+          (async () => {
+            let note = ''
+            if (doAds) {
+              const res = await fetch(`/api/google-ads/${feedId}/settings`, {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                // The route replaces every field, so send all of them.
+                body: JSON.stringify({
+                  customerId,
+                  customerName: account?.name ?? ads.customerName,
+                  currencyCode: account?.currencyCode ?? ads.currencyCode,
+                  loginCustomerId: account?.viaManager ?? null,
+                  feedLabel: feedLabel.trim() || null,
+                  roasConversionActions: roas,
+                  poasConversionActions: poas,
+                  syncNow: refetch,
+                }),
+              })
+              const json = await res.json()
+              if (!res.ok) throw new Error(json.error ?? 'Could not save the Google Ads account')
+              if (json.syncError) note = ` The figures could not be fetched: ${json.syncError}`
+            }
+            if (doPerf) {
+              const r = await saveGoogleAdsSchedule(feedId, perfFreq, perfTime)
+              if (r.error) throw new Error(r.error)
+            }
+            return note
+          })()
+        )
       }
-      if (perfSchedDirty) {
-        const r = await saveGoogleAdsSchedule(feedId, perfFreq, perfTime)
-        if (r.error) throw new Error(r.error)
-      }
-      setSaved({ feedFreq, feedTime, perfFreq, perfTime, feedMode })
+      const note = (await Promise.all(tasks)).join('')
       setStatus({ kind: note ? 'error' : 'ok', text: `Saved.${note}` })
-      router.refresh()
-      refreshShell()
+      // What the server works out from the saved values (last fetch, the
+      // account's conversion actions, the market's label) arrives in the
+      // background; the form itself is already up to date.
+      if (doShop || doAds || doPerf) router.refresh()
+      if (doShop || doMode) refreshShell()
       return true
     } catch (err) {
+      setSaved(before.saved)
+      setSavedShop(before.savedShop)
+      setSavedAds(before.savedAds)
       setStatus({ kind: 'error', text: err instanceof Error ? err.message : 'Could not save' })
       return false
     } finally {
