@@ -1,6 +1,8 @@
 'use client'
 
+import { useEffect } from 'react'
 import { usePathname } from 'next/navigation'
+import { polyfillCountryFlagEmojis } from 'country-flag-emoji-polyfill'
 import { Sidebar } from './shell/Sidebar'
 import { TopBar } from './shell/TopBar'
 import { useShell } from './shell/useShell'
@@ -11,6 +13,12 @@ const NO_SHELL = ['/login', '/auth/invite', '/oauth/consent']
 
 export function AppShell({ children }: { children: React.ReactNode }) {
   const pathname = usePathname()
+  // Windows has no flag emoji (🇩🇰 shows as "DK"). Where flags are missing, this
+  // loads a small font with just the flags (self-hosted, see public/fonts);
+  // --font lists it first, and its unicode-range limits it to flag characters.
+  useEffect(() => {
+    polyfillCountryFlagEmojis('Twemoji Country Flags', '/fonts/TwemojiCountryFlags.woff2')
+  }, [])
   if (NO_SHELL.includes(pathname)) return <>{children}</>
   return <Shell pathname={pathname}>{children}</Shell>
 }

@@ -228,7 +228,7 @@ const btnSm =
 const miniSel = 'ff-select shrink-0'
 // Left-hand keyword column of a rule row (ONLY IF / ELSE IF / THEN / ELSE).
 // Fixed width so every keyword lines up down the panel.
-const condLbl = 'text-xs text-[var(--muted)] opacity-70 font-mono w-16 shrink-0 pt-2'
+const condLbl = 'text-[11px] font-semibold tracking-[0.08em] text-[var(--muted)] w-16 shrink-0 pt-2'
 
 // Drops one key from a mapping config. Used when a whole layer (the rule stack,
 // the filter layer) is removed — the key must disappear rather than be left as
@@ -694,7 +694,8 @@ function CombineChip({
       onDragOver={onDragOver}
       onDrop={onDrop}
       onDragEnd={onDragEnd}
-      className={`inline-flex items-center gap-1.5 ${isDragging ? 'cursor-grabbing' : 'cursor-grab'}`}
+      className={`mp-chip inline-flex items-center gap-1.5 ${isDragging ? 'cursor-grabbing' : 'cursor-grab'}`}
+      title={empty ? undefined : label}
       style={{
         position: 'relative',
         padding: '4px 4px 4px 8px',
@@ -723,7 +724,7 @@ function CombineChip({
       >
         {isField ? '{}' : 'txt'}
       </span>
-      <span style={{ fontWeight: 500, whiteSpace: 'pre' }}>
+      <span className="mp-chip-t" style={{ fontWeight: 500, whiteSpace: 'pre' }}>
         {empty ? <em style={{ opacity: 0.6, fontStyle: 'italic' }}>tom</em> : label}
       </span>
       {onToggleSkipIfPresent && (
@@ -1757,7 +1758,7 @@ function ConditionRows({
         }
 
         return (
-          <div key={i} className="flex gap-2 items-start">
+          <div key={i} className="flex gap-2 items-start mp-cond">
             {i === 0 ? (
               <span className={condLbl}>{label}</span>
             ) : (
@@ -1887,7 +1888,7 @@ function ValueSpecEditor({
   allFields: string[]
 }) {
   return (
-    <div className="flex gap-2 items-start">
+    <div className="flex gap-2 items-start mp-cond">
       <span className={condLbl}>{label}</span>
       <select
         value={value.type}
@@ -2376,7 +2377,7 @@ function TransformsEditor({
       )}
 
       {transforms.map((t, i) => (
-        <div key={i} className="flex gap-2 items-start">
+        <div key={i} className="flex gap-2 items-start mp-cond">
           <span className={condLbl}>THEN</span>
           <div
             className="shrink-0 pt-2"
