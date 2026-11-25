@@ -1,5 +1,5 @@
 import { redirect, notFound } from 'next/navigation'
-import { createSupabaseServerClient } from '@/lib/supabase-server'
+import { createSupabaseServerClient, getSessionUser } from '@/lib/supabase-server'
 import { adminDb, getOwnedFeed } from '@/lib/feeds'
 import { FiltersClient } from '@/app/filters/FiltersClient'
 import { loadMasterFields } from '@/lib/masterFields'
@@ -14,7 +14,7 @@ export default async function FeedFiltersPage({
   const supabase = await createSupabaseServerClient()
   const {
     data: { user },
-  } = await supabase.auth.getUser()
+  } = await getSessionUser(supabase)
   if (!user) redirect('/login')
 
   const feed = await getOwnedFeed(user.id, feedId)

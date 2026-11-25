@@ -1,4 +1,4 @@
-import { createSupabaseServerClient } from '@/lib/supabase-server'
+import { createSupabaseServerClient, getSessionUser } from '@/lib/supabase-server'
 import { generateFeed, loadFeedProducts } from '@/lib/feedGenerator'
 import { validateFeed, type ValidationResult } from '@/lib/feedValidator'
 import { adminDb, getOwnedFeed } from '@/lib/feeds'
@@ -90,7 +90,7 @@ export async function POST(
   const supabase = await createSupabaseServerClient()
   const {
     data: { user },
-  } = await supabase.auth.getUser()
+  } = await getSessionUser(supabase)
 
   if (!user) return Response.json({ error: 'Unauthorized' }, { status: 401 })
 

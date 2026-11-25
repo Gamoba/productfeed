@@ -1,6 +1,6 @@
 'use server'
 
-import { createSupabaseServerClient } from '@/lib/supabase-server'
+import { createSupabaseServerClient, getSessionUser } from '@/lib/supabase-server'
 import { adminDb, getOwnedFeed } from '@/lib/feeds'
 import { applyFilters, type FilterConfig as OpsFilterConfig, type FilterRule as OpsFilterRule } from '@/lib/ops/feedConfig'
 import { getFeedMetafields as getFeedMetafieldsLib, type FeedMetafield } from '@/lib/optimizationBuckets'
@@ -19,7 +19,7 @@ export async function getFeedMetafields(
   const supabase = await createSupabaseServerClient()
   const {
     data: { user },
-  } = await supabase.auth.getUser()
+  } = await getSessionUser(supabase)
   if (!user) return { error: 'Unauthorized' }
 
   const owned = await getOwnedFeed(user.id, feedId)
@@ -36,7 +36,7 @@ export async function saveFilters(
   const supabase = await createSupabaseServerClient()
   const {
     data: { user },
-  } = await supabase.auth.getUser()
+  } = await getSessionUser(supabase)
   if (!user) return { error: 'Unauthorized' }
 
   const owned = await getOwnedFeed(user.id, feedId)

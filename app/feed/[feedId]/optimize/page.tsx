@@ -1,5 +1,5 @@
 import { redirect, notFound } from 'next/navigation'
-import { createSupabaseServerClient } from '@/lib/supabase-server'
+import { createSupabaseServerClient, getSessionUser } from '@/lib/supabase-server'
 import { getOwnedFeed } from '@/lib/feeds'
 import { getOptimizationSettings } from '@/lib/titleOptimizationService'
 import { listBuckets } from '@/lib/optimizationBuckets'
@@ -15,7 +15,7 @@ export default async function FeedOptimizePage({
   const supabase = await createSupabaseServerClient()
   const {
     data: { user },
-  } = await supabase.auth.getUser()
+  } = await getSessionUser(supabase)
   if (!user) redirect('/login')
 
   const feed = await getOwnedFeed(user.id, feedId)

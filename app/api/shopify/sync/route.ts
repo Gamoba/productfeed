@@ -1,4 +1,4 @@
-import { createSupabaseServerClient } from '@/lib/supabase-server'
+import { createSupabaseServerClient, getSessionUser } from '@/lib/supabase-server'
 import { syncProducts } from '@/lib/sync'
 import { getOwnedFeed } from '@/lib/feeds'
 import { enforceRateLimit } from '@/lib/rateLimit'
@@ -15,7 +15,7 @@ export async function POST(req: Request) {
   const supabase = await createSupabaseServerClient()
   const {
     data: { user },
-  } = await supabase.auth.getUser()
+  } = await getSessionUser(supabase)
 
   if (!user) {
     return Response.json({ error: 'Unauthorized' }, { status: 401 })

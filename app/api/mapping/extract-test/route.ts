@@ -1,5 +1,5 @@
 import { NextResponse } from 'next/server'
-import { createSupabaseServerClient } from '@/lib/supabase-server'
+import { createSupabaseServerClient, getSessionUser } from '@/lib/supabase-server'
 import { getOwnedFeed } from '@/lib/feeds'
 import { errorResponse } from '@/lib/errors'
 import { extractCoverage } from '@/lib/feedGenerator'
@@ -58,7 +58,7 @@ export async function POST(req: Request) {
   const supabase = await createSupabaseServerClient()
   const {
     data: { user },
-  } = await supabase.auth.getUser()
+  } = await getSessionUser(supabase)
   if (!user) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
 
   const feedId = new URL(req.url).searchParams.get('feedId')

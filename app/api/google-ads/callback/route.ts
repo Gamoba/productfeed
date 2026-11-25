@@ -1,6 +1,6 @@
 import { NextResponse } from 'next/server'
 import { cookies } from 'next/headers'
-import { createSupabaseServerClient } from '@/lib/supabase-server'
+import { createSupabaseServerClient, getSessionUser } from '@/lib/supabase-server'
 import { adminDb, getOwnedFeed } from '@/lib/feeds'
 import { saveConnection, getFeedSettings, saveFeedSettings } from '@/lib/feedGoogleAds'
 import { exchangeCode, redirectUri, OAUTH_STATE_COOKIE, type OAuthState } from '@/lib/googleAdsOAuth'
@@ -57,7 +57,7 @@ export async function GET(req: Request) {
     const supabase = await createSupabaseServerClient()
     const {
       data: { user },
-    } = await supabase.auth.getUser()
+    } = await getSessionUser(supabase)
     if (!user) return back(origin, feedId, { ga_error: 'Your session has expired. Sign in again.' })
 
     const feed = await getOwnedFeed(user.id, state.feedId)

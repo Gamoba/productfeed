@@ -1,6 +1,6 @@
 import { NextResponse } from 'next/server'
 import { cookies } from 'next/headers'
-import { createSupabaseServerClient } from '@/lib/supabase-server'
+import { createSupabaseServerClient, getSessionUser } from '@/lib/supabase-server'
 import { getOwnedFeed } from '@/lib/feeds'
 import {
   buildAuthUrl,
@@ -23,7 +23,7 @@ export async function GET(req: Request) {
     const supabase = await createSupabaseServerClient()
     const {
       data: { user },
-    } = await supabase.auth.getUser()
+    } = await getSessionUser(supabase)
     if (!user) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
 
     const url = new URL(req.url)

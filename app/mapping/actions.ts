@@ -1,6 +1,6 @@
 'use server'
 
-import { createSupabaseServerClient } from '@/lib/supabase-server'
+import { createSupabaseServerClient, getSessionUser } from '@/lib/supabase-server'
 import { redirect } from 'next/navigation'
 import { adminDb, getOwnedFeed } from '@/lib/feeds'
 import { applyMappings, type MappingEntry as OpsMappingEntry } from '@/lib/ops/feedConfig'
@@ -18,7 +18,7 @@ export async function saveMappings(
   const supabase = await createSupabaseServerClient()
   const {
     data: { user },
-  } = await supabase.auth.getUser()
+  } = await getSessionUser(supabase)
   if (!user) redirect('/login')
 
   const owned = await getOwnedFeed(user.id, feedId)

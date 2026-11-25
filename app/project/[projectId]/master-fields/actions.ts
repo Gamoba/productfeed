@@ -1,6 +1,6 @@
 'use server'
 
-import { createSupabaseServerClient } from '@/lib/supabase-server'
+import { createSupabaseServerClient, getSessionUser } from '@/lib/supabase-server'
 import { adminDb, getOwnedProject } from '@/lib/feeds'
 import { deleteMasterField, saveMasterField, type MasterFieldInput } from '@/lib/ops/masterFields'
 
@@ -10,7 +10,7 @@ async function access(projectId: string) {
   const supabase = await createSupabaseServerClient()
   const {
     data: { user },
-  } = await supabase.auth.getUser()
+  } = await getSessionUser(supabase)
   if (!user) return null
   return (await getOwnedProject(user.id, projectId)) ? user : null
 }

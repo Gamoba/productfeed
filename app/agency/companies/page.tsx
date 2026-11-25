@@ -1,5 +1,5 @@
 import { redirect } from 'next/navigation'
-import { createSupabaseServerClient } from '@/lib/supabase-server'
+import { createSupabaseServerClient, getSessionUser } from '@/lib/supabase-server'
 import { PlaceholderPage } from '@/app/components/PlaceholderPage'
 
 // Agency › Connected companies. Placeholder from the prototype; what the page is for is
@@ -8,7 +8,7 @@ export default async function ConnectedCompaniesPage() {
   const supabase = await createSupabaseServerClient()
   const {
     data: { user },
-  } = await supabase.auth.getUser()
+  } = await getSessionUser(supabase)
   if (!user) redirect('/login')
 
   return (
