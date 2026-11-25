@@ -934,7 +934,7 @@ export function createFeedFlowServer(caller: McpCaller): McpServer {
       if (plan.targets.length === 0) return fail('Nothing to generate: every product in this bucket already has a title. Use rerun=true to redo AI titles.')
       const n = Math.min(plan.targets.length, max_products)
       const details: ChangeDetail[] = [
-        { label: 'products', before: null, after: `${n} / ${plan.targets.length} (${rerun ? 'all products again (not hand-edited)' : 'products without a title'})` },
+        { label: 'Products', before: null, after: `${n} / ${plan.targets.length} (${rerun ? 'all products again (not hand-edited)' : 'products without a title'})` },
       ]
       return text(await propose(f, { kind: 'title_run', bucket_id, rerun, limit: n }, `Generate AI titles in ${b.name}: ${n} products`, details))
     })
