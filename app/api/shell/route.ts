@@ -12,7 +12,7 @@ import { staleSyncDays } from '@/lib/syncSchedule'
 export type ShellData = {
   user: { email: string; name: string }
   accounts: { id: string; name: string; role: 'owner' | 'admin' | 'member' }[]
-  projects: { id: string; accountId: string; name: string; shopUrl: string | null }[]
+  projects: { id: string; accountId: string; name: string; shopUrl: string | null; connectionError?: boolean }[]
   feeds: {
     id: string
     name: string
@@ -23,6 +23,8 @@ export type ShellData = {
     status: FeedStatus
     errors: number
     staleDays: number | null
+    /** The last automatic product sync failed. */
+    syncFailed?: boolean
   }[]
   attention: {
     /** Changes from assistants waiting for approval, per shop. */
@@ -51,7 +53,7 @@ export async function GET() {
           db.from('accounts').select('id, name').in('id', accountIds),
           db
             .from('projects')
-            .select('id, account_id, name, shop_url, primary_domain, source_type')
+            .select('id, account_id, name, shop_url, primary_domain, source_type, connection_status')
             .in('account_id', accountIds)
             .order('created_at', { ascending: true }),
         ])
@@ -69,6 +71,7 @@ export async function GET() {
       shop_url: string | null
       primary_domain: string | null
       source_type: string | null
+      connection_status?: string | null
     }[]
     const projectIds = projects.map((p) => p.id)
 
@@ -80,7 +83,7 @@ export async function GET() {
         .in('project_id', projectIds)
         .order('created_at', { ascending: true })
       if (feedErr) throw feedErr
-      const rows = (feedRows ?? []) as { id: string; name: string; project_id: string; channel: string; last_synced_at?: string | null }[]
+      const rows = (feedRows ?? []) as { id: string; name: string; project_id: string; channel: string; last_synced_at?: string | null; last_auto_sync_status?: string | null }[]
       // Small columns only: never xml_content.
       const { data: caches } = rows.length
         ? await db.from('feed_cache').select('feed_id, generated_at, validation_errors').in('feed_id', rows.map((r) => r.id))
@@ -108,6 +111,7 @@ export async function GET() {
         channel: channelOf(r.channel).id,
         country: country.get(r.id) ?? null,
         ...feedState(cache.get(r.id), r.last_synced_at ?? null),
+        syncFailed: r.last_auto_sync_status === 'error',
       }))
     }
 
@@ -126,6 +130,7 @@ export async function GET() {
       })),
       projects: projects.map((p) => ({
         id: p.id,
+        connectionError: p.source_type !== 'feed_url' && p.connection_status === 'error',
         accountId: p.account_id,
         name: p.name,
         shopUrl: p.source_type === 'feed_url' ? (p.primary_domain ?? null) : p.shop_url,

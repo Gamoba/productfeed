@@ -183,7 +183,7 @@ The `feedflow-design` skill (`.claude/skills/feedflow-design/`) has been rewritt
 ## 7. What not to build now
 
 - CSS, anywhere.
-- The agency pages Monitoring, Connected companies and Partner levels, the "Spørg Flow" AI chat, and the Design A and C variants.
+- The agency pages Connected companies and Partner levels, the "Spørg Flow" AI chat, and the Design A and C variants.
 - The prototype's leftover "Labels" mapping type, unless someone confirms it.
 - Anything that writes to Shopify. Product actions such as "Ekskludér fra feed" and "Skriv titel selv" only change FeedFlow's own feed data.
 
@@ -193,7 +193,7 @@ The `feedflow-design` skill (`.claude/skills/feedflow-design/`) has been rewritt
 
 ## 7a. Status (Nov. 2026)
 
-**Built:** the app shell (sidebar per level, breadcrumbs with the feed switcher, the "Feed running" status pill, search on ⌘K / Ctrl+K and "Needs attention"), the Agency → Shop → Feed hierarchy, all feed pages from §4, the step footer on the five setup pages, the Mapping Live preview with "One field" and "One product", Master fields (shop level, used from Mapping and by Claude), flag emoji (with a font fallback on Windows) and the phone-width layout.
+**Built:** the app shell (sidebar per level, breadcrumbs with the feed switcher, the "Feed running" status pill, search on ⌘K / Ctrl+K and "Needs attention"), the Agency → Shop → Feed hierarchy, all feed pages from §4, the step footer on the five setup pages, the Mapping Live preview with "One field" and "One product", Master fields (shop level, used from Mapping and by Claude), agency Monitoring (feed quality per customer, critical errors, badge in the sidebar), flag emoji (with a font fallback on Windows) and the phone-width layout.
 
 **Skipped for now:** the campaign filter in Settings and the Plan column on the agency dashboard (see §7).
 
