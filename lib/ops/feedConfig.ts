@@ -11,7 +11,8 @@ import { generateFeed, loadFeedProducts } from '@/lib/feedGenerator'
 import { after } from 'next/server'
 import { describeMapping, logActivities, logActivity, type ActivityInput } from '@/lib/activity'
 import { clientMessage } from '@/lib/errors'
-import { describeRule, isActiveRule, type FeedFilterRule } from '@/lib/feedFilters'
+import { describeRule, isActiveRule, type FeedFilterRule, rulesReadMasters } from '@/lib/feedFilters'
+import { masterNamesForFeed } from '@/lib/masterFields'
 import { AUTO_SYNC_LABELS, isAutoSyncFrequency, isAutoSyncTime, type AutoSyncFrequency } from '@/lib/syncSchedule'
 import { patternProblems, type ExtractConfig } from '@/lib/mappingExtract'
 
@@ -224,8 +225,10 @@ export async function applyFilters(
   if (error) return { error: error.message }
 
   // One line per rule added or removed, and when AND/OR flipped.
+  const prevFilters = (prevRows ?? []) as { filter_type: string; operator: string; rules: FilterRule[] }[]
+  const names = rulesReadMasters([include, exclude, ...prevFilters]) ? await masterNamesForFeed(db, feedId) : undefined
   const text = (rules: FilterRule[] | null | undefined) =>
-    (rules ?? []).map((r) => r as FeedFilterRule).filter(isActiveRule).map(describeRule)
+    (rules ?? []).map((r) => r as FeedFilterRule).filter(isActiveRule).map((r) => describeRule(r, names))
   const lines: LogLine[] = []
   for (const [type, cfg, word] of [
     ['include', include, 'Include'],

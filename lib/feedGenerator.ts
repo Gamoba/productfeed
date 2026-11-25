@@ -234,13 +234,14 @@ async function attachMastersForFeed(
   feedId: string,
   products: SupabaseProduct[],
   marketUrl: string | null
-): Promise<void> {
+): Promise<Map<string, string>> {
   const [masters, { data }] = await Promise.all([
     loadMasterFieldsForFeed(db, feedId),
     db.from('feed_mappings').select('google_field, mapping_type, config').eq('feed_id', feedId),
   ])
   const mappings = ((data ?? []) as FeedMapping[]).filter((m) => m.mapping_type)
   attachMasterResolvers(products, { masters, mappings, marketUrl })
+  return new Map(masters.map((m) => [m.key, m.name]))
 }
 
 // ── Filter counts (used by dashboard) ──────────────────────────────────────
@@ -1111,7 +1112,7 @@ export async function scopePreview(
   const needsMetafields = usesMasters || filters.some((f) => (f.rules ?? []).some((r) => r.field?.startsWith('metafield:')))
   const marketUrl = await resolveFeedBaseUrl(db, feedId, (shopSettingsData?.market_url as string | null) ?? null)
   const products = await scopeCatalogue(db, feedId, needsMetafields)
-  if (usesMasters) await attachMastersForFeed(db, feedId, products, marketUrl)
+  const masterNames = usesMasters ? await attachMastersForFeed(db, feedId, products, marketUrl) : undefined
 
   const includeFilter = filters.find((f) => f.filter_type === 'include')
   const excludeFilter = filters.find((f) => f.filter_type === 'exclude')
@@ -1169,8 +1170,8 @@ export async function scopePreview(
     total: products.length,
     included,
     excluded: products.length - included,
-    includeRules: includeRules.map((r, i) => ({ label: describeRule(r), count: includeCounts[i] })),
-    excludeRules: excludeRules.map((r, i) => ({ label: describeRule(r), count: excludeCounts[i] })),
+    includeRules: includeRules.map((r, i) => ({ label: describeRule(r, masterNames), count: includeCounts[i] })),
+    excludeRules: excludeRules.map((r, i) => ({ label: describeRule(r, masterNames), count: excludeCounts[i] })),
     products: out,
     matching,
   }

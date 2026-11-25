@@ -13,7 +13,8 @@
 import { McpServer } from '@modelcontextprotocol/sdk/server/mcp.js'
 import type { CallToolResult } from '@modelcontextprotocol/sdk/types.js'
 import { z } from 'zod'
-import { loadMasterFields, MASTER_FIELD_TYPES } from '@/lib/masterFields'
+import { loadMasterFields, masterNamesForFeed, MASTER_FIELD_TYPES } from '@/lib/masterFields'
+import { rulesReadMasters } from '@/lib/feedFilters'
 import { masterFieldUsage } from '@/lib/ops/masterFields'
 import { adminDb, getOwnedFeed, getOwnedProject, type OwnedFeed } from '@/lib/feeds'
 import { getAgencyOverview } from '@/lib/agencyOverview'
@@ -324,10 +325,11 @@ export function createFeedFlowServer(caller: McpCaller): McpServer {
     tool(async ({ feed_id }: { feed_id: string }) => {
       await feed(feed_id)
       const current = await currentFilters(feed_id)
+      const names = await masterNamesIfUsed(feed_id, current.include, current.exclude)
       return ok({
         include: toRuleSet(current.include),
         exclude: toRuleSet(current.exclude),
-        readable: { include: readable(current.include), exclude: readable(current.exclude) },
+        readable: { include: readable(current.include, names), exclude: readable(current.exclude, names) },
       })
     })
   )
@@ -552,9 +554,10 @@ export function createFeedFlowServer(caller: McpCaller): McpServer {
         include: include ? fromRuleSet(include) : current.include,
         exclude: exclude ? fromRuleSet(exclude) : current.exclude,
       }
+      const names = await masterNamesIfUsed(feed_id, current.include, current.exclude, next.include, next.exclude)
       const details: ChangeDetail[] = []
-      if (include) details.push({ label: 'Include', before: readable(current.include).join('\n') || null, after: readable(next.include).join('\n') || null })
-      if (exclude) details.push({ label: 'Exclude', before: readable(current.exclude).join('\n') || null, after: readable(next.exclude).join('\n') || null })
+      if (include) details.push({ label: 'Include', before: readable(current.include, names).join('\n') || null, after: readable(next.include, names).join('\n') || null })
+      if (exclude) details.push({ label: 'Exclude', before: readable(current.exclude, names).join('\n') || null, after: readable(next.exclude, names).join('\n') || null })
       const summary = `Include / exclude: ${[include && 'include rules', exclude && 'exclude rules'].filter(Boolean).join(' and ')}`
       return text(await propose(f, { kind: 'filters', include: next.include, exclude: next.exclude }, summary, details))
     })
@@ -1122,6 +1125,10 @@ export function createFeedFlowServer(caller: McpCaller): McpServer {
 
   // ── helpers ────────────────────────────────────────────────────────────────
 
+  // Master field names for rule text, only loaded when a rule uses one.
+  async function masterNamesIfUsed(feedId: string, ...configs: FilterConfig[]) {
+    return rulesReadMasters(configs) ? masterNamesForFeed(db, feedId) : undefined
+  }
   async function currentFilters(feedId: string): Promise<{ include: FilterConfig; exclude: FilterConfig }> {
     const { data } = await db.from('feed_filters').select('filter_type, operator, rules').eq('feed_id', feedId)
     const rows = (data ?? []) as { filter_type: string; operator: 'AND' | 'OR'; rules: FilterConfig['rules'] | null }[]
@@ -1147,8 +1154,8 @@ function fromRuleSet(s: { match: 'all' | 'any'; rules: { field: string; operator
   }
 }
 
-const readable = (c: FilterConfig): string[] =>
-  c.rules.map((r) => r as FeedFilterRule).filter(isActiveRule).map(describeRule)
+const readable = (c: FilterConfig, names?: Map<string, string>): string[] =>
+  c.rules.map((r) => r as FeedFilterRule).filter(isActiveRule).map((r) => describeRule(r, names))
 
 // The shape checks the mapping editor guarantees by construction.
 function checkMapping(type: string, config: Record<string, unknown>): string | null {
