@@ -23,6 +23,18 @@ import {
   type MappingEntry,
   type OpResult,
 } from '@/lib/ops/feedConfig'
+import { applyLabelBucketSave, applyLabelSave, type LabelBucketInput, type LabelInput } from '@/lib/ops/labels'
+import {
+  applyTitleBucketSave,
+  applyTitleConfig,
+  applyTitleReview,
+  applyTitleRun,
+  type TitleBucketInput,
+  type TitleDecision,
+} from '@/lib/ops/titles'
+import type { OptFilterConfig } from '@/lib/titleOptimizationService'
+import type { BucketTitleConfig } from '@/lib/bucketExamples'
+import { applyTitleScope } from '@/lib/ops/titles'
 
 export type ChangePayload =
   | { kind: 'mapping'; entries: MappingEntry[] }
@@ -30,6 +42,13 @@ export type ChangePayload =
   | { kind: 'feed_mode'; mode: FeedMode }
   | { kind: 'feed_schedule'; frequency: string; time: string }
   | { kind: 'ads_schedule'; frequency: string; time: string }
+  | { kind: 'label_save'; label: LabelInput }
+  | { kind: 'label_bucket_save'; bucket: LabelBucketInput }
+  | { kind: 'title_bucket_save'; bucket: TitleBucketInput }
+  | { kind: 'title_scope'; bucket_id: string; include: OptFilterConfig; exclude: OptFilterConfig }
+  | { kind: 'title_config'; bucket_id: string; config: BucketTitleConfig }
+  | { kind: 'title_review'; bucket_id: string; decisions: TitleDecision[] }
+  | { kind: 'title_run'; bucket_id: string; rerun: boolean; limit: number }
 
 export type ChangeDetail = { label: string; before: string | null; after: string | null }
 
@@ -61,6 +80,13 @@ export const AREA: Record<ChangePayload['kind'], string> = {
   feed_mode: 'Settings',
   feed_schedule: 'Settings',
   ads_schedule: 'Settings',
+  label_save: 'Labels',
+  label_bucket_save: 'Labels',
+  title_bucket_save: 'AI Titles',
+  title_scope: 'AI Titles',
+  title_config: 'AI Titles',
+  title_review: 'AI Titles',
+  title_run: 'AI Titles',
 }
 
 export function displayName(user: Pick<User, 'email' | 'user_metadata'>): string {
@@ -93,6 +119,20 @@ function run(db: SupabaseClient, ctx: { user: User; via: string }, feedId: strin
       return applyFeedSchedule(db, ctx, feedId, p.frequency, p.time)
     case 'ads_schedule':
       return applyAdsSchedule(db, ctx, feedId, p.frequency, p.time)
+    case 'label_save':
+      return applyLabelSave(db, ctx, feedId, p.label)
+    case 'label_bucket_save':
+      return applyLabelBucketSave(db, ctx, feedId, p.bucket)
+    case 'title_bucket_save':
+      return applyTitleBucketSave(db, ctx, feedId, p.bucket)
+    case 'title_scope':
+      return applyTitleScope(db, ctx, feedId, p.bucket_id, p.include, p.exclude)
+    case 'title_config':
+      return applyTitleConfig(db, ctx, feedId, p.bucket_id, p.config)
+    case 'title_review':
+      return applyTitleReview(db, ctx, feedId, p.bucket_id, p.decisions)
+    case 'title_run':
+      return applyTitleRun(db, ctx, feedId, p.bucket_id, { rerun: p.rerun, limit: p.limit })
   }
 }
 
@@ -105,7 +145,7 @@ export type ProposeInput = {
   details: ChangeDetail[]
 }
 
-export type ProposeResult = { id: number; status: ChangeStatus; error?: string }
+export type ProposeResult = { id: number; status: ChangeStatus; error?: string; warnings?: string[] }
 
 export async function proposeChange(db: SupabaseClient, input: ProposeInput): Promise<ProposeResult> {
   const { data: account, error: accErr } = await db
@@ -144,7 +184,7 @@ export async function proposeChange(db: SupabaseClient, input: ProposeInput): Pr
     .from('mcp_changes')
     .update({ status, error: result.error ?? null, decided_by_name: 'Gennemført uden godkendelse', decided_at: new Date().toISOString() })
     .eq('id', row.id)
-  return { id: row.id, status, error: result.error }
+  return { id: row.id, status, error: result.error, warnings: result.warnings }
 }
 
 // Approve (apply) or reject a pending change. The caller has checked that
@@ -193,7 +233,7 @@ export async function decideChange(
   if (requester.id !== actor.id) {
     await logActivity(db, { user: actor, feedId: row.feed_id, area: AREA[row.kind], action: `Ændring fra ${row.client_name ?? 'assistent'} godkendt`, after: row.summary })
   }
-  return { id: row.id, status: 'applied' }
+  return { id: row.id, status: 'applied', warnings: result.warnings }
 }
 
 export async function listChanges(

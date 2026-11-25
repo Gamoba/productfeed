@@ -53,8 +53,8 @@ export default async function ConsentPage({
           {agencies.length ? <> i {agencies.join(', ')}</> : null}, til alle de shops du kan åbne.
         </p>
         <ul className="oc-list">
-          <li>Læse shops, feeds, varer, mapping, regler og performance</li>
-          <li>Ændre mapping, regler for inkludér / ekskludér og feedets indstillinger. Ændringer venter på godkendelse, medmindre jeres bureau har slået det fra.</li>
+          <li>Læse shops, feeds, varer, mapping, regler, labels, AI-titler og performance</li>
+          <li>Ændre mapping, regler for inkludér / ekskludér, feedets indstillinger, Google Ads-labels og AI Titles, og generere AI-titler. Ændringer venter på godkendelse, medmindre jeres bureau har slået det fra.</li>
           <li>Starte en hentning af varer (højst én gang i timen pr. feed)</li>
           <li>Skriver aldrig til jeres Shopify-butik og kan ikke ændre forbindelser og brugere eller slette noget</li>
         </ul>
