@@ -3,7 +3,7 @@ import { createSupabaseServerClient } from '@/lib/supabase-server'
 import { adminDb } from '@/lib/feeds'
 import { getAccessibleProjectIds } from '@/lib/accounts'
 import { errorResponse } from '@/lib/errors'
-import { countFilteredProducts } from '@/lib/feedGenerator'
+import { countAndStore } from '@/lib/feedCounts'
 
 // LAG 2 endpoint for the dashboard. Per-feed countFilteredProducts pages
 // through products + applies filter rules in JS — slow enough to be worth
@@ -42,7 +42,7 @@ export async function GET(req: Request) {
   const feedIds = (feeds ?? []).map((f) => f.id)
 
   const results = await Promise.allSettled(
-    feedIds.map(async (id) => [id, await countFilteredProducts(id)] as const)
+    feedIds.map(async (id) => [id, await countAndStore(id)] as const)
   )
 
   const counts = results
@@ -55,7 +55,7 @@ export async function GET(req: Request) {
           excluded: Math.max(0, c.total - c.included),
         }
       }
-      console.error('[/api/feeds/counts] countFilteredProducts failed:', r.reason)
+      console.error('[/api/feeds/counts] counting failed:', r.reason)
       return null
     })
     .filter((x): x is { feedId: string; included: number; excluded: number } => x !== null)

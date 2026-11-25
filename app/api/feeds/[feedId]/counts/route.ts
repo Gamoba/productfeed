@@ -1,7 +1,7 @@
 import { createSupabaseServerClient } from '@/lib/supabase-server'
 import { getOwnedFeed } from '@/lib/feeds'
 import { errorResponse } from '@/lib/errors'
-import { countFilteredProducts } from '@/lib/feedGenerator'
+import { countAndStore } from '@/lib/feedCounts'
 
 // LAG 2 endpoint for the feed overview page. countFilteredProducts paginates
 // through the products table and applies the feed's filters in JS — too slow
@@ -22,7 +22,7 @@ export async function GET(
   if (!owned) return Response.json({ error: 'Feed not found' }, { status: 404 })
 
   try {
-    const counts = await countFilteredProducts(feedId)
+    const counts = await countAndStore(feedId)
     const excluded = Math.max(0, counts.total - counts.included)
     return Response.json({
       total: counts.total,
