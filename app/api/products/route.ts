@@ -138,7 +138,14 @@ export async function GET(req: Request) {
     if (error) throw new Error(error.message)
 
     const rows = (data ?? []) as SupabaseProduct[]
-    const products = toShopifyData(rows).products
+    let products = toShopifyData(rows).products
+    // The Products page (feedView=1) shows title, vendor, variants, the first
+    // image and the metafields; the description and the rest were most of the
+    // response (~300 KB for 25 products). Other callers (the mapping previews)
+    // still get everything, since they evaluate mappings on the client.
+    if (withFeedView) {
+      products = products.map((p) => ({ ...p, body_html: '', options: [], images: p.images.slice(0, 1) }))
+    }
     let feed: Record<string, FeedViewItem> | undefined
     if (withFeedView) feed = Object.fromEntries(await feedView(feedId, rows))
     const total = skipCount ? null : (count ?? 0)
