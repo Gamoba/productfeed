@@ -20,6 +20,13 @@ left as it is.
   058 (master fields, a new table only) has run too; rollback in
   `supabase/rollback/rollback_058.sql`.
   `master` keeps working on that schema in the meantime (trigger in 052).
+- **Vercel settings in `vercel.json` (take effect with the merge):**
+  - `regions: ["lhr1"]`: functions run in London, next to the database
+    (Supabase eu-west-2). The dashboard default is Frankfurt; the file wins.
+  - A Vercel Cron calls `/api/warm` every 3 minutes, so a production server
+    is always running (no cold start on the first click after a quiet
+    spell). Needs the Pro plan (the project is on Pro). The product, order
+    and Google Ads syncs are still ticked by `.github/workflows/cron-sync.yml`.
 - **Environment variables:** none new. The branch reads the same variables as
   `master`.
 - **Routes:** no page or API route is removed. Feed links in Merchant Center
