@@ -425,11 +425,14 @@ async function fetchAllActiveProducts(
     withMetafields = true,
     columns = '*',
     metafieldKeys,
+    stopAfter,
   }: {
     withMetafields?: boolean
     columns?: string
     /** Only these metafields (namespace + key), e.g. the ones a rule reads. */
     metafieldKeys?: { namespace: string; key: string }[]
+    /** Called with each page as it arrives; returning true stops reading. */
+    stopAfter?: (page: SupabaseProduct[]) => boolean
   } = {}
 ): Promise<SupabaseProduct[]> {
   // A handful of named metafields is small, so those pages can be as big as
@@ -468,6 +471,7 @@ async function fetchAllActiveProducts(
     const rows = data as unknown as SupabaseProduct[]
     if (!withMetafields) for (const p of rows) p.metafields = []
     out.push(...rows)
+    if (stopAfter?.(rows)) break
     if (data.length < pageSize) break
     from += pageSize
   }
@@ -808,22 +812,24 @@ export async function generatePreview(
 ): Promise<PreviewData> {
   const db = adminClient()
 
+  // Without preloaded products only the first `limit` rows are needed, so the
+  // catalogue is read page by page (same order as the feed) until the sample is
+  // full, and the total comes from countFilteredProducts. Reading every product
+  // with all its metafields for a 20-row sample took ~28 s on an 11k feed.
+  const sampling = !input.products
   const [
     { data: settingsData },
     { data: shopSettingsData },
     { data: mappingsData },
-    rawProducts,
     { data: filtersData },
+    counted,
   ] = await Promise.all([
     db.from('feed_settings').select('feed_mode').eq('feed_id', feedId).maybeSingle(),
     db.from('shop_settings').select('market_url, selected_market_id, selected_locale').eq('feed_id', feedId).maybeSingle(),
     db.from('feed_mappings').select('google_field, mapping_type, config').eq('feed_id', feedId),
-    // Paged like generateFeed: a single unpaged select was capped at 1000 rows
-    // and timed out on metafield-heavy feeds (silently → empty preview).
-    input.products ?? fetchAllActiveProducts(db, feedId),
     db.from('feed_filters').select('filter_type, operator, rules').eq('feed_id', feedId),
+    sampling ? countFilteredProducts(feedId) : Promise.resolve(null),
   ])
-
   const feedMode = (settingsData?.feed_mode as 'product' | 'variant') ?? 'product'
   const marketUrl = await resolveFeedBaseUrl(
     db,
@@ -836,8 +842,31 @@ export async function generatePreview(
   const filterRows = (filtersData ?? []) as FeedFilter[]
   const idMapping = mappings.find((m) => m.google_field === 'id')
 
-  await attachOptimizedTitles(db, feedId, rawProducts)
-  const filteredProducts = applyFeedFilters(rawProducts, filterRows, marketUrl)
+  let filteredProducts: SupabaseProduct[]
+  if (sampling) {
+    // AI titles are attached page by page, before filtering, exactly as the
+    // full read does, so a rule on ai_optimized_title picks the same products.
+    const titles = await fetchOptimizedTitles(db, feedId)
+    filteredProducts = []
+    let rowsSoFar = 0
+    await fetchAllActiveProducts(db, feedId, {
+      stopAfter: (page) => {
+        for (const p of page) {
+          const opt = titles.get(p.shopify_id)
+          if (opt) (p as Record<string, unknown>).optimized_title = opt
+        }
+        for (const p of applyFeedFilters(page, filterRows, marketUrl)) {
+          filteredProducts.push(p)
+          rowsSoFar += feedMode === 'variant' ? (p.variants as unknown[]).length : 1
+        }
+        return rowsSoFar >= limit
+      },
+    })
+  } else {
+    const rawProducts = input.products!
+    await attachOptimizedTitles(db, feedId, rawProducts)
+    filteredProducts = applyFeedFilters(rawProducts, filterRows, marketUrl)
+  }
 
   let googleFields: string[]
   const rows: PreviewRow[] = []
@@ -905,7 +934,7 @@ export async function generatePreview(
     }
   }
 
-  return { feedMode, rows, googleFields, totalProducts: filteredProducts.length }
+  return { feedMode, rows, googleFields, totalProducts: counted?.included ?? filteredProducts.length }
 }
 
 // ── Feed view of specific products ──────────────────────────────────────────

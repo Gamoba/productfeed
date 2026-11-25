@@ -42,6 +42,8 @@ import {
   type BucketRule,
 } from '@/lib/googleAdsBuckets'
 import * as titleBuckets from '@/lib/optimizationBuckets'
+import { getProductPerformance, resolveActions, type ProductRow } from '@/lib/googleAdsAnalytics'
+import { getFeedSettings } from '@/lib/feedGoogleAds'
 import * as titleSvc from '@/lib/titleOptimizationService'
 import * as titleWorkshop from '@/lib/bucketExamples'
 import { MAX_RUN_PRODUCTS } from '@/lib/ops/titles'
@@ -529,6 +531,90 @@ export function createFeedFlowServer(caller: McpCaller): McpServer {
         await logActivity(db, { user: caller.user, via: client, feedId: feed_id, area: 'Sync', action: 'Sync failed', after: message })
         return fail(`The sync failed: ${message}`)
       }
+    })
+  )
+
+  server.registerTool(
+    'get_product_performance',
+    {
+      title: 'Product performance',
+      description:
+        "Google Ads figures per product for one feed over the last N days, measured with the feed's saved revenue and gross-profit goals (as on its Performance page). Sort to find the biggest spenders, the best or worst ROAS/POAS, or use show='spend_without_revenue' for products that cost money and sold nothing. Figures are as of the last fetch from Google Ads.",
+      inputSchema: {
+        feed_id: feedIdArg,
+        days: z.union([z.literal(7), z.literal(14), z.literal(30), z.literal(90), z.literal(180), z.literal(365)]).default(30),
+        sort: z.enum(['cost', 'revenue', 'profit', 'roas', 'poas', 'clicks', 'conversions', 'profit_after_ad_spend']).default('cost'),
+        order: z.enum(['desc', 'asc']).default('desc'),
+        show: z.enum(['all', 'spend_without_revenue', 'with_spend']).default('with_spend'),
+        limit: z.number().int().min(1).max(100).default(25),
+      },
+      annotations: READ,
+    },
+    tool(async (a: { feed_id: string; days: number; sort: string; order: 'asc' | 'desc'; show: string; limit: number }) => {
+      await feed(a.feed_id)
+      const settings = await getFeedSettings(db, a.feed_id)
+      if (!settings?.customer_id) return fail('This feed has no Google Ads account, so there are no product figures.')
+      const actions = resolveActions({}, settings)
+      const perf = await getProductPerformance(db, a.feed_id, a.days, actions)
+      const value = (r: ProductRow): number | null => {
+        switch (a.sort) {
+          case 'revenue': return r.roas_value
+          case 'profit': return r.poas_value
+          case 'roas': return r.roas
+          case 'poas': return r.poas
+          case 'clicks': return r.clicks
+          case 'conversions': return r.conversions
+          case 'profit_after_ad_spend': return r.profitAfterAdSpend
+          default: return r.cost
+        }
+      }
+      let rows = perf.rows
+      if (a.show === 'with_spend') rows = rows.filter((r) => r.cost > 0)
+      if (a.show === 'spend_without_revenue') rows = rows.filter((r) => r.cost > 0 && r.roas_value === 0)
+      // Products without a value for the sort (e.g. no ROAS without a goal) go last either way.
+      rows = [...rows].sort((x, y) => {
+        const vx = value(x)
+        const vy = value(y)
+        if (vx === null && vy === null) return 0
+        if (vx === null) return 1
+        if (vy === null) return -1
+        return a.order === 'asc' ? vx - vy : vy - vx
+      })
+      const round = (n: number | null, d = 2) => (n === null ? null : Math.round(n * 10 ** d) / 10 ** d)
+      return ok({
+        period: { from: perf.from, to: perf.to, days: a.days },
+        currency: settings.currency_code ?? null,
+        last_fetched_from_google: settings.last_synced_at ?? null,
+        revenue_goals: actions.roas,
+        profit_goals: actions.poas,
+        totals: {
+          products: perf.totals.products,
+          cost: round(perf.totals.cost),
+          revenue: round(perf.totals.roas_value),
+          profit: round(perf.totals.poas_value),
+          roas: round(perf.totals.roas),
+          poas: round(perf.totals.poas),
+          clicks: perf.totals.clicks,
+          impressions: perf.totals.impressions,
+        },
+        matching: rows.length,
+        products: rows.slice(0, a.limit).map((r) => ({
+          product_ref: r.productRef,
+          title: r.title,
+          vendor: r.vendor,
+          product_type: r.productType,
+          in_catalogue: !r.unmatched,
+          impressions: r.impressions,
+          clicks: r.clicks,
+          cost: round(r.cost),
+          conversions: round(r.conversions),
+          revenue: round(r.roas_value),
+          profit: round(r.poas_value),
+          roas: round(r.roas),
+          poas: round(r.poas),
+          profit_after_ad_spend: round(r.profitAfterAdSpend),
+        })),
+      })
     })
   )
 

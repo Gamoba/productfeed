@@ -12,6 +12,7 @@ import { countryName, formatNumber, formatWhen } from '@/lib/formatDa'
 import { Icon, type IconName } from '../components/shell/icons'
 import { SyncProgressBar, fetchSyncStatus } from '../components/SyncProgress'
 import './overview.css'
+import { takeFeedEdited } from '@/lib/recentEdit'
 
 // Feed › Overview (reference: references/feed_overview.jpg). The feed's state
 // in one card, the link channels fetch it from, and a list of what to fix —
@@ -96,6 +97,16 @@ export function FeedClient({
       setIsGenerating(false)
     }
   }
+
+  // Arriving after a save on Mapping / Include / exclude / Settings: the stored
+  // result may be from before the change, so check again right away.
+  const [recheckAfterEdit, setRecheckAfterEdit] = useState(false)
+  useEffect(() => {
+    if (!initialCacheInfo?.generated_at || !takeFeedEdited(feedId)) return
+    setRecheckAfterEdit(true) // eslint-disable-line react-hooks/set-state-in-effect -- one-time check on arrival
+    runValidation()
+    // eslint-disable-next-line react-hooks/exhaustive-deps -- once per arrival
+  }, [feedId])
 
   function runValidation() {
     startValidating(async () => {
@@ -211,6 +222,7 @@ export function FeedClient({
         mappingCount={mappingCount}
         missingRequired={missingRequired}
         validation={validation}
+        rechecking={isValidating && recheckAfterEdit}
         errorCount={errorCount}
         warningCount={warningCount}
         isGenerating={isGenerating}
@@ -276,6 +288,7 @@ function IssuesCard({
   mappingCount,
   missingRequired,
   validation,
+  rechecking,
   errorCount,
   warningCount,
   isGenerating,
@@ -286,6 +299,7 @@ function IssuesCard({
   mappingCount: number
   missingRequired: string[]
   validation: ValidationResult | null
+  rechecking: boolean
   errorCount: number
   warningCount: number
   isGenerating: boolean
@@ -354,6 +368,7 @@ function IssuesCard({
         </div>
         {summary ? <span className="neg">{summary}</span> : total === 0 && validation ? <span className="st">No errors</span> : null}
       </div>
+      {rechecking && <p className="ov-recheck">Checking the feed again after your change…</p>}
 
       {items.length > 0 && (
         <ul className="ov-list">
