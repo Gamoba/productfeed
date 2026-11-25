@@ -8,8 +8,23 @@ export function formatNumber(n: number): string {
   return nf.format(n)
 }
 
-function sameDay(a: Date, b: Date): boolean {
-  return a.getFullYear() === b.getFullYear() && a.getMonth() === b.getMonth() && a.getDate() === b.getDate()
+// Times are always shown in Danish time. Using the machine's own zone made the
+// server (UTC on Vercel) and the browser render different text for the same
+// timestamp, which React reports as a hydration error and re-renders.
+export const DISPLAY_TIME_ZONE = 'Europe/Copenhagen'
+
+// Calendar day in Danish time, as "YYYY-MM-DD".
+const dayFmt = new Intl.DateTimeFormat('en-CA', {
+  timeZone: DISPLAY_TIME_ZONE,
+  year: 'numeric',
+  month: '2-digit',
+  day: '2-digit',
+})
+const dayKey = (d: Date) => dayFmt.format(d)
+
+function previousDayKey(key: string): string {
+  const [y, m, d] = key.split('-').map(Number)
+  return new Date(Date.UTC(y, m - 1, d - 1)).toISOString().slice(0, 10)
 }
 
 // "i dag 06:15", "i går 14:02", "12. nov.", "12. nov. 2025" (other years).
@@ -17,15 +32,18 @@ export function formatWhen(iso: string | null | undefined, now: Date = new Date(
   if (!iso) return ''
   const d = new Date(iso)
   if (Number.isNaN(d.getTime())) return ''
-  const time = d.toLocaleTimeString('da-DK', { hour: '2-digit', minute: '2-digit' }).replace('.', ':')
-  if (sameDay(d, now)) return `i dag ${time}`
-  const yesterday = new Date(now)
-  yesterday.setDate(now.getDate() - 1)
-  if (sameDay(d, yesterday)) return `i går ${time}`
+  const time = d
+    .toLocaleTimeString('da-DK', { hour: '2-digit', minute: '2-digit', timeZone: DISPLAY_TIME_ZONE })
+    .replace('.', ':')
+  const day = dayKey(d)
+  const today = dayKey(now)
+  if (day === today) return `i dag ${time}`
+  if (day === previousDayKey(today)) return `i går ${time}`
   return d.toLocaleDateString('da-DK', {
     day: 'numeric',
     month: 'short',
-    ...(d.getFullYear() === now.getFullYear() ? {} : { year: 'numeric' }),
+    timeZone: DISPLAY_TIME_ZONE,
+    ...(day.slice(0, 4) === today.slice(0, 4) ? {} : { year: 'numeric' }),
   })
 }
 
