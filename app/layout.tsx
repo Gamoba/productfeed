@@ -1,20 +1,30 @@
 import type { Metadata } from 'next'
-import { Outfit, JetBrains_Mono } from 'next/font/google'
+import localFont from 'next/font/local'
 import './globals.css'
 import { AppShell } from './components/AppShell'
 
+// Fonts are self-hosted (app/fonts, SIL Open Font License): next/font/google
+// downloaded them from Google on every build, and a slow or refused download
+// failed the build. Both are variable fonts from github.com/google/fonts,
+// trimmed to the Latin + Latin Extended ranges Google served (fontTools,
+// WOFF2), so text renders exactly as before.
+
 // UI font. Exposed as --font-outfit; globals.css builds --font on top of it.
-const outfit = Outfit({
+const outfit = localFont({
+  src: './fonts/Outfit-Variable.woff2',
   variable: '--font-outfit',
-  subsets: ['latin', 'latin-ext'],
-  weight: ['300', '400', '500', '600'],
+  weight: '100 900',
+  display: 'swap',
 })
 
-// Code font: XML/code blocks and API tokens only, never ordinary UI text.
-const jetbrains = JetBrains_Mono({
+// Code font: XML/code blocks and API tokens only, never ordinary UI text, so
+// it isn't preloaded on every page.
+const jetbrains = localFont({
+  src: './fonts/JetBrainsMono-Variable.woff2',
   variable: '--font-jetbrains',
-  subsets: ['latin'],
-  weight: ['400', '500'],
+  weight: '100 800',
+  display: 'swap',
+  preload: false,
 })
 
 export const metadata: Metadata = {
