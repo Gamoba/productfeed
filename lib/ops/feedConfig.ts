@@ -12,9 +12,10 @@ import { describeMapping, logActivity } from '@/lib/activity'
 import { clientMessage } from '@/lib/errors'
 import { describeRule, isActiveRule, type FeedFilterRule } from '@/lib/feedFilters'
 import { AUTO_SYNC_LABELS, isAutoSyncFrequency, isAutoSyncTime, type AutoSyncFrequency } from '@/lib/syncSchedule'
+import { patternProblems, type ExtractConfig } from '@/lib/mappingExtract'
 
 export type OpContext = { user: User; via?: string }
-export type OpResult = { error?: string }
+export type OpResult = { error?: string; warnings?: string[] }
 
 export type MappingEntry = {
   google_field: string
@@ -32,6 +33,22 @@ export const scheduleLabel = (f: string | null | undefined, t: string | null | u
   f ? (f === 'off' ? AUTO_SYNC_LABELS.off : `${AUTO_SYNC_LABELS[f as AutoSyncFrequency] ?? f} at ${t ?? '?'}`) : null
 
 // ── Mapping ──────────────────────────────────────────────────────────────────
+
+// Extract patterns the generator will skip (too long, nested repetition,
+// invalid syntax). Saving still goes through — a half-finished list is a valid
+// state, the bad rows are just ignored — but the user is told, so a refused
+// pattern can't pass for one that simply matches nothing.
+export function extractWarnings(entries: MappingEntry[]): string[] {
+  const out: string[] = []
+  for (const e of entries) {
+    if (e.mapping_type !== 'EXTRACT') continue
+    const cfg = e.config as ExtractConfig
+    for (const p of patternProblems(cfg.patterns)) {
+      out.push(`${e.google_field}: pattern ${p.index + 1} is skipped (${p.error})`)
+    }
+  }
+  return out
+}
 
 // Saves the given fields; an entry with mapping_type '' removes that field.
 export async function applyMappings(
@@ -155,7 +172,8 @@ export async function applyMappings(
       console.error('Auto-generering/validering efter mapping save fejlede:', err)
     }
 
-    return {}
+    const warnings = extractWarnings(toUpsert)
+    return warnings.length > 0 ? { warnings } : {}
   } catch (err) {
     return { error: err instanceof Error ? err.message : 'Unknown error' }
   }

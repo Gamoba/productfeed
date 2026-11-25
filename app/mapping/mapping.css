@@ -111,3 +111,14 @@
   .lk-table, .lk-tools, .lk-paste, .lk-opts { padding-left: 0; }
 }
 @media (prefers-reduced-motion: reduce) { .mp { animation: none; } .mp-chev { transition: none; } }
+
+/* Saved, but some Extract patterns will be skipped. */
+.mp-warnings { display: flex; align-items: flex-start; gap: 10px; }
+.mp-warnings > div { flex: 1; min-width: 0; }
+.mp-warnings b { font-weight: 500; display: block; margin-bottom: 2px; }
+.mp-warnings p { margin: 0; overflow-wrap: anywhere; }
+
+/* Extract and Lookup editors: own line, aligned under the type dropdown. */
+.mp-row > .flex { flex-wrap: wrap; }
+.mp-wide { flex: 1 1 100%; order: 10; padding-left: calc(13rem + 12px); }
+@media (max-width: 820px) { .mp-wide { padding-left: 0; } }

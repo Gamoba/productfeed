@@ -12,7 +12,7 @@ export type { MappingEntry }
 export async function saveMappings(
   feedId: string,
   entries: MappingEntry[]
-): Promise<{ error?: string }> {
+): Promise<{ error?: string; warnings?: string[] }> {
   const supabase = await createSupabaseServerClient()
   const {
     data: { user },
