@@ -21,6 +21,10 @@
 -- removing a member from the system must not delete the account's shops, feeds
 -- or mappings that happen to carry their user_id.
 --
+-- A trigger (step 4b) fills account_id when code that predates accounts
+-- inserts a project or Google Ads grant with only user_id, so the old app
+-- keeps working on the migrated database until it is replaced.
+--
 -- seat_limit is the hook for plan limits (number of users). NULL = no limit.
 -- How plans set it is not decided yet; nothing enforces it in this migration.
 --
@@ -102,6 +106,60 @@ WHERE c.account_id IS NULL;
 ALTER TABLE google_ads_connections ALTER COLUMN account_id SET NOT NULL;
 CREATE INDEX IF NOT EXISTS idx_google_ads_connections_account_id
   ON google_ads_connections(account_id);
+
+-- ── 4b. Fill account_id for code that doesn't know about accounts ─────────
+-- Code written before accounts (the master branch until this is merged)
+-- inserts projects and Google Ads grants with only user_id. Without this,
+-- those inserts fail on the NOT NULL above. The trigger fills account_id from
+-- the user's own account, oldest owner membership first, exactly as the
+-- backfill did; a user with no account yet gets a personal one, as in step 2.
+-- Inserts that already set account_id (the accounts-aware app) are untouched.
+
+CREATE OR REPLACE FUNCTION fill_account_id_from_user()
+RETURNS trigger
+LANGUAGE plpgsql
+AS $$
+DECLARE
+  v_account uuid;
+BEGIN
+  IF NEW.account_id IS NOT NULL OR NEW.user_id IS NULL THEN
+    RETURN NEW;
+  END IF;
+
+  SELECT m.account_id INTO v_account
+  FROM account_members m
+  WHERE m.user_id = NEW.user_id
+  ORDER BY (m.role = 'owner') DESC, m.created_at
+  LIMIT 1;
+
+  IF v_account IS NULL THEN
+    INSERT INTO accounts (name, created_by)
+    SELECT COALESCE(NULLIF(u.raw_user_meta_data->>'full_name', ''), u.email, 'Konto'), u.id
+    FROM auth.users u
+    WHERE u.id = NEW.user_id
+    RETURNING id INTO v_account;
+
+    IF v_account IS NOT NULL THEN
+      INSERT INTO account_members (account_id, user_id, role)
+      VALUES (v_account, NEW.user_id, 'owner')
+      ON CONFLICT DO NOTHING;
+    END IF;
+  END IF;
+
+  NEW.account_id := v_account;
+  RETURN NEW;
+END;
+$$;
+
+DROP TRIGGER IF EXISTS projects_fill_account_id ON projects;
+CREATE TRIGGER projects_fill_account_id
+  BEFORE INSERT ON projects
+  FOR EACH ROW EXECUTE FUNCTION fill_account_id_from_user();
+
+DROP TRIGGER IF EXISTS google_ads_connections_fill_account_id ON google_ads_connections;
+CREATE TRIGGER google_ads_connections_fill_account_id
+  BEFORE INSERT ON google_ads_connections
+  FOR EACH ROW EXECUTE FUNCTION fill_account_id_from_user();
 
 -- ── 5. Relax user_id: nullable, ON DELETE SET NULL ────────────────────────
 
