@@ -1,9 +1,11 @@
 import { redirect } from 'next/navigation'
 import { createSupabaseServerClient } from '@/lib/supabase-server'
-import { PlaceholderPage } from '@/app/components/PlaceholderPage'
+import { adminDb } from '@/lib/feeds'
+import { getAgencyMonitoring } from '@/lib/agencyMonitoring'
+import { MonitoringClient } from './MonitoringClient'
 
-// Agency › Monitoring. Placeholder from the prototype; what the page is for is
-// still being decided. Reads no data.
+// Agency › Monitoring: feed quality per customer and what needs someone to act,
+// across every shop the user can reach (lib/agencyMonitoring). Read-only.
 export default async function MonitoringPage() {
   const supabase = await createSupabaseServerClient()
   const {
@@ -11,11 +13,6 @@ export default async function MonitoringPage() {
   } = await supabase.auth.getUser()
   if (!user) redirect('/login')
 
-  return (
-    <PlaceholderPage
-      title="Monitoring"
-      lede="Feed-kvalitet og kritiske fejl på tværs af alle kunder."
-      contents={["Feed-kvalitet pr. kunde med antal feeds og en kvalitetsscore", "Kritiske fejl på tværs af kunderne"]}
-    />
-  )
+  const data = await getAgencyMonitoring(adminDb(), user.id)
+  return <MonitoringClient data={data} />
 }

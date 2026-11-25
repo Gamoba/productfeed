@@ -144,10 +144,11 @@ export function shopNav(projectId: string): NavEntry[] {
   ]
 }
 
-export function accountNav(): NavEntry[] {
+/** `monitoring`: critical problems across customers, shown as a badge. */
+export function accountNav(monitoring?: number): NavEntry[] {
   return [
     { kind: 'link', label: 'Agency dashboard', href: '/', icon: 'overview', exact: true },
-    { kind: 'link', label: 'Monitoring', href: '/agency/monitoring', icon: 'pulse' },
+    { kind: 'link', label: 'Monitoring', href: '/agency/monitoring', icon: 'pulse', badge: monitoring || undefined },
     { kind: 'link', label: 'Agency users', href: '/agency/users', icon: 'users' },
     { kind: 'link', label: 'Connected companies', href: '/agency/companies', icon: 'building' },
     { kind: 'link', label: 'Partner levels', href: '/agency/partner-levels', icon: 'award' },

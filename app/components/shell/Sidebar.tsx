@@ -27,7 +27,21 @@ export function navFor(shell: Shell): NavEntry[] {
   const { level } = shell
   if (level.kind === 'feed') return feedNav(level.feedId)
   if (level.kind === 'shop') return shopNav(level.projectId)
-  return accountNav()
+  return accountNav(monitoringCount(shell))
+}
+
+// The same rules as Agency › Monitoring's critical list (lib/agencyMonitoring):
+// failing Shopify connections, feeds with errors, stale syncs, failed syncs.
+function monitoringCount(shell: Shell): number {
+  const d = shell.data
+  if (!d) return 0
+  let n = d.projects.filter((p) => p.connectionError).length
+  for (const f of d.feeds) {
+    if (f.errors > 0) n++
+    if (f.staleDays !== null) n++
+    if (f.syncFailed) n++
+  }
+  return n
 }
 
 export function Sidebar({ shell, pathname }: { shell: Shell; pathname: string }) {
