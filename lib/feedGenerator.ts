@@ -457,6 +457,7 @@ async function fetchAllActiveProducts(
     columns = '*',
     metafieldKeys,
     stopAfter,
+    pageSize: pageSizeOverride,
   }: {
     withMetafields?: boolean
     columns?: string
@@ -464,12 +465,15 @@ async function fetchAllActiveProducts(
     metafieldKeys?: { namespace: string; key: string }[]
     /** Called with each page as it arrives; returning true stops reading. */
     stopAfter?: (page: SupabaseProduct[]) => boolean
+    /** Smaller pages for a sample (never above the defaults below). */
+    pageSize?: number
   } = {}
 ): Promise<SupabaseProduct[]> {
   // A handful of named metafields is small, so those pages can be as big as
   // pages without metafields.
   const someMetafields = withMetafields && !!metafieldKeys?.length
-  const pageSize = withMetafields && !someMetafields ? PAGE_SIZE : PAGE_SIZE_NO_METAFIELDS
+  const maxPage = withMetafields && !someMetafields ? PAGE_SIZE : PAGE_SIZE_NO_METAFIELDS
+  const pageSize = pageSizeOverride ? Math.max(1, Math.min(pageSizeOverride, maxPage)) : maxPage
   const quote = (v: string) => `"${v.replace(/\\/g, '\\\\').replace(/"/g, '\\"')}"`
   const metafieldFilter = someMetafields
     ? metafieldKeys!.map((m) => `and(namespace.eq.${quote(m.namespace)},key.eq.${quote(m.key)})`).join(',')
@@ -568,6 +572,47 @@ async function fetchOptimizedTitles(
     from += PAGE_SIZE
   }
   return map
+}
+
+// The accepted AI titles of just these products (the Products page's page).
+async function fetchOptimizedTitlesFor(
+  db: ReturnType<typeof adminClient>,
+  feedId: string,
+  refs: string[]
+): Promise<Map<string, string>> {
+  const map = new Map<string, string>()
+  const ids = refs.filter(Boolean)
+  for (let i = 0; i < ids.length; i += 200) {
+    const { data, error } = await db
+      .from('product_title_optimizations')
+      .select('product_ref, optimized_title')
+      .eq('feed_id', feedId)
+      .not('optimized_title', 'is', null)
+      .in('product_ref', ids.slice(i, i + 200))
+    if (error) throw new Error(`Optimized titles failed: ${error.message}`)
+    for (const r of (data ?? []) as { product_ref: string; optimized_title: string }[]) map.set(r.product_ref, r.optimized_title)
+  }
+  return map
+}
+
+// Which metafields a feed's preview can read: every `metafield:<ns>.<key>`
+// named in its mappings, master fields and include/exclude rules. Nothing else
+// reads metafields there (AI mappings are not run in a preview), so a sample
+// fetches only those instead of every metafield of every product (most of the
+// cost on a metaobject-heavy store, ~24 per product on BWH).
+function metafieldsFor(
+  mappings: { config: unknown }[],
+  masters: { config: unknown }[],
+  filters: { rules?: unknown }[]
+): { withMetafields: false } | { metafieldKeys: { namespace: string; key: string }[] } {
+  const text = JSON.stringify([mappings.map((m) => m.config), masters.map((m) => m.config), filters.map((f) => f.rules)])
+  const keys = new Map<string, { namespace: string; key: string }>()
+  for (const hit of text.matchAll(/"metafield:([^"]+)"/g)) {
+    const rest = hit[1]
+    const dot = rest.indexOf('.')
+    if (dot > 0) keys.set(rest, { namespace: rest.slice(0, dot), key: rest.slice(dot + 1) })
+  }
+  return keys.size ? { metafieldKeys: [...keys.values()] } : { withMetafields: false }
 }
 
 // Attaches optimized_title onto each product so resolveField('ai_optimized_title')
@@ -885,6 +930,9 @@ export async function generatePreview(
     filteredProducts = []
     let rowsSoFar = 0
     await fetchAllActiveProducts(db, feedId, {
+      ...metafieldsFor(mappings, masters, filterRows),
+      // A sample needs `limit` rows; more pages only when rules drop products.
+      pageSize: Math.max(limit, 50),
       stopAfter: (page) => {
         for (const p of page) {
           const opt = titles.get(p.shopify_id)
@@ -993,22 +1041,27 @@ export async function feedView(
   products: SupabaseProduct[]
 ): Promise<Map<string, FeedViewItem>> {
   const db = adminClient()
-  const [{ data: shopSettingsData }, { data: mappingsData }, { data: filtersData }] = await Promise.all([
+  // Everything independent in one go: each sequential query costs a round trip.
+  const [{ data: shopSettingsData }, { data: mappingsData }, { data: filtersData }, masters, titles] = await Promise.all([
     db.from('shop_settings').select('market_url').eq('feed_id', feedId).maybeSingle(),
     db.from('feed_mappings').select('google_field, mapping_type, config').eq('feed_id', feedId),
     db.from('feed_filters').select('filter_type, operator, rules').eq('feed_id', feedId),
+    loadMasterFieldsForFeed(db, feedId),
+    fetchOptimizedTitlesFor(db, feedId, products.map((p) => p.shopify_id)),
   ])
 
   const marketUrl = await resolveFeedBaseUrl(db, feedId, (shopSettingsData?.market_url as string | null) ?? null)
   const mappings = ((mappingsData ?? []) as FeedMapping[]).filter(
     (m) => m.mapping_type && m.mapping_type !== ('' as MappingType)
   )
-  const masters = await loadMasterFieldsForFeed(db, feedId)
   const filterRows = (filtersData ?? []) as FeedFilter[]
 
-  // Copies: attachOptimizedTitles writes onto the objects it is given.
+  // Copies: the accepted AI title is written onto them.
   const copies = products.map((p) => ({ ...p }) as SupabaseProduct)
-  await attachOptimizedTitles(db, feedId, copies)
+  for (const p of copies) {
+    const opt = titles.get(p.shopify_id)
+    if (opt) (p as Record<string, unknown>).optimized_title = opt
+  }
 
   if (rulesReadMasters(filterRows)) attachMasterResolvers(copies, { masters, mappings, marketUrl })
   const out = new Map<string, FeedViewItem>()
