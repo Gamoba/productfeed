@@ -26,6 +26,7 @@ import {
   type ExtractPattern,
   type LookupEntry,
 } from '@/lib/mappingExtract'
+import { markFeedEdited } from '@/lib/recentEdit'
 import {
   createItemEvaluator,
   FEED_FIELD_PREFIX,
@@ -4643,6 +4644,7 @@ export default function MappingClient({
         setErrorMsg(result.error)
         setStatus('error')
       } else {
+        markFeedEdited(feedId)
         setSaveWarnings(result.warnings ?? [])
         setStatus('saved')
         setRemovedCustomFields([])

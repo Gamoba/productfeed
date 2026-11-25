@@ -9,6 +9,7 @@ import { AUTO_SYNC_FREQUENCIES, AUTO_SYNC_LABELS, type AutoSyncFrequency } from 
 import { countryName, formatWhen, languageName } from '@/lib/formatDa'
 import { flagEmoji } from '@/app/components/shell/nav'
 import './settings.css'
+import { markFeedEdited } from '@/lib/recentEdit'
 
 export type ScheduleState = {
   frequency: AutoSyncFrequency
@@ -210,6 +211,7 @@ export function SettingsClient({
       if (modeDirty) {
         const r = await saveFeedMode(feedId, feedMode)
         if (r.error) throw new Error(r.error)
+        markFeedEdited(feedId)
       }
       if (feedSchedDirty) {
         const r = await saveAutoSyncSchedule(feedId, feedFreq, feedTime)

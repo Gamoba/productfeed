@@ -10,6 +10,7 @@ import type { ScopePreview } from '@/lib/feedGenerator'
 import { formatNumber } from '@/lib/formatDa'
 import { Icon } from '../components/shell/icons'
 import './filters.css'
+import { markFeedEdited } from '@/lib/recentEdit'
 
 // Feed › Inkludér / ekskludér (reference: references/feed_include_exclude.jpg).
 // Pick a side at the top (the included or the excluded products), edit the
@@ -95,6 +96,7 @@ export function FiltersClient({
         setSaveError(result.error)
         return
       }
+      markFeedEdited(feedId)
       setSaved(JSON.stringify([include, exclude]))
       setJustSaved(true)
       setTimeout(() => setJustSaved(false), 2500)
