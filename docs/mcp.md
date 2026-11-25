@@ -15,7 +15,7 @@ can open. FeedFlow never writes to Shopify through it.
 | Fallback for older clients: proxies Supabase's metadata | `app/.well-known/oauth-authorization-server/` |
 | Consent page | `app/oauth/consent/` |
 | Proposed changes, approval and auto-apply | `lib/mcp/changes.ts`, migration `057_mcp_changes.sql` |
-| Shared save logic (UI and MCP run the same code) | `lib/ops/feedConfig.ts` |
+| Shared save logic (UI and MCP run the same code) | `lib/ops/feedConfig.ts`, `lib/ops/masterFields.ts` and the rest of `lib/ops/` |
 | Shop › API / MCP page | `app/project/[projectId]/api/` |
 
 Supabase Auth is the OAuth 2.1 authorization server. Claude registers itself
@@ -31,10 +31,12 @@ Supabase access token for that user. Every tool starts from that user and uses
   - `get_performance`, `get_activity`, `list_changes`
   - `get_labels` (Google Ads labels with values, rules and product counts)
   - `list_title_buckets`, `get_title_bucket`, `list_title_review` (AI Titles)
+  - `list_master_fields` (the shop's master fields and which feeds use them)
 - **Write, as proposals:**
   - `set_mapping`, `set_rules`, `set_feed_settings`
   - `set_label`, `set_label_bucket`: the label is recalculated once applied, as on the Labels page
   - `set_title_bucket`, `set_title_scope`, `set_title_instructions`
+  - `set_master_field`, `delete_master_field`: shop-level changes (no feed), applied through `lib/ops/masterFields`; a delete is refused while a feed uses the field
   - `review_ai_titles`: approve, edit or reject titles in the review queue
   - `run_ai_titles`: at most 100 products per proposal, in chunks of 10 within the daily AI budget (`optimize_products_daily`), never overwriting titles edited by hand
 - **Direct:**

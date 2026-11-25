@@ -164,6 +164,8 @@ export function describeMapping(type: string | null | undefined, config: Record<
       return field ? `${field} uden HTML` : 'Uden HTML'
     case 'LOOKUP':
       return field ? `Opslagstabel på ${field}` : 'Opslagstabel'
+    case 'MASTER':
+      return `Master field: ${String(c.master ?? '')}`
     case 'AI':
       return 'AI'
     default:

@@ -129,7 +129,7 @@ export function McpClient({ initial }: { initial: McpState }) {
                   <div>
                     <b>{c.summary}</b>
                     <span className="mc-muted">
-                      {c.feed_label ?? 'Feed'} · {c.requested_by_name} via {c.client_name ?? 'assistent'} · {formatWhen(c.created_at)}
+                      {c.feed_label ?? (c.feed_id ? 'Feed' : 'Shop')} · {c.requested_by_name} via {c.client_name ?? 'assistent'} · {formatWhen(c.created_at)}
                     </span>
                   </div>
                   <div className="mc-change-actions">
@@ -226,7 +226,7 @@ export function McpClient({ initial }: { initial: McpState }) {
                 <tr key={c.id}>
                   <td>
                     <b>{c.summary}</b>
-                    <span className="mc-muted">{c.feed_label ?? ''}</span>
+                    <span className="mc-muted">{c.feed_label ?? (c.feed_id ? '' : 'Shop')}</span>
                   </td>
                   <td>
                     {c.requested_by_name} via {c.client_name ?? 'assistent'}

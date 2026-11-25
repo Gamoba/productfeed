@@ -13,6 +13,8 @@
 import { McpServer } from '@modelcontextprotocol/sdk/server/mcp.js'
 import type { CallToolResult } from '@modelcontextprotocol/sdk/types.js'
 import { z } from 'zod'
+import { loadMasterFields, MASTER_FIELD_TYPES } from '@/lib/masterFields'
+import { masterFieldUsage } from '@/lib/ops/masterFields'
 import { adminDb, getOwnedFeed, getOwnedProject, type OwnedFeed } from '@/lib/feeds'
 import { getAgencyOverview } from '@/lib/agencyOverview'
 import { getMemberships } from '@/lib/accounts'
@@ -106,9 +108,10 @@ mapping_type and config:
 - LOOKUP: { field: <source>, rows: [{ from, to }], match: "exact"|"contains", caseSensitive?: false, fallback: "source"|"empty"|"static", fallbackValue?: "" }
 - EXTRACT: { field: <source>, patterns: [{ pattern: "<JavaScript regex>", template: "$1/$2", ignoreCase: true }], lookup?: [{ from, to }] }
   Patterns are tried top-down; the first match wins and fills the template ($1, $2 … = groups). lookup rewrites each captured group first (ml → M/L). No match gives an empty value. Max 2000 characters per pattern; nested repetition such as (a+)+ is refused.
+- MASTER: { master: <key> } takes the value of the shop's master field <key> (see list_master_fields); the field's own onlyIf/transforms still apply.
 - REMOVE: {} removes the field's mapping.
 Any type may add config.onlyIf = { conditions: [{ field: <source>, operator, value, logic: null|"AND"|"OR", ignoreCase?: true }], rules?: [{ conditions, value: ValueSpec }], else: ValueSpec } where ValueSpec = { type: "empty"|"static"|"field", value } or { type: "combine", blocks, skipEmpty? }. Condition operators: equals, not_equals, contains, not_contains, contains_word, not_contains_word, starts_with, ends_with, greater_than, less_than, is_empty, is_not_empty; each comparing operator also has a "<operator>_field" form whose value is another <source> instead of text (e.g. price less_than_field compare_at_price).
-<source> is a standard field (see get_mapping → sources), "metafield:<namespace>.<key>", "ai_optimized_title", "url", or "feed:<feed field>" to reuse another mapped field's final value (e.g. feed:color).
+<source> is a standard field (see get_mapping → sources), "metafield:<namespace>.<key>", "ai_optimized_title", "url", or "feed:<feed field>" to reuse another mapped field's final value (e.g. feed:color), or "master:<key>" to read one of the shop's master fields.
 Keep the config of the other kind of keys exactly as get_mapping shows them; only send the fields you change.`
 
 export function createFeedFlowServer(caller: McpCaller): McpServer {
@@ -130,6 +133,11 @@ export function createFeedFlowServer(caller: McpCaller): McpServer {
   }
   async function propose(f: OwnedFeed, payload: Parameters<typeof proposeChange>[1]['payload'], summary: string, details: ChangeDetail[]) {
     const r = await proposeChange(db, { user: caller.user, client: await via(), feed: f, payload, summary, details })
+    return describeOutcome(r, summary)
+  }
+  async function proposeForShop(shopId: string, payload: Parameters<typeof proposeChange>[1]['payload'], summary: string, details: ChangeDetail[]) {
+    const p = await shop(shopId)
+    const r = await proposeChange(db, { user: caller.user, client: await via(), feed: { id: null, project_id: p.id, account_id: p.account_id }, payload, summary, details })
     return describeOutcome(r, summary)
   }
 
@@ -402,7 +410,7 @@ export function createFeedFlowServer(caller: McpCaller): McpServer {
           .array(
             z.object({
               google_field: z.string().regex(/^[a-z0-9_]+$/).describe('Feed field, e.g. title, brand, custom_label_0'),
-              mapping_type: z.enum(['FIELD', 'STATIC', 'COMBINE', 'PREFIX_SUFFIX', 'FIND_REPLACE', 'TRUNCATE', 'STRIP_HTML', 'LOOKUP', 'EXTRACT', 'REMOVE']),
+              mapping_type: z.enum(['FIELD', 'STATIC', 'COMBINE', 'PREFIX_SUFFIX', 'FIND_REPLACE', 'TRUNCATE', 'STRIP_HTML', 'LOOKUP', 'EXTRACT', 'MASTER', 'REMOVE']),
               config: z.record(z.string(), z.unknown()).default({}),
             })
           )
@@ -441,6 +449,90 @@ export function createFeedFlowServer(caller: McpCaller): McpServer {
       const outcome = await propose(f, { kind: 'mapping', entries }, summary, details)
       const warnings = extractWarnings(entries)
       return text(warnings.length ? `${outcome}\nAdvarsel, disse mønstre springes over:\n${warnings.join('\n')}` : outcome)
+    })
+  )
+
+  // ── Master fields (shop level) ─────────────────────────────────────────────
+
+  server.registerTool(
+    'list_master_fields',
+    {
+      title: 'List master fields',
+      description:
+        "The shop's master fields: rules set up once and used by its feeds, through mapping_type MASTER ({ master: <key> }) or a \"master:<key>\" source. Shows each field's rule (same mapping_type/config shape as get_mapping) and which feeds use it.",
+      inputSchema: { shop_id: shopIdArg },
+      annotations: READ,
+    },
+    tool(async ({ shop_id }: { shop_id: string }) => {
+      await shop(shop_id)
+      const [fields, usage] = await Promise.all([loadMasterFields(db, shop_id), masterFieldUsage(db, shop_id)])
+      return text(
+        JSON.stringify(
+          fields.map((m) => ({
+            key: m.key,
+            name: m.name,
+            description: m.description,
+            mapping_type: m.mapping_type,
+            config: m.config,
+            used_by_feeds: [...(usage.get(m.key) ?? [])],
+          })),
+          null,
+          2
+        )
+      )
+    })
+  )
+
+  server.registerTool(
+    'set_master_field',
+    {
+      title: 'Create or change a master field',
+      description: `Create a master field (leave out key) or change one (send its key from list_master_fields). Every feed that uses it follows. Not AI or MASTER.\n${MAPPING_HELP}`,
+      inputSchema: {
+        shop_id: shopIdArg,
+        key: z.string().regex(/^[a-z0-9_]+$/).optional().describe('Existing master field to change; leave out to create'),
+        name: z.string().min(1).max(120),
+        description: z.string().max(500).optional(),
+        mapping_type: z.enum(MASTER_FIELD_TYPES),
+        config: z.record(z.string(), z.unknown()).default({}),
+      },
+      annotations: WRITE,
+    },
+    tool(async (a: { shop_id: string; key?: string; name: string; description?: string; mapping_type: string; config: Record<string, unknown> }) => {
+      const problem = checkMapping(a.mapping_type, a.config)
+      if (problem) return fail(problem)
+      await shop(a.shop_id)
+      const prev = a.key ? (await loadMasterFields(db, a.shop_id)).find((m) => m.key === a.key) : undefined
+      if (a.key && !prev) return fail(`No master field with key ${a.key}; see list_master_fields`)
+      const details: ChangeDetail[] = [
+        { label: 'Navn', before: prev?.name ?? null, after: a.name },
+        { label: 'Regel', before: prev ? describeMapping(prev.mapping_type, prev.config) : null, after: describeMapping(a.mapping_type, a.config) },
+      ]
+      if (a.description !== undefined) details.push({ label: 'Beskrivelse', before: prev?.description ?? null, after: a.description || null })
+      const field = { key: a.key ?? null, name: a.name, description: a.description ?? prev?.description ?? null, mapping_type: a.mapping_type, config: a.config }
+      return text(await proposeForShop(a.shop_id, { kind: 'master_field_save', field }, 'Master field: {name}'.replace('{name}', a.name), details))
+    })
+  )
+
+  server.registerTool(
+    'delete_master_field',
+    {
+      title: 'Delete a master field',
+      description: 'Delete a master field. Refused while a feed still uses it: change those mappings first (set_mapping).',
+      inputSchema: { shop_id: shopIdArg, key: z.string().regex(/^[a-z0-9_]+$/) },
+      annotations: { ...WRITE, destructiveHint: true },
+    },
+    tool(async ({ shop_id, key }: { shop_id: string; key: string }) => {
+      await shop(shop_id)
+      const prev = (await loadMasterFields(db, shop_id)).find((m) => m.key === key)
+      if (!prev) return fail(`No master field with key ${key}; see list_master_fields`)
+      const used = (await masterFieldUsage(db, shop_id)).get(key)?.size ?? 0
+      if (used) return fail(`${prev.name} is used by ${used} feed(s); change those mappings first`)
+      return text(
+        await proposeForShop(shop_id, { kind: 'master_field_delete', key }, 'Master field slettet: {name}'.replace('{name}', prev.name), [
+          { label: 'Regel', before: describeMapping(prev.mapping_type, prev.config), after: null },
+        ])
+      )
     })
   )
 
@@ -1078,6 +1170,8 @@ function checkMapping(type: string, config: Record<string, unknown>): string | n
       return str('field') && Array.isArray(config.rows) ? null : 'config.field and config.rows are required'
     case 'EXTRACT':
       return str('field') && Array.isArray(config.patterns) && config.patterns.length ? null : 'config.field and config.patterns are required'
+    case 'MASTER':
+      return str('master') ? null : 'config.master (a master field key) is required'
     case 'REMOVE':
       return null
     default:

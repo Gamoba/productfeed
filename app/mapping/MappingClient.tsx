@@ -33,7 +33,10 @@ import {
   createItemEvaluator,
   FEED_FIELD_PREFIX,
   isFeedFieldRef,
+  isMasterFieldRef,
+  MASTER_FIELD_PREFIX,
   type EvalMapping,
+  type EvalMasterField,
   type ItemEvaluator,
 } from '@/lib/mappingEval'
 
@@ -65,6 +68,29 @@ const MappingsContext = createContext<Record<string, FieldState>>({})
 // that field out of "Feed fields (mapped)" so a mapping can't read itself.
 const CurrentFieldContext = createContext<string>('')
 
+// The shop's master fields (lib/masterFields): offered as `master:<key>` in
+// every field picker and as the MASTER mapping type. `exclude` is the master
+// field being edited on the Master fields page, so it can't read itself.
+type MasterOption = EvalMasterField & { name: string }
+const MastersContext = createContext<{ projectId: string; masters: MasterOption[]; exclude?: string }>({
+  projectId: '',
+  masters: [],
+})
+const NO_MASTERS: MasterOption[] = []
+
+function masterFieldLabel(token: string, masters: MasterOption[]): string {
+  const key = token.slice(MASTER_FIELD_PREFIX.length)
+  return `${masters.find((m) => m.key === key)?.name ?? key} (master)`
+}
+
+function useMasterFieldTokens(): string[] {
+  const { masters, exclude } = useContext(MastersContext)
+  return useMemo(
+    () => masters.filter((m) => m.key !== exclude).map((m) => MASTER_FIELD_PREFIX + m.key),
+    [masters, exclude]
+  )
+}
+
 // Readable label for a "metafield:ns.key" token: the definition name when known,
 // else the raw "ns.key" (the token minus its "metafield:" prefix).
 function metafieldDisplayName(token: string, labels: Map<string, string>): string {
@@ -84,6 +110,7 @@ type MappingType =
   | 'STRIP_HTML'
   | 'LOOKUP'
   | 'EXTRACT'
+  | 'MASTER'
   | 'AI'
 
 type Config = Record<string, unknown>
@@ -149,6 +176,7 @@ const MAPPING_TYPES: { value: MappingType; label: string }[] = [
   { value: 'STRIP_HTML', label: 'Strip HTML' },
   { value: 'LOOKUP', label: 'Lookup table' },
   { value: 'EXTRACT', label: 'Extract with pattern' },
+  { value: 'MASTER', label: 'Master field' },
   { value: 'AI', label: 'AI' },
 ]
 
@@ -348,7 +376,8 @@ function previewEvaluator(
   all: Record<string, FieldState>,
   product: PreviewProduct,
   marketUrl: string | null,
-  feedMode: 'product' | 'variant'
+  feedMode: 'product' | 'variant',
+  masters: EvalMasterField[] = NO_MASTERS
 ): ItemEvaluator {
   const mappings: EvalMapping[] = []
   for (const [google_field, s] of Object.entries(all)) {
@@ -356,6 +385,7 @@ function previewEvaluator(
   }
   return createItemEvaluator({
     mappings,
+    masters,
     resolveSource: (f) => resolveClientField(f, product, marketUrl, feedMode),
     aiPlaceholder: AI_PLACEHOLDER,
   })
@@ -366,10 +396,11 @@ function computePreviewValue(
   all: Record<string, FieldState>,
   product: PreviewProduct,
   marketUrl: string | null,
-  feedMode: 'product' | 'variant'
+  feedMode: 'product' | 'variant',
+  masters: EvalMasterField[] = NO_MASTERS
 ): string {
   if (!all[field]?.type) return ''
-  return previewEvaluator(all, product, marketUrl, feedMode).value(field) ?? ''
+  return previewEvaluator(all, product, marketUrl, feedMode, masters).value(field) ?? ''
 }
 
 // ── FieldSelect ────────────────────────────────────────────────────────────
@@ -427,17 +458,21 @@ function FieldSelect({
   const standard = allFields.filter((f) => !f.startsWith('metafield:'))
   const meta = allFields.filter((f) => f.startsWith('metafield:'))
   const feedFields = useMappedFeedFields()
+  const masterTokens = useMasterFieldTokens()
+  const { masters } = useContext(MastersContext)
   // A saved value that isn't among the options yet — metafields still loading,
   // or a feed field that has since been unmapped — must still show, or the
   // select renders "— Select field —" and touching it would overwrite the value.
   const known =
-    !value || standard.includes(value) || meta.includes(value) || feedFields.includes(value)
+    !value || standard.includes(value) || meta.includes(value) || feedFields.includes(value) || masterTokens.includes(value)
   return (
     <select value={value} onChange={(e) => onChange(e.target.value)} className={sel}>
       <option value="">— Vælg felt —</option>
       {!known && (
         <option value={value}>
-          {isFeedFieldRef(value)
+          {isMasterFieldRef(value)
+            ? `${masterFieldLabel(value, masters)} (findes ikke længere)`
+            : isFeedFieldRef(value)
             ? `${feedFieldLabel(value)} (ikke mappet)`
             : value.startsWith('metafield:')
               ? metafieldDisplayName(value, metafieldLabels)
@@ -448,6 +483,13 @@ function FieldSelect({
         <optgroup label="Feedfelter (mappet)">
           {feedFields.map((f) => (
             <option key={f} value={f}>{feedFieldLabel(f)}</option>
+          ))}
+        </optgroup>
+      )}
+      {masterTokens.length > 0 && (
+        <optgroup label="Master fields">
+          {masterTokens.map((f) => (
+            <option key={f} value={f}>{masterFieldLabel(f, masters)}</option>
           ))}
         </optgroup>
       )}
@@ -483,6 +525,7 @@ function CombineChipsEditor({
   skipEmpty: boolean
   onSkipEmptyChange: (v: boolean) => void
 }) {
+  const { masters } = useContext(MastersContext)
   const feedMode = useContext(FeedModeContext)
   const metafieldLabels = useContext(MetafieldLabelsContext)
   const labels = useMemo(() => getFieldLabels(feedMode), [feedMode])
@@ -565,6 +608,7 @@ function CombineChipsEditor({
   function chipLabel(b: CombineBlock): string {
     if (b.type === 'text') return b.value
     if (!b.value) return ''
+    if (isMasterFieldRef(b.value)) return masterFieldLabel(b.value, masters)
     if (isFeedFieldRef(b.value)) return feedFieldLabel(b.value)
     if (b.value.startsWith('metafield:')) return metafieldDisplayName(b.value, metafieldLabels)
     return labels[b.value] ?? b.value
@@ -819,9 +863,14 @@ function FieldPickerPanel({
   )
 
   const feedFields = useMappedFeedFields()
+  const masterTokens = useMasterFieldTokens()
+  const { masters } = useContext(MastersContext)
 
   const q = search.toLowerCase()
   const filteredFeed = q ? feedFields.filter((f) => f.toLowerCase().includes(q)) : feedFields
+  const filteredMaster = q
+    ? masterTokens.filter((f) => masterFieldLabel(f, masters).toLowerCase().includes(q))
+    : masterTokens
   const filteredStandard = q
     ? standard.filter(
         (f) =>
@@ -877,6 +926,24 @@ function FieldPickerPanel({
                 onClick={() => onSelect(f)}
                 primary={feedFieldLabel(f)}
                 secondary="værdien fra det felts mapping"
+              />
+            ))}
+          </>
+        )}
+        {filteredMaster.length > 0 && (
+          <>
+            <div
+              className="ff-label"
+              style={{ padding: '6px 10px', background: 'var(--bg-surface)' }}
+            >
+              Master fields
+            </div>
+            {filteredMaster.map((f) => (
+              <PickerOption
+                key={f}
+                onClick={() => onSelect(f)}
+                primary={masterFieldLabel(f, masters)}
+                secondary="regel sat op én gang på shoppen"
               />
             ))}
           </>
@@ -1520,6 +1587,9 @@ function ConfigEditor({
       return <LookupEditor config={config as LookupConfig} onChange={(c) => onChange({ ...config, ...c })} allFields={allFields} />
     case 'EXTRACT':
       return <ExtractEditor config={config} onChange={onChange} allFields={allFields} />
+
+    case 'MASTER':
+      return <MasterSelect config={config} onChange={onChange} />
 
     case 'AI':
       return (
@@ -2489,10 +2559,15 @@ function FieldRow({
   previewValue,
   onRemove,
   onPreview,
+  label,
+  types = MAPPING_TYPES,
 }: {
   field: string
   state: FieldState
   allFields: string[]
+  /** Shown instead of the field name. */
+  label?: string
+  types?: { value: MappingType; label: string }[]
   onTypeChange: (t: MappingType) => void
   onConfigChange: (c: Config) => void
   previewValue: string | null
@@ -2505,7 +2580,7 @@ function FieldRow({
 }) {
   // Strip the "custom:" prefix when displaying user-defined fields. The
   // underlying mapping key keeps the prefix so feedGenerator can detect it.
-  const displayField = field.startsWith('custom:') ? field.slice('custom:'.length) : field
+  const displayField = label ?? (field.startsWith('custom:') ? field.slice('custom:'.length) : field)
   const onlyIf = state.config.onlyIf as OnlyIf | undefined
   const [showOnlyIf, setShowOnlyIf] = useState(!!onlyIf?.conditions?.length)
   const hasConditions = onlyIf?.conditions?.some((c) => c.field) ?? false
@@ -2598,7 +2673,7 @@ function FieldRow({
             onChange={(e) => onTypeChange(e.target.value as MappingType)}
             className={sel}
           >
-            {MAPPING_TYPES.map((t) => (
+            {types.map((t) => (
               <option key={t.value} value={t.value}>{t.label}</option>
             ))}
           </select>
@@ -2738,7 +2813,7 @@ function collectUsedFields(state: FieldState): string[] {
   used.push(...collectRuleFields(cfg.onlyIf as OnlyIf | undefined))
 
   // `feed:` references point at other mappings, not Shopify fields.
-  return used.filter((f) => !isFeedFieldRef(f))
+  return used.filter((f) => !isFeedFieldRef(f) && !isMasterFieldRef(f))
 }
 
 // ── ShopifyFieldsModal ─────────────────────────────────────────────────────
@@ -3800,6 +3875,7 @@ function ProductPreviewPanel({
   headerExtra: React.ReactNode
 }) {
   const allMappings = useContext(MappingsContext)
+  const { masters } = useContext(MastersContext)
   const [search, setSearch] = useState('')
   const [query, setQuery] = useState('')
   const [products, setProducts] = useState<PreviewProduct[] | null>(null)
@@ -3838,9 +3914,9 @@ function ProductPreviewPanel({
 
   const values = useMemo(() => {
     if (!selected) return [] as { field: string; value: string | null }[]
-    const ev = previewEvaluator(allMappings, selected, marketUrl, feedMode)
+    const ev = previewEvaluator(allMappings, selected, marketUrl, feedMode, masters)
     return fields.map((f) => ({ field: f, value: allMappings[f]?.type ? (ev.value(f) ?? '') : null }))
-  }, [selected, allMappings, marketUrl, feedMode, fields])
+  }, [selected, allMappings, marketUrl, feedMode, fields, masters])
 
   return (
     <>
@@ -3868,12 +3944,12 @@ function ProductPreviewPanel({
           <div className="lp-products" role="listbox" aria-label={LP_TEXT.oneProduct}>
             {products === null && <p className="lp-muted">{LP_TEXT.loading}</p>}
             {products?.length === 0 && <p className="lp-muted">{LP_TEXT.none}</p>}
-            {products?.map((p) => (
+            {products?.map((p, i) => (
               <button
-                key={p.id}
+                key={`${p.id ?? ''}-${i}`}
                 type="button"
                 role="option"
-                aria-selected={selected?.id === p.id}
+                aria-selected={selected === p}
                 className="lp-product"
                 onClick={() => {
                   setSelected(p)
@@ -3929,6 +4005,7 @@ function FieldPreviewSidebar({
 }) {
   // Every field's current state, so `feed:` references preview correctly.
   const allMappings = useContext(MappingsContext)
+  const { masters } = useContext(MastersContext)
   const [search, setSearch] = useState('')
   const [debouncedSearch, setDebouncedSearch] = useState('')
   const [filters, setFilters] = useState<Partial<Record<FilterKey, string>>>({})
@@ -4248,7 +4325,7 @@ function FieldPreviewSidebar({
           ) : (
             products.map((p) => {
               const value = hasMapping
-                ? computePreviewValue(field, { ...allMappings, [field]: state }, p, marketUrl, feedMode)
+                ? computePreviewValue(field, { ...allMappings, [field]: state }, p, marketUrl, feedMode, masters)
                 : ''
               return (
                 <div
@@ -4429,6 +4506,194 @@ function FilterValueEditor({
 
 // ── Main component ─────────────────────────────────────────────────────────
 
+// ── Master fields ────────────────────────────────────────────────────────────
+
+function MasterSelect({ config, onChange }: { config: Config; onChange: (c: Config) => void }) {
+  const { projectId, masters } = useContext(MastersContext)
+  const value = String(config.master ?? '')
+  if (masters.length === 0) {
+    return (
+      <p className="lp-muted" style={{ margin: 0 }}>
+        Shoppen har ingen master fields endnu.{' '}
+        {projectId && (
+          <a className="link" href={`/project/${projectId}/master-fields`}>
+            Opret et
+          </a>
+        )}
+      </p>
+    )
+  }
+  const known = !value || masters.some((m) => m.key === value)
+  return (
+    <select value={value} onChange={(e) => onChange({ ...config, master: e.target.value })} className={sel}>
+      <option value="">— Vælg et master field —</option>
+      {!known && <option value={value}>{value} (findes ikke længere)</option>}
+      {masters.map((m) => (
+        <option key={m.key} value={m.key}>
+          {m.name}
+        </option>
+      ))}
+    </select>
+  )
+}
+
+// Types a master field can use: not AI (an API call per item) and not MASTER.
+const MASTER_TYPES = MAPPING_TYPES.filter((t) => t.value !== 'AI' && t.value !== 'MASTER')
+
+export type MasterEditorFeed = {
+  id: string
+  label: string
+  feedMode: 'product' | 'variant'
+  mappings: InitialMapping[]
+}
+
+/**
+ * One master field's rule, edited with the same field editor as Mapping and
+ * previewed on a product of one of the shop's feeds (whose own mappings are
+ * used for `feed:` references). Used by Shop › Master fields.
+ */
+export function MasterFieldEditor({
+  projectId,
+  masters,
+  editKey,
+  name,
+  state,
+  onChange,
+  feeds,
+}: {
+  projectId: string
+  /** All saved master fields; the one being edited is replaced by `state`. */
+  masters: MasterOption[]
+  editKey: string | null
+  name: string
+  state: FieldState
+  onChange: (s: FieldState) => void
+  feeds: MasterEditorFeed[]
+}) {
+  const [feedId, setFeedId] = useState(feeds[0]?.id ?? '')
+  const feed = feeds.find((f) => f.id === feedId) ?? feeds[0] ?? null
+  const feedMode = feed?.feedMode ?? 'product'
+
+  const [metafields, setMetafields] = useState<{ namespace: string; key: string; name?: string }[]>([])
+  const [marketUrl, setMarketUrl] = useState<string | null>(null)
+  const [products, setProducts] = useState<PreviewProduct[] | null>(null)
+  const [productIdx, setProductIdx] = useState(0)
+
+  useEffect(() => {
+    if (!feedId) return
+    let cancelled = false
+    fetch(`/api/mapping/metafields?feedId=${encodeURIComponent(feedId)}`)
+      .then((r) => r.json())
+      .then((d: { metafields?: { namespace: string; key: string; name?: string }[] }) => !cancelled && setMetafields(d.metafields ?? []))
+      .catch(() => {})
+    fetch(`/api/settings?feedId=${encodeURIComponent(feedId)}`)
+      .then((r) => r.json())
+      .then((d: { settings?: { market_url?: string | null } | null; primaryDomain?: string | null }) => {
+        if (!cancelled) setMarketUrl(d.settings?.market_url ?? d.primaryDomain ?? null)
+      })
+      .catch(() => {})
+    fetch(`/api/products?${new URLSearchParams({ feedId, page: '1', pageSize: '20', skipCount: '1' })}`)
+      .then((r) => (r.ok ? r.json() : { products: [] }))
+      .then((d: { products?: PreviewProduct[] }) => {
+        if (cancelled) return
+        setProducts(d.products ?? [])
+        setProductIdx(0)
+      })
+      .catch(() => !cancelled && setProducts([]))
+    return () => {
+      cancelled = true
+    }
+  }, [feedId])
+
+  const feedMappings = useMemo(() => {
+    const out: Record<string, FieldState> = {}
+    for (const m of feed?.mappings ?? []) out[m.google_field] = { type: m.mapping_type as MappingType, config: m.config ?? {} }
+    return out
+  }, [feed])
+
+  const selfKey = editKey ?? '__editing__'
+  const allMasters = useMemo<MasterOption[]>(
+    () => [
+      ...masters.filter((m) => m.key !== selfKey),
+      { key: selfKey, name, mapping_type: state.type, config: state.config },
+    ],
+    [masters, selfKey, name, state]
+  )
+  const mastersCtx = useMemo(() => ({ projectId, masters: allMasters, exclude: selfKey }), [projectId, allMasters, selfKey])
+
+  const product = products?.[productIdx] ?? null
+  const previewValue = useMemo(() => {
+    if (!product || !state.type) return null
+    return previewEvaluator(feedMappings, product, marketUrl, feedMode, allMasters).resolve(MASTER_FIELD_PREFIX + selfKey)
+  }, [product, state.type, feedMappings, marketUrl, feedMode, allMasters, selfKey])
+
+  const allFields = useMemo(
+    () => [...STANDARD_FIELDS, ...metafields.map((m) => `metafield:${m.namespace}.${m.key}`)],
+    [metafields]
+  )
+  const metafieldLabels = useMemo(() => {
+    const m = new Map<string, string>()
+    for (const mf of metafields) if (mf.name) m.set(`metafield:${mf.namespace}.${mf.key}`, mf.name)
+    return m
+  }, [metafields])
+  const editorContext = useMemo(() => ({ feedId, previewProduct: product, marketUrl }), [feedId, product, marketUrl])
+
+  return (
+    <FeedModeContext.Provider value={feedMode}>
+      <MetafieldLabelsContext.Provider value={metafieldLabels}>
+        <MappingsContext.Provider value={feedMappings}>
+          <MastersContext.Provider value={mastersCtx}>
+            <EditorContext.Provider value={editorContext}>
+              <div className="mp mf-editor">
+                <FieldRow
+                  field={MASTER_FIELD_PREFIX + selfKey}
+                  label={name || '—'}
+                  state={state}
+                  allFields={allFields}
+                  types={[{ value: '', label: '—' }, ...MASTER_TYPES.filter((t) => t.value !== '')]}
+                  onTypeChange={(t) => onChange({ type: t, config: t === state.type ? state.config : {} })}
+                  onConfigChange={(c) => onChange({ ...state, config: c })}
+                  previewValue={previewValue}
+                />
+                {feeds.length > 0 && (
+                  <div className="mf-preview">
+                    <label>
+                      <span>Preview med feed</span>
+                      <select className={sel} value={feedId} onChange={(e) => setFeedId(e.target.value)}>
+                        {feeds.map((f) => (
+                          <option key={f.id} value={f.id}>
+                            {f.label}
+                          </option>
+                        ))}
+                      </select>
+                    </label>
+                    <label>
+                      <span>Vare</span>
+                      {products === null ? (
+                        <span className="lp-muted">Henter…</span>
+                      ) : products.length === 0 ? (
+                        <span className="lp-muted">Ingen varer at vise preview med.</span>
+                      ) : (
+                        <select className={sel} value={productIdx} onChange={(e) => setProductIdx(Number(e.target.value))}>
+                          {products.map((x, i) => (
+                            <option key={`${x.id ?? ''}-${i}`} value={i}>
+                              {x.title}
+                            </option>
+                          ))}
+                        </select>
+                      )}
+                    </label>
+                  </div>
+                )}
+              </div>
+            </EditorContext.Provider>
+          </MastersContext.Provider>
+        </MappingsContext.Provider>
+      </MetafieldLabelsContext.Provider>
+    </FeedModeContext.Provider>
+  )
+}
+
 type InitialMapping = {
   google_field: string
   mapping_type: string
@@ -4439,11 +4704,16 @@ export default function MappingClient({
   feedId,
   feedMode,
   initialMappings,
+  projectId = '',
+  masters = NO_MASTERS,
 }: {
   feedId: string
   feedMode: 'product' | 'variant'
   initialMappings: InitialMapping[]
+  projectId?: string
+  masters?: MasterOption[]
 }) {
+  const mastersCtx = useMemo(() => ({ projectId, masters }), [projectId, masters])
   // Metafields load progressively (LAG 2). Field-selector dropdowns render
   // with standard Shopify fields immediately and gain metafield options once
   // the paginated scan returns. Saved mappings that reference metafields are
@@ -4706,12 +4976,12 @@ export default function MappingClient({
     if (!previewProduct) return {}
     const result: Record<string, string | null> = {}
     const fieldsToPreview = [...ALL_FIELDS, ...customFields]
-    const ev = previewEvaluator(mappings, previewProduct, marketUrl, feedMode)
+    const ev = previewEvaluator(mappings, previewProduct, marketUrl, feedMode, masters)
     for (const field of fieldsToPreview) {
       result[field] = mappings[field]?.type ? ev.value(field) ?? '' : null
     }
     return result
-  }, [mappings, previewProduct, marketUrl, feedMode, customFields])
+  }, [mappings, previewProduct, marketUrl, feedMode, customFields, masters])
 
   // What config editors need beyond their own config (the EXTRACT editor shows
   // which pattern hits the preview product, and runs the coverage check).
@@ -4857,6 +5127,7 @@ export default function MappingClient({
     <FeedModeContext.Provider value={feedMode}>
     <MetafieldLabelsContext.Provider value={metafieldLabels}>
     <MappingsContext.Provider value={mappings}>
+    <MastersContext.Provider value={mastersCtx}>
     <EditorContext.Provider value={editorContext}>
     <div className="mp">
       <div className="mp-head">
@@ -5088,6 +5359,7 @@ export default function MappingClient({
       )}
     </div>
     </EditorContext.Provider>
+    </MastersContext.Provider>
     </MappingsContext.Provider>
     </MetafieldLabelsContext.Provider>
     </FeedModeContext.Provider>
