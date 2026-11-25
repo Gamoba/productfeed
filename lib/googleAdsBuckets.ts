@@ -402,9 +402,17 @@ async function buildEntities(
     poas: actions.p_poas_actions.length > 0,
   }
 
-  const margins = await getProductMargins(db, feedId, vatBasis(settings))
-
-  const stock = await getStockForFeed(db, feedId)
+  // Independent reads, all at once: each one waited for the previous before.
+  const summary =
+    level === 'product'
+      ? db.rpc('google_ads_product_summary', { p_feed_id: feedId, p_from: from, p_to: to, ...actions })
+      : db.rpc('google_ads_variant_summary', { p_feed_id: feedId, p_from: from, p_to: to, p_product_ref: null, ...actions })
+  const [margins, stock, summaryRes, products] = await Promise.all([
+    getProductMargins(db, feedId, vatBasis(settings)),
+    getStockForFeed(db, feedId),
+    summary,
+    activeCatalogue(db, feedId, level),
+  ])
 
   const NO_STOCK = { quantity: null, coverage: null, daysOfStock: null }
   const stockFor = (row: StockRow | undefined): BucketEntity['stock'] =>
@@ -453,12 +461,7 @@ async function buildEntities(
   }
 
   if (level === 'product') {
-    const { data, error } = await db.rpc('google_ads_product_summary', {
-      p_feed_id: feedId,
-      p_from: from,
-      p_to: to,
-      ...actions,
-    })
+    const { data, error } = summaryRes
     if (error) dbError('buildEntities/product', error)
     for (const r of (data ?? []) as unknown as ProductRow[] & Record<string, unknown>[]) {
       const ref = (r.product_ref as string | null) ?? null
@@ -469,13 +472,7 @@ async function buildEntities(
       byRef.set(ref, toEntity(ref, ref, (r.title as string | null) ?? null, r as never, true))
     }
   } else {
-    const { data, error } = await db.rpc('google_ads_variant_summary', {
-      p_feed_id: feedId,
-      p_from: from,
-      p_to: to,
-      p_product_ref: null,
-      ...actions,
-    })
+    const { data, error } = summaryRes
     if (error) dbError('buildEntities/variant', error)
     for (const r of (data ?? []) as unknown as VariantRow[] & Record<string, unknown>[]) {
       const ref = String(r.item_id ?? '')
@@ -495,23 +492,6 @@ async function buildEntities(
   }
 
   // ── Fill in the catalogue ──
-  const products: CatalogueProduct[] = []
-  const PAGE = 1000
-  const columns = level === 'variant' ? 'shopify_id, title, variants' : 'shopify_id, title'
-  for (let page = 0; ; page++) {
-    const { data, error } = await db
-      .from('products')
-      .select(columns)
-      .or('status.is.null,status.eq.active')
-      .eq('feed_id', feedId)
-      .order('shopify_id', { ascending: true })
-      .range(page * PAGE, page * PAGE + PAGE - 1)
-    if (error) dbError('buildEntities/catalogue', error)
-    const rows = (data ?? []) as unknown as CatalogueProduct[]
-    products.push(...rows)
-    if (rows.length < PAGE) break
-  }
-
   if (level === 'product') {
     for (const p of products) {
       if (!p.shopify_id || byRef.has(p.shopify_id)) continue
@@ -532,6 +512,32 @@ async function buildEntities(
   }
 
   return { entities: [...byRef.values()], unmatchedCost }
+}
+
+// Every active product of the feed (or its variants for variant labels). The
+// first page carries the total, so the remaining pages are fetched in parallel
+// instead of one after another.
+async function activeCatalogue(db: SupabaseClient, feedId: string, level: BucketLevel): Promise<CatalogueProduct[]> {
+  const PAGE = 1000
+  const columns = level === 'variant' ? 'shopify_id, title, variants' : 'shopify_id, title'
+  const page = (n: number, count = false) =>
+    db
+      .from('products')
+      .select(columns, count ? { count: 'exact' } : undefined)
+      .or('status.is.null,status.eq.active')
+      .eq('feed_id', feedId)
+      .order('shopify_id', { ascending: true })
+      .range(n * PAGE, n * PAGE + PAGE - 1)
+  const first = await page(0, true)
+  if (first.error) dbError('buildEntities/catalogue', first.error)
+  const out = [...((first.data ?? []) as unknown as CatalogueProduct[])]
+  const pages = Math.ceil((first.count ?? out.length) / PAGE)
+  const rest = await Promise.all(Array.from({ length: Math.max(0, pages - 1) }, (_, i) => page(i + 1)))
+  for (const r of rest) {
+    if (r.error) dbError('buildEntities/catalogue', r.error)
+    out.push(...((r.data ?? []) as unknown as CatalogueProduct[]))
+  }
+  return out
 }
 
 /**
@@ -702,15 +708,29 @@ async function recomputeOne(
 /** Previous membership per label, read BEFORE any rewrite, for "what changed". */
 async function previousMembership(
   db: SupabaseClient,
-  feedId: string
+  feedId: string,
+  labelId?: string
 ): Promise<Map<string, Map<string, string>>> {
-  const { data } = await db
-    .from('google_ads_bucket_members')
-    .select('label_id, ref, bucket_id')
-    .eq('feed_id', feedId)
+  // Paged: one request returns at most 1000 rows, and a feed with more members
+  // used to report a wrong "changed value" count. First page with the total,
+  // the rest in parallel.
+  const PAGE = 1000
+  const page = (n: number, count = false) => {
+    let q = db
+      .from('google_ads_bucket_members')
+      .select('label_id, ref, bucket_id', count ? { count: 'exact' } : undefined)
+      .eq('feed_id', feedId)
+    if (labelId) q = q.eq('label_id', labelId)
+    return q.order('label_id').order('ref').range(n * PAGE, n * PAGE + PAGE - 1)
+  }
+  const first = await page(0, true)
+  const rows = [...((first.data ?? []) as { label_id: string; ref: string; bucket_id: string }[])]
+  const pages = Math.ceil((first.count ?? rows.length) / PAGE)
+  const rest = await Promise.all(Array.from({ length: Math.max(0, pages - 1) }, (_, i) => page(i + 1)))
+  for (const r of rest) rows.push(...((r.data ?? []) as { label_id: string; ref: string; bucket_id: string }[]))
 
   const out = new Map<string, Map<string, string>>()
-  for (const r of (data ?? []) as { label_id: string; ref: string; bucket_id: string }[]) {
+  for (const r of rows) {
     let m = out.get(r.label_id)
     if (!m) out.set(r.label_id, (m = new Map()))
     m.set(r.ref, r.bucket_id)
@@ -730,18 +750,20 @@ export async function recomputeFeed(
   db: SupabaseClient,
   feedId: string
 ): Promise<RecomputeResult> {
-  const settings = await getFeedSettings(db, feedId)
+  const [settings, labels, allBuckets, previous] = await Promise.all([
+    getFeedSettings(db, feedId),
+    listLabels(db, feedId),
+    listBuckets(db, feedId),
+    previousMembership(db, feedId),
+  ])
   if (!settings) throw new AppError('Google Ads is not set up for this feed.')
-
-  const labels = await listLabels(db, feedId)
-  const allBuckets = await listBuckets(db, feedId)
-  const previous = await previousMembership(db, feedId)
   const build = entityBuilder(db, feedId, settings)
 
-  const results: LabelResult[] = []
-  for (const label of labels) {
-    results.push(
-      await recomputeOne(
+  // Labels are independent (each is replaced in its own transaction), so they
+  // run side by side; labels with the same level and window share one build.
+  const results: LabelResult[] = await Promise.all(
+    labels.map((label) =>
+      recomputeOne(
         db,
         feedId,
         settings,
@@ -751,7 +773,7 @@ export async function recomputeFeed(
         previous.get(label.id) ?? new Map()
       )
     )
-  }
+  )
 
   return { labels: results, warnings: feedWarnings(settings) }
 }
@@ -762,19 +784,21 @@ export async function recomputeLabel(
   feedId: string,
   labelId: string
 ): Promise<RecomputeResult> {
-  const settings = await getFeedSettings(db, feedId)
+  const [settings, label, buckets, previous] = await Promise.all([
+    getFeedSettings(db, feedId),
+    getLabel(db, feedId, labelId),
+    listBuckets(db, feedId, labelId),
+    previousMembership(db, feedId, labelId),
+  ])
   if (!settings) throw new AppError('Google Ads is not set up for this feed.')
-
-  const label = await getLabel(db, feedId, labelId)
   if (!label) throw new AppError('That custom label does not exist on this feed.')
 
-  const previous = await previousMembership(db, feedId)
   const result = await recomputeOne(
     db,
     feedId,
     settings,
     label,
-    await listBuckets(db, feedId, labelId),
+    buckets,
     entityBuilder(db, feedId, settings),
     previous.get(labelId) ?? new Map()
   )

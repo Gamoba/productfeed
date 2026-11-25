@@ -1,7 +1,7 @@
 import { NextResponse } from 'next/server'
 import { createSupabaseServerClient } from '@/lib/supabase-server'
 import { adminDb, getOwnedFeed } from '@/lib/feeds'
-import { saveBucket, deleteBucket, listBuckets, type Bucket } from '@/lib/googleAdsBuckets'
+import { saveBucket, deleteBucket, listBuckets, recomputeLabel, type Bucket } from '@/lib/googleAdsBuckets'
 import { logActivity } from '@/lib/activity'
 import { errorResponse } from '@/lib/errors'
 
@@ -26,7 +26,9 @@ export async function POST(req: Request, { params }: { params: Promise<{ feedId:
     const g = await guard(feedId)
     if ('error' in g) return g.error
 
-    const body = (await req.json().catch(() => ({}))) as { bucket?: Partial<Bucket> }
+    // recompute: true recalculates the bucket's label in the same request, so
+    // the page doesn't wait for a second round trip.
+    const body = (await req.json().catch(() => ({}))) as { bucket?: Partial<Bucket>; recompute?: boolean }
     if (!body.bucket) {
       return NextResponse.json({ error: 'bucket is required' }, { status: 400 })
     }
@@ -40,7 +42,8 @@ export async function POST(req: Request, { params }: { params: Promise<{ feedId:
       action: body.bucket.id ? 'Bucket changed' : 'Bucket created',
       after: saved.name === saved.value ? saved.name : `${saved.name} → ${saved.value}`,
     })
-    return NextResponse.json({ bucket: saved })
+    const result = body.recompute ? await recomputeLabel(db, feedId, saved.label_id) : undefined
+    return NextResponse.json({ bucket: saved, ...(result ? { result } : {}) })
   } catch (err) {
     return errorResponse(err, 'POST /api/google-ads/[feedId]/buckets')
   }
@@ -59,7 +62,10 @@ export async function DELETE(req: Request, { params }: { params: Promise<{ feedI
     const bucket = (await listBuckets(db, feedId)).find((b) => b.id === id)
     await deleteBucket(db, feedId, id)
     await logActivity(db, { user: g.user, feedId, area: 'Labels', action: 'Bucket deleted', before: bucket?.name ?? null })
-    return NextResponse.json({ ok: true })
+    // recompute=1: recalculate the bucket's label in the same request.
+    const result =
+      bucket && new URL(req.url).searchParams.get('recompute') === '1' ? await recomputeLabel(db, feedId, bucket.label_id) : undefined
+    return NextResponse.json({ ok: true, ...(result ? { result } : {}) })
   } catch (err) {
     return errorResponse(err, 'DELETE /api/google-ads/[feedId]/buckets')
   }
