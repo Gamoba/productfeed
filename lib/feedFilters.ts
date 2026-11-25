@@ -172,20 +172,30 @@ function matchesFilter(
 
 // Applies an include filter then an exclude filter (the standard feed scope).
 // Reused verbatim by both feed generation and the title-optimization scope.
+// Which of the feed's two rule sets actually filter anything. Shared by
+// applyFeedFilters and the fast count (countFilteredProducts) so they can't
+// disagree about when "no rules" means "every active product".
+export function activeFilterSides(filters: FeedFilter[]): { include: FeedFilter | null; exclude: FeedFilter | null } {
+  const includeFilter = filters.find((f) => f.filter_type === 'include')
+  const excludeFilter = filters.find((f) => f.filter_type === 'exclude')
+  return {
+    include: includeFilter && includeFilter.rules.length > 0 ? includeFilter : null,
+    exclude:
+      excludeFilter && excludeFilter.rules.some((r) => NO_VALUE_OPS.has(r.operator) || r.value !== '')
+        ? excludeFilter
+        : null,
+  }
+}
+
 export function applyFeedFilters(
   products: SupabaseProduct[],
   filters: FeedFilter[],
   marketUrl: string | null
 ): SupabaseProduct[] {
-  const includeFilter = filters.find((f) => f.filter_type === 'include')
-  const excludeFilter = filters.find((f) => f.filter_type === 'exclude')
+  const { include, exclude } = activeFilterSides(filters)
   let result = products
-  if (includeFilter && includeFilter.rules.length > 0) {
-    result = result.filter((p) => matchesFilter(p, includeFilter, marketUrl))
-  }
-  if (excludeFilter && excludeFilter.rules.some((r) => NO_VALUE_OPS.has(r.operator) || r.value !== '')) {
-    result = result.filter((p) => !matchesFilter(p, excludeFilter, marketUrl))
-  }
+  if (include) result = result.filter((p) => matchesFilter(p, include, marketUrl))
+  if (exclude) result = result.filter((p) => !matchesFilter(p, exclude, marketUrl))
   return result
 }
 
