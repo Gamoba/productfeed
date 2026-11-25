@@ -144,7 +144,15 @@ export async function GET(req: Request) {
     // response (~300 KB for 25 products). Other callers (the mapping previews)
     // still get everything, since they evaluate mappings on the client.
     if (withFeedView) {
-      products = products.map((p) => ({ ...p, body_html: '', options: [], images: p.images.slice(0, 1) }))
+      products = products.map((p) => ({
+        ...p,
+        body_html: '',
+        options: [],
+        images: p.images.slice(0, 1),
+        // The list shows namespace, key and value; the rest is padding
+        // (~24 metafields per product on a metaobject-heavy store).
+        metafields: p.metafields.map((m) => ({ namespace: m.namespace, key: m.key, value: m.value }) as typeof m),
+      }))
     }
     let feed: Record<string, FeedViewItem> | undefined
     if (withFeedView) feed = Object.fromEntries(await feedView(feedId, rows))
