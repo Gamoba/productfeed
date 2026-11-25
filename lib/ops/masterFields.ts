@@ -66,7 +66,7 @@ export async function saveMasterField(
     : await db.from('master_fields').insert(row)
   if (error) return { error: error.message }
 
-  await logActivity(db, {
+  await afterResponse(() => logActivity(db, {
     user: ctx.user,
     via: ctx.via,
     projectId,
@@ -74,7 +74,7 @@ export async function saveMasterField(
     action: (prev ? 'Master field "{name}" changed' : 'Master field "{name}" created').replace('{name}', row.name),
     before: prev ? describeMapping(prev.mapping_type, prev.config) : null,
     after: describeMapping(row.mapping_type, row.config),
-  })
+  }))
 
   // Every feed that reads this field gets re-validated, as after a mapping save.
   if (prev) {
@@ -102,7 +102,7 @@ export async function deleteMasterField(
 
   const { error } = await db.from('master_fields').delete().eq('id', prev.id)
   if (error) return { error: error.message }
-  await logActivity(db, {
+  await afterResponse(() => logActivity(db, {
     user: ctx.user,
     via: ctx.via,
     projectId,
@@ -110,6 +110,6 @@ export async function deleteMasterField(
     action: 'Master field "{name}" deleted'.replace('{name}', prev.name),
     before: describeMapping(prev.mapping_type, prev.config),
     after: null,
-  })
+  }))
   return {}
 }
