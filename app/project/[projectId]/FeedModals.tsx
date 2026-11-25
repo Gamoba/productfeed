@@ -2,6 +2,7 @@
 
 import { useState } from 'react'
 import { createPortal } from 'react-dom'
+import { refreshShell } from '@/app/components/shell/useShell'
 
 // Rename, edit description and delete for one feed. Used from the row menu on
 // the shop's Feeds page.
@@ -70,6 +71,7 @@ export function RenameFeedDialog({
     setErr(null)
     try {
       onSaved(await patchFeed(feed.id, { name: trimmed }))
+      refreshShell()
     } catch (e2) {
       setErr(e2 instanceof Error ? e2.message : 'Navnet kunne ikke gemmes')
       setBusy(false)
@@ -177,6 +179,7 @@ export function DeleteFeedDialog({
         throw new Error(j.error ?? `HTTP ${res.status}`)
       }
       onDeleted()
+      refreshShell()
     } catch (e2) {
       setErr(e2 instanceof Error ? e2.message : 'Feedet kunne ikke slettes')
       setBusy(false)

@@ -9,6 +9,7 @@ import { Icon } from '@/app/components/shell/icons'
 import { Popover } from '@/app/components/shell/Popover'
 import { flagEmoji, initials } from '@/app/components/shell/nav'
 import { countryName, formatNumber } from '@/lib/formatDa'
+import { refreshShell } from '@/app/components/shell/useShell'
 import './agency.css'
 
 export function AgencyDashboardClient({ initial }: { initial: AgencyOverview }) {
@@ -216,6 +217,7 @@ function ShopRow({
             onClose={() => setDialog(null)}
             onSaved={(name) => {
               onRenamed(name)
+              refreshShell()
               setDialog(null)
             }}
           />
@@ -227,6 +229,7 @@ function ShopRow({
             onDeleted={() => {
               setDialog(null)
               onDeleted()
+              refreshShell()
             }}
           />
         )}

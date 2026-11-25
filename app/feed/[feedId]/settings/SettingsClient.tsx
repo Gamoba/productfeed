@@ -10,6 +10,7 @@ import { countryName, formatWhen, languageName } from '@/lib/formatDa'
 import { flagEmoji } from '@/app/components/shell/nav'
 import './settings.css'
 import { markFeedEdited } from '@/lib/recentEdit'
+import { refreshShell } from '@/app/components/shell/useShell'
 
 export type ScheduleState = {
   frequency: AutoSyncFrequency
@@ -137,6 +138,7 @@ export function SettingsClient({
         text: r ? `Synkroniseret: ${r.synced} varer på ${(r.durationMs / 1000).toFixed(1)} s` : 'Synkroniseret',
       })
       router.refresh()
+      refreshShell()
     },
   })
 
@@ -249,6 +251,7 @@ export function SettingsClient({
       setSaved({ feedFreq, feedTime, perfFreq, perfTime, feedMode })
       setStatus({ kind: note ? 'error' : 'ok', text: `Gemt.${note}` })
       router.refresh()
+      refreshShell()
       return true
     } catch (err) {
       setStatus({ kind: 'error', text: err instanceof Error ? err.message : 'Kunne ikke gemme' })

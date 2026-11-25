@@ -4,6 +4,7 @@ import { useState } from 'react'
 import { formatWhen } from '@/lib/formatDa'
 import type { ChangeRow } from '@/lib/mcp/changes'
 import { decideMcpChange, disconnectAssistant, setMcpAutoApply } from './actions'
+import { refreshShell } from '@/app/components/shell/useShell'
 import './mcp.css'
 
 export type McpState = {
@@ -54,6 +55,7 @@ export function McpClient({ initial }: { initial: McpState }) {
     }
     if (r.error) setError(`Ændringen kunne ikke gennemføres: ${r.error}`)
     setPending((p) => p.filter((c) => c.id !== change.id))
+    refreshShell()
     setHistory((h) => [{ ...change, status: r.status ?? 'applied', error: r.error ?? null, decided_by_name: 'Dig', decided_at: new Date().toISOString() }, ...h])
   }
 
