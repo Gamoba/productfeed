@@ -90,12 +90,16 @@ export function RuleRow({
   onChange,
   onDelete,
   metafieldOptions,
+  masterOptions,
 }: {
   rule: FilterRule
   onChange: (patch: Partial<FilterRule>) => void
   onDelete: () => void
   metafieldOptions?: MetafieldOption[]
+  /** The shop's master fields; offered as `master:<key>` (feed rules only). */
+  masterOptions?: { key: string; name: string }[]
 }) {
+  const isMaster = rule.field.startsWith('master:')
   const isMetafield = rule.field.startsWith('metafield:')
   const metafieldKey = isMetafield ? rule.field.slice('metafield:'.length) : ''
   const dropdownValue = isMetafield ? '__metafield__' : rule.field
@@ -121,6 +125,20 @@ export function RuleRow({
         {FILTER_FIELDS.map((f) => (
           <option key={f.value} value={f.value}>{f.label}</option>
         ))}
+        {isMaster && !masterOptions?.some((m) => `master:${m.key}` === rule.field) && (
+          <option value={rule.field}>
+            {rule.field.slice('master:'.length)} (findes ikke længere)
+          </option>
+        )}
+        {masterOptions && masterOptions.length > 0 && (
+          <optgroup label="Master fields">
+            {masterOptions.map((m) => (
+              <option key={m.key} value={`master:${m.key}`}>
+                {m.name} (master)
+              </option>
+            ))}
+          </optgroup>
+        )}
       </select>
 
       {isMetafield && (

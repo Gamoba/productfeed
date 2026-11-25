@@ -27,6 +27,17 @@ export type FeedFilter = {
 
 // ── Field resolution ─────────────────────────────────────────────────────────
 
+// `master:<key>` (a shop master field) can't be read from the product alone: it
+// may combine fields, read other mappings and so on. Callers whose rules use
+// one attach a resolver to each product first (lib/masterFields,
+// attachMasterResolvers); without it the field reads ''.
+export const MASTER_RESOLVER = '__masterResolve'
+
+/** Whether any rule reads a master field, so the caller must attach resolvers. */
+export function rulesReadMasters(filters: { rules?: { field?: string }[] | null }[]): boolean {
+  return filters.some((f) => (f.rules ?? []).some((r) => !!r.field?.startsWith('master:')))
+}
+
 // Builds a product URL using the selected market's rootUrl when available.
 // `marketUrl` may be a subdomain (https://shop.fr) or a subfolder (https://shop.com/fr) —
 // in both cases we strip a trailing slash and append /products/<handle>.
@@ -47,6 +58,11 @@ export function resolveField(
   marketUrl: string | null
 ): string {
   if (!field) return ''
+
+  if (field.startsWith('master:')) {
+    const resolve = (product as Record<string, unknown>)[MASTER_RESOLVER] as ((key: string) => string) | undefined
+    return resolve ? resolve(field.slice('master:'.length)) : ''
+  }
 
   if (field === 'url') {
     // Feed-URL sources carry the product's real URL; their URL scheme isn't
@@ -231,6 +247,7 @@ const FIELD_LABEL: Record<string, string> = {
 }
 
 function fieldLabel(field: string): string {
+  if (field.startsWith('master:')) return `${field.slice('master:'.length)} (master)`
   return FIELD_LABEL[field] ?? field.replace(/^metafield:/, '')
 }
 
