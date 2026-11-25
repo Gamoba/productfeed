@@ -1,5 +1,7 @@
 'use client'
 
+import { useRouter } from 'next/navigation'
+import { SetupStepFooter } from '@/app/components/SetupStepFooter'
 import { createContext, useContext, useEffect, useMemo, useState, useTransition } from 'react'
 import { saveMappings, type MappingEntry } from './actions'
 import {
@@ -3723,6 +3725,190 @@ const FILTER_DEFS: FilterDef[] = [
 
 const SIDEBAR_PAGE_SIZE = 20
 
+// ── Live preview: mode switch + "One product" mode ─────────────────────────
+
+const LP_TEXT = {
+  live: 'Live preview',
+  oneField: 'One field',
+  oneProduct: 'One product',
+  field: 'Field',
+  search: 'Search products by title, vendor or tag',
+  none: 'No products match the search.',
+  loading: 'Loading products…',
+  notMapped: 'Not mapped',
+  empty: '(empty)',
+  close: 'Close preview',
+  lede: 'All mapped fields for one product, as the feed will show them. Unsaved changes are included.',
+  noFields: 'No fields are mapped yet.',
+}
+
+function LivePreviewSwitch({
+  mode,
+  onMode,
+  field,
+  fields,
+  onField,
+}: {
+  mode: 'field' | 'product'
+  onMode: (m: 'field' | 'product') => void
+  field?: string
+  fields: string[]
+  onField?: (f: string) => void
+}) {
+  return (
+    <div className="lp-switch">
+      <div className="lp-seg" role="tablist" aria-label={LP_TEXT.live}>
+        <button type="button" role="tab" aria-selected={mode === 'field'} onClick={() => onMode('field')}>
+          {LP_TEXT.oneField}
+        </button>
+        <button type="button" role="tab" aria-selected={mode === 'product'} onClick={() => onMode('product')}>
+          {LP_TEXT.oneProduct}
+        </button>
+      </div>
+      {mode === 'field' && onField && fields.length > 0 && (
+        <select className="ff-select lp-field" aria-label={LP_TEXT.field} value={field} onChange={(e) => onField(e.target.value)}>
+          {fields.map((f) => (
+            <option key={f} value={f}>
+              {f.startsWith('custom:') ? f.slice('custom:'.length) : f}
+            </option>
+          ))}
+        </select>
+      )}
+    </div>
+  )
+}
+
+// Every mapped field for one product, evaluated with the editor's current
+// (unsaved) mappings — the same evaluator the inline preview uses.
+function ProductPreviewPanel({
+  feedId,
+  feedMode,
+  marketUrl,
+  fields,
+  initialProduct,
+  onPick,
+  onClose,
+  headerExtra,
+}: {
+  feedId: string
+  feedMode: 'product' | 'variant'
+  marketUrl: string | null
+  fields: string[]
+  initialProduct: PreviewProduct | null
+  onPick: (p: PreviewProduct) => void
+  onClose: () => void
+  headerExtra: React.ReactNode
+}) {
+  const allMappings = useContext(MappingsContext)
+  const [search, setSearch] = useState('')
+  const [query, setQuery] = useState('')
+  const [products, setProducts] = useState<PreviewProduct[] | null>(null)
+  const [selected, setSelected] = useState<PreviewProduct | null>(initialProduct)
+
+  useEffect(() => {
+    const t = setTimeout(() => setQuery(search.trim()), 300)
+    return () => clearTimeout(t)
+  }, [search])
+
+  useEffect(() => {
+    let cancelled = false
+    const params = new URLSearchParams({ feedId, page: '1', pageSize: '20', skipCount: '1' })
+    if (query) params.set('search', query)
+    fetch(`/api/products?${params.toString()}`)
+      .then((r) => (r.ok ? r.json() : { products: [] }))
+      .then((d: { products?: PreviewProduct[] }) => {
+        if (cancelled) return
+        const list = d.products ?? []
+        setProducts(list)
+        setSelected((cur) => cur ?? list[0] ?? null)
+      })
+      .catch(() => !cancelled && setProducts([]))
+    return () => {
+      cancelled = true
+    }
+  }, [feedId, query])
+
+  useEffect(() => {
+    function onKey(e: KeyboardEvent) {
+      if (e.key === 'Escape') onClose()
+    }
+    document.addEventListener('keydown', onKey)
+    return () => document.removeEventListener('keydown', onKey)
+  }, [onClose])
+
+  const values = useMemo(() => {
+    if (!selected) return [] as { field: string; value: string | null }[]
+    const ev = previewEvaluator(allMappings, selected, marketUrl, feedMode)
+    return fields.map((f) => ({ field: f, value: allMappings[f]?.type ? (ev.value(f) ?? '') : null }))
+  }, [selected, allMappings, marketUrl, feedMode, fields])
+
+  return (
+    <>
+      <div className="lp-overlay" onClick={onClose} />
+      <aside className="lp-panel" aria-label={LP_TEXT.live}>
+        <div className="lp-head">
+          <div className="min-w-0">
+            <b className="lp-title">{LP_TEXT.live}</b>
+            <p className="lp-lede">{LP_TEXT.lede}</p>
+            {headerExtra}
+          </div>
+          <button type="button" className="lp-close" onClick={onClose} aria-label={LP_TEXT.close}>
+            ×
+          </button>
+        </div>
+        <div className="lp-body">
+          <input
+            type="search"
+            className="ff-input"
+            value={search}
+            placeholder={LP_TEXT.search}
+            aria-label={LP_TEXT.search}
+            onChange={(e) => setSearch(e.target.value)}
+          />
+          <div className="lp-products" role="listbox" aria-label={LP_TEXT.oneProduct}>
+            {products === null && <p className="lp-muted">{LP_TEXT.loading}</p>}
+            {products?.length === 0 && <p className="lp-muted">{LP_TEXT.none}</p>}
+            {products?.map((p) => (
+              <button
+                key={p.id}
+                type="button"
+                role="option"
+                aria-selected={selected?.id === p.id}
+                className="lp-product"
+                onClick={() => {
+                  setSelected(p)
+                  onPick(p)
+                }}
+              >
+                <span className="lp-product-t">{p.title}</span>
+                <small>{[p.vendor, p.product_type].filter(Boolean).join(' · ')}</small>
+              </button>
+            ))}
+          </div>
+          {selected && (
+            <div className="lp-values">
+              <b className="lp-values-h">{selected.title}</b>
+              {fields.length === 0 && <p className="lp-muted">{LP_TEXT.noFields}</p>}
+              {values.map(({ field, value }) => (
+                <div key={field} className="lp-row">
+                  <span className="lp-k">{field.startsWith('custom:') ? field.slice('custom:'.length) : field}</span>
+                  {value === null ? (
+                    <span className="lp-v lp-muted">{LP_TEXT.notMapped}</span>
+                  ) : value === '__AI__' ? (
+                    <span className="lp-v lp-muted">AI</span>
+                  ) : (
+                    <span className="lp-v">{value || <em className="lp-muted">{LP_TEXT.empty}</em>}</span>
+                  )}
+                </div>
+              ))}
+            </div>
+          )}
+        </div>
+      </aside>
+    </>
+  )
+}
+
 function FieldPreviewSidebar({
   field,
   state,
@@ -3730,6 +3916,7 @@ function FieldPreviewSidebar({
   feedMode,
   marketUrl,
   onClose,
+  headerExtra,
 }: {
   field: string
   state: FieldState
@@ -3737,6 +3924,8 @@ function FieldPreviewSidebar({
   feedMode: 'product' | 'variant'
   marketUrl: string | null
   onClose: () => void
+  /** The Live preview mode switch and field picker. */
+  headerExtra?: React.ReactNode
 }) {
   // Every field's current state, so `feed:` references preview correctly.
   const allMappings = useContext(MappingsContext)
@@ -3879,7 +4068,7 @@ function FieldPreviewSidebar({
         className="fixed top-0 right-0 z-50 h-screen flex flex-col"
         style={{
           width: '50vw',
-          minWidth: '440px',
+          minWidth: 'min(440px, 100vw)',
           maxWidth: '100vw',
           background: '#ffffff',
           borderLeft: '1px solid var(--hairline)',
@@ -3904,6 +4093,7 @@ function FieldPreviewSidebar({
             >
               {mappingLabel}
             </p>
+            {headerExtra}
           </div>
           <button
             type="button"
@@ -4334,6 +4524,7 @@ export default function MappingClient({
 
   const [isPending, startTransition] = useTransition()
   const [status, setStatus] = useState<'idle' | 'saved' | 'error'>('idle')
+  const router = useRouter()
   const [errorMsg, setErrorMsg] = useState('')
   // Patterns the last save stored but the generator will skip. Kept until the
   // next save (not timed out like "Saved") — it's something to go fix.
@@ -4371,6 +4562,8 @@ export default function MappingClient({
   // Field preview sidebar — set to a Google field name when the user clicks
   // the hover "Preview" button on a row; null when the sidebar is closed.
   const [previewSidebarField, setPreviewSidebarField] = useState<string | null>(null)
+  // Live preview "One product" mode (the field mode is previewSidebarField).
+  const [productPreviewOpen, setProductPreviewOpen] = useState(false)
 
   function toggleSection(title: string) {
     setOpenSections((prev) => {
@@ -4504,6 +4697,11 @@ export default function MappingClient({
   }
 
   // Compute preview values for all fields whenever mappings or selected product change
+  const mappedPreviewFields = useMemo(
+    () => [...ALL_FIELDS, ...customFields].filter((f) => !!mappings[f]?.type),
+    [mappings, customFields]
+  )
+
   const previewValues = useMemo<Record<string, string | null>>(() => {
     if (!previewProduct) return {}
     const result: Record<string, string | null> = {}
@@ -4619,7 +4817,7 @@ export default function MappingClient({
     .map((g) => ({ ...g, shown: g.fields.filter(fieldMatches) }))
     .filter((g) => !filtering || g.shown.length > 0)
 
-  function handleSave() {
+  function handleSave(then?: () => void) {
     startTransition(async () => {
       const entries: MappingEntry[] = [
         ...ALL_FIELDS.map((f) => ({
@@ -4650,6 +4848,7 @@ export default function MappingClient({
         setStatus('saved')
         setRemovedCustomFields([])
         setTimeout(() => setStatus('idle'), 2500)
+        then?.()
       }
     })
   }
@@ -4676,6 +4875,10 @@ export default function MappingClient({
             <Icon name="bolt" size={14} />
             {isFetchingAI ? 'AI is analysing…' : 'Auto-map with AI'}
           </button>
+          <button onClick={() => setProductPreviewOpen(true)} className="wl-btn-secondary">
+            <Icon name="eye" size={14} />
+            Live preview
+          </button>
           {previewProduct ? (
             <span className="mp-prodchip">
               {(previewProduct.images[0]?.src as string | undefined) && (
@@ -4693,7 +4896,7 @@ export default function MappingClient({
               Show on a product
             </button>
           )}
-          <button onClick={handleSave} disabled={isPending} className="wl-btn-primary">
+          <button onClick={() => handleSave()} disabled={isPending} className="wl-btn-primary">
             {isPending ? 'Saving…' : status === 'saved' ? '✓ Saved' : 'Save'}
           </button>
         </div>
@@ -4787,6 +4990,14 @@ export default function MappingClient({
           onPreview={setPreviewSidebarField}
         />
 
+      <SetupStepFooter
+        step={1}
+        back={{ href: `/feed/${feedId}`, label: 'Back to Overview' }}
+        next={{ href: `/feed/${feedId}/filters`, label: 'Save and continue to Include / exclude' }}
+        onNext={() => handleSave(() => router.push(`/feed/${feedId}/filters`))}
+        busy={isPending}
+      />
+
       {showPicker && (
         <ProductPickerModal
           feedId={feedId}
@@ -4836,6 +5047,43 @@ export default function MappingClient({
           feedMode={feedMode}
           marketUrl={marketUrl}
           onClose={() => setPreviewSidebarField(null)}
+          headerExtra={
+            <LivePreviewSwitch
+              mode="field"
+              onMode={(m) => {
+                if (m === 'product') {
+                  setPreviewSidebarField(null)
+                  setProductPreviewOpen(true)
+                }
+              }}
+              field={previewSidebarField}
+              fields={mappedPreviewFields}
+              onField={setPreviewSidebarField}
+            />
+          }
+        />
+      )}
+      {productPreviewOpen && (
+        <ProductPreviewPanel
+          feedId={feedId}
+          feedMode={feedMode}
+          marketUrl={marketUrl}
+          fields={mappedPreviewFields}
+          initialProduct={previewProduct}
+          onPick={setPreviewProduct}
+          onClose={() => setProductPreviewOpen(false)}
+          headerExtra={
+            <LivePreviewSwitch
+              mode="product"
+              onMode={(m) => {
+                if (m === 'field') {
+                  setProductPreviewOpen(false)
+                  setPreviewSidebarField(mappedPreviewFields[0] ?? 'title')
+                }
+              }}
+              fields={mappedPreviewFields}
+            />
+          }
         />
       )}
     </div>

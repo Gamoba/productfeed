@@ -613,3 +613,10 @@ body {
 .link { color: var(--accent-ink); font-weight: 500; font-size: 12.5px; text-decoration: none; }
 .link:hover { text-decoration: underline; }
 .num { font-variant-numeric: tabular-nums; }
+
+/* Step footer on the feed setup pages (components/SetupStepFooter). */
+.setup-step {
+  display: flex; align-items: center; gap: 10px; flex-wrap: wrap;
+  padding: 12px 16px; border-radius: var(--r-lg); background: var(--card); box-shadow: var(--shadow); font-size: 12.5px;
+}
+.setup-step > span { margin-right: auto; color: var(--muted); }

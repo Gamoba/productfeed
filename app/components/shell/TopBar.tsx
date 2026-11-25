@@ -8,6 +8,7 @@ import { Popover } from './Popover'
 import { accountNav, shopNav, feedPageLabel, flagEmoji, isActive, samePageOnFeed, type NavLink } from './nav'
 import { navFor } from './Sidebar'
 import { UserMenu } from './UserMenu'
+import { AttentionButton, FeedStatusPill, SearchButton } from './TopTools'
 import { ChannelIcon } from '../ChannelIcon'
 import { channelOf } from '@/lib/channels'
 import type { Shell } from './useShell'
@@ -24,8 +25,13 @@ export function TopBar({ shell, pathname }: { shell: Shell; pathname: string }) 
 
       <Crumbs shell={shell} pathname={pathname} />
 
-      <div className="shell-top-tools shell-mobile-only">
-        <UserMenu shell={shell} variant="avatar" />
+      <div className="shell-top-tools">
+        <FeedStatusPill shell={shell} />
+        <SearchButton shell={shell} />
+        <AttentionButton shell={shell} />
+        <span className="shell-mobile-only">
+          <UserMenu shell={shell} variant="avatar" />
+        </span>
       </div>
 
       <MobileNav shell={shell} pathname={pathname} />
