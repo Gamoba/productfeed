@@ -37,6 +37,7 @@ export function FeedClient({
   totalFields,
   missingRequired,
   lastSynced,
+  initialCounts,
 }: {
   feedId: string
   channel: string
@@ -47,9 +48,12 @@ export function FeedClient({
   totalFields: number
   missingRequired: string[]
   lastSynced: string | null
+  /** The stored count, shown until the live recount arrives. */
+  initialCounts?: { included: number; excluded: number } | null
 }) {
-  // Included / excluded come from the slow paginated count; null = loading.
-  const [counts, setCounts] = useState<{ included: number; excluded: number } | null>(null)
+  // Included / excluded: the stored count at once, then the live recount
+  // (which also stores it for next time). null = never counted yet.
+  const [counts, setCounts] = useState<{ included: number; excluded: number } | null>(initialCounts ?? null)
   useEffect(() => {
     let cancelled = false
     fetch(`/api/feeds/${encodeURIComponent(feedId)}/counts`)

@@ -54,10 +54,18 @@ export function PreviewClient({
   const [upgrading, setUpgrading] = useState(true)
   useEffect(() => {
     let cancelled = false
-    fetch(`/api/preview?feedId=${encodeURIComponent(feedId)}&limit=100`)
+    // The rows (without the slow count) and the live count, side by side. The
+    // stored count shows until the live one arrives (lib/feedCounts).
+    fetch(`/api/feeds/${encodeURIComponent(feedId)}/counts`)
+      .then((r) => (r.ok ? r.json() : null))
+      .then((c: { included?: number } | null) => {
+        if (!cancelled && typeof c?.included === 'number') setData((d) => ({ ...d, totalProducts: c.included as number }))
+      })
+      .catch(() => {})
+    fetch(`/api/preview?feedId=${encodeURIComponent(feedId)}&limit=100&count=0`)
       .then((r) => (r.ok ? r.json() : null))
       .then((full: PreviewData | null) => {
-        if (!cancelled && full) setData(full)
+        if (!cancelled && full) setData((d) => ({ ...full, totalProducts: full.totalProducts ?? d.totalProducts }))
       })
       .catch(() => {})
       .finally(() => {
@@ -198,7 +206,7 @@ function Pipeline({
     {
       icon: 'filter',
       title: 'Include / exclude',
-      detail: `${formatNumber(data.totalProducts)} ${data.feedMode === 'variant' ? 'products (before variants)' : 'products'} included`,
+      detail: `${data.totalProducts === null ? '…' : formatNumber(data.totalProducts)} ${data.feedMode === 'variant' ? 'products (before variants)' : 'products'} included`,
       href: f('/filters'),
     },
     {
@@ -348,7 +356,7 @@ function ItemPreview({ data, upgrading }: { data: PreviewData; upgrading: boolea
           <h3>Products in the feed</h3>
           <small>
             {formatNumber(rows.length)} {data.feedMode === 'variant' ? 'variants' : 'products'} shown
-            {data.totalProducts > rows.length ? ` of ${formatNumber(data.totalProducts)} products in the feed` : ''} ·{' '}
+            {data.totalProducts !== null && data.totalProducts > rows.length ? ` of ${formatNumber(data.totalProducts)} products in the feed` : ''} ·{' '}
             {fields.length} fields
           </small>
         </div>

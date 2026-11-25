@@ -3,6 +3,7 @@ import { createSupabaseServerClient } from '@/lib/supabase-server'
 import { adminDb, getOwnedProject } from '@/lib/feeds'
 import { getAccessibleProjectIds } from '@/lib/accounts'
 import { errorResponse } from '@/lib/errors'
+import { storedCounts } from '@/lib/feedCounts'
 import { logActivity } from '@/lib/activity'
 import { channelOf } from '@/lib/channels'
 import type { ValidationIssue } from '@/lib/feedValidator'
@@ -70,9 +71,10 @@ export async function GET(req: Request) {
   const productCount = new Map<string, number>()
   let caches: CacheRow[] | null = []
   let markets: MarketRow[] = []
+  let stored = new Map<string, { active: number; included: number }>()
 
   try {
-    const [productCountResults, cacheResult, marketResult] = await Promise.all([
+    const [productCountResults, cacheResult, marketResult, counted] = await Promise.all([
       Promise.allSettled(
         feedIds.map(
           async (id) =>
@@ -98,7 +100,9 @@ export async function GET(req: Request) {
             .select('feed_id, selected_market_id, selected_country, selected_locale, currency')
             .in('feed_id', feedIds)
         : Promise.resolve({ data: [] as MarketRow[] }),
+      storedCounts(db, feedIds),
     ])
+    stored = counted
 
     for (const r of productCountResults) {
       if (r.status === 'fulfilled') {
@@ -145,10 +149,10 @@ export async function GET(req: Request) {
       lastSynced: (f.last_synced_at as string | null) ?? null,
       feedGenerated: cache?.generated_at ?? null,
       feedProductCount: cache?.product_count ?? null,
-      // null = LAG 2 still loading; FeedListClient fills these from
-      // /api/feeds/counts.
-      includedCount: null,
-      excludedCount: null,
+      // The last stored count (lib/feedCounts); /api/feeds/counts recounts and
+      // the page swaps in the live numbers. null = never counted yet.
+      includedCount: stored.get(f.id)?.included ?? null,
+      excludedCount: stored.has(f.id) ? Math.max(0, stored.get(f.id)!.active - stored.get(f.id)!.included) : null,
       validationStatus: cache?.validation_status ?? null,
       validationErrors: cache?.validation_errors ?? null,
     }

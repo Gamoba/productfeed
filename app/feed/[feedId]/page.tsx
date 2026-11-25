@@ -3,6 +3,7 @@ import { createSupabaseServerClient } from '@/lib/supabase-server'
 import { adminDb, getOwnedFeed } from '@/lib/feeds'
 import { FeedClient } from '@/app/feed/FeedClient'
 import { REQUIRED_GOOGLE_FIELDS, type ValidationIssue, type ValidationResult } from '@/lib/feedValidator'
+import { storedCount } from '@/lib/feedCounts'
 
 // Total Google Shopping fields the mapping UI exposes ("X / TOTAL fields mapped").
 const TOTAL_GOOGLE_FIELDS = 39
@@ -35,6 +36,7 @@ export default async function FeedDetailPage({
     { data: mappedRows },
     { data: lastSyncRow },
     { data: marketRow },
+    counted,
   ] = await Promise.all([
     db.from('feed_settings').select('feed_mode').eq('feed_id', feedId).maybeSingle(),
     db
@@ -49,6 +51,8 @@ export default async function FeedDetailPage({
     db.from('feeds').select('last_synced_at').eq('id', feedId).maybeSingle(),
     // The feed's market, for the lede ("Google Shopping · Tyskland").
     db.from('shop_settings').select('selected_country').eq('feed_id', feedId).maybeSingle(),
+    // The last stored included / excluded count, shown until the live recount.
+    storedCount(db, feedId),
   ])
 
   const mapped = new Set(((mappedRows ?? []) as { google_field: string }[]).map((m) => m.google_field))
@@ -85,6 +89,7 @@ export default async function FeedDetailPage({
       totalFields={TOTAL_GOOGLE_FIELDS}
       missingRequired={missingRequired}
       lastSynced={(lastSyncRow?.last_synced_at as string | null) ?? null}
+      initialCounts={counted ? { included: counted.included, excluded: Math.max(0, counted.active - counted.included) } : null}
     />
   )
 }

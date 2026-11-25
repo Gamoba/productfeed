@@ -30,7 +30,9 @@ export async function GET(req: Request) {
     : DEFAULT_LIMIT
 
   try {
-    const data = await generatePreview(feedId, limit)
+    // count=0: just the rows; the page shows the stored count and recounts
+    // through /api/feeds/[feedId]/counts in parallel.
+    const data = await generatePreview(feedId, limit, {}, { count: url.searchParams.get('count') !== '0' })
     return Response.json(data)
   } catch (err) {
     return errorResponse(err, 'GET /api/preview')

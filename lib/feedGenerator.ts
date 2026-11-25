@@ -880,13 +880,16 @@ export type PreviewData = {
   feedMode: 'product' | 'variant'
   rows: PreviewRow[]
   googleFields: string[]
-  totalProducts: number
+  /** null: not counted in this response (see generatePreview opts.count). */
+  totalProducts: number | null
 }
 
 export async function generatePreview(
   feedId: string,
   limit = 100,
-  input: FeedInput = {}
+  input: FeedInput = {},
+  /** count: false skips the slow live count; totalProducts is then null. */
+  opts: { count?: boolean } = {}
 ): Promise<PreviewData> {
   const db = adminClient()
 
@@ -906,7 +909,7 @@ export async function generatePreview(
     db.from('shop_settings').select('market_url, selected_market_id, selected_locale').eq('feed_id', feedId).maybeSingle(),
     db.from('feed_mappings').select('google_field, mapping_type, config').eq('feed_id', feedId),
     db.from('feed_filters').select('filter_type, operator, rules').eq('feed_id', feedId),
-    sampling ? countFilteredProducts(feedId) : Promise.resolve(null),
+    sampling && opts.count !== false ? countFilteredProducts(feedId) : Promise.resolve(null),
   ])
   const feedMode = (settingsData?.feed_mode as 'product' | 'variant') ?? 'product'
   const marketUrl = await resolveFeedBaseUrl(
@@ -1019,7 +1022,8 @@ export async function generatePreview(
     }
   }
 
-  return { feedMode, rows, googleFields, totalProducts: counted?.included ?? filteredProducts.length }
+  const totalProducts = counted ? counted.included : sampling ? null : filteredProducts.length
+  return { feedMode, rows, googleFields, totalProducts }
 }
 
 // ── Feed view of specific products ──────────────────────────────────────────
