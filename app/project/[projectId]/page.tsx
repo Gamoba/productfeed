@@ -1,6 +1,7 @@
 import { redirect, notFound } from 'next/navigation'
 import { createSupabaseServerClient } from '@/lib/supabase-server'
-import { getOwnedProject } from '@/lib/feeds'
+import { adminDb, getOwnedProject } from '@/lib/feeds'
+import { loadFeedList } from '@/lib/feedList'
 import { ShopFeedsClient } from './ShopFeedsClient'
 
 export default async function ProjectPage({
@@ -19,6 +20,10 @@ export default async function ProjectPage({
   const project = await getOwnedProject(user.id, projectId)
   if (!project) notFound()
 
+  // The list comes with the page (no second request from the browser). On a
+  // failure the client fetches it itself, as before.
+  const initialFeeds = await loadFeedList(adminDb(), [project.id]).catch(() => null)
+
   return (
     <ShopFeedsClient
       projectId={project.id}
@@ -28,6 +33,7 @@ export default async function ProjectPage({
       feedUrl={project.feed_url}
       connectionStatus={project.connection_status}
       lastVerifiedAt={project.last_verified_at}
+      initialFeeds={initialFeeds}
     />
   )
 }

@@ -15,6 +15,7 @@ import type { ShopifyMarket } from '@/lib/shopify'
 import type { MissingScope } from '@/lib/shopifyScopes'
 import type { ValidationIssue } from '@/lib/feedValidator'
 import { DeleteFeedDialog, DescribeFeedDialog, RenameFeedDialog, type PatchedFeed } from './FeedModals'
+import type { FeedListItem } from '@/lib/feedList'
 import './feeds.css'
 
 // Shop level › Feeds. Every feed of the shop in one table, grouped by market
@@ -52,6 +53,7 @@ export function ShopFeedsClient({
   feedUrl: initialFeedUrl,
   connectionStatus: initialStatus,
   lastVerifiedAt: initialVerifiedAt,
+  initialFeeds,
 }: {
   projectId: string
   projectName: string
@@ -60,6 +62,8 @@ export function ShopFeedsClient({
   feedUrl: string | null
   connectionStatus: string
   lastVerifiedAt: string | null
+  /** The list, rendered with the page; null makes the client fetch it. */
+  initialFeeds?: FeedListItem[] | null
 }) {
   const [shopUrl, setShopUrl] = useState(initialShopUrl)
   const [sourceType, setSourceType] = useState<ProjectSource>(initialSourceType)
@@ -72,7 +76,7 @@ export function ShopFeedsClient({
   // undefined = closed; '' = open with no market preselected.
   const [wizardMarket, setWizardMarket] = useState<string | undefined>(undefined)
 
-  const [feeds, setFeeds] = useState<FeedRow[] | null>(null)
+  const [feeds, setFeeds] = useState<FeedRow[] | null>((initialFeeds as FeedRow[] | null | undefined) ?? null)
   const [loadError, setLoadError] = useState<string | null>(null)
   const [markets, setMarkets] = useState<ShopifyMarket[] | null>(null)
 
@@ -82,8 +86,11 @@ export function ShopFeedsClient({
   // Feeds first (fast), then the slow per-feed excluded counts.
   useEffect(() => {
     let cancelled = false
-    fetch(`/api/feeds?projectId=${encodeURIComponent(projectId)}`)
-      .then((r) => r.json())
+    // The list usually came with the page; otherwise fetch it.
+    const listed = initialFeeds
+      ? Promise.resolve({ feeds: initialFeeds as FeedRow[] })
+      : fetch(`/api/feeds?projectId=${encodeURIComponent(projectId)}`).then((r) => r.json())
+    listed
       .then((d: { feeds?: (Omit<FeedRow, 'excludedCount'> & { excludedCount: number | null })[]; error?: string }) => {
         if (cancelled) return
         if (d.error) throw new Error(d.error)
@@ -103,7 +110,7 @@ export function ShopFeedsClient({
     return () => {
       cancelled = true
     }
-  }, [projectId])
+  }, [projectId, initialFeeds])
 
   // Shopify markets, so markets without feeds get a row too. Read-only.
   useEffect(() => {
