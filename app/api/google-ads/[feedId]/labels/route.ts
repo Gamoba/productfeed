@@ -7,6 +7,7 @@ import {
   saveLabel,
   deleteLabel,
   type CustomLabel,
+  recomputeLabel,
 } from '@/lib/googleAdsBuckets'
 import { errorResponse } from '@/lib/errors'
 import { logActivity } from '@/lib/activity'
@@ -72,7 +73,9 @@ export async function POST(req: Request, { params }: { params: Promise<{ feedId:
       action: body.label.id ? 'Label ændret' : 'Label oprettet',
       after: `${saved.name}${slot}`,
     })
-    return NextResponse.json({ label: saved })
+    // recompute: true recalculates the label in the same request.
+    const result = (body as { recompute?: boolean }).recompute ? await recomputeLabel(db, feedId, saved.id) : undefined
+    return NextResponse.json({ label: saved, ...(result ? { result } : {}) })
   } catch (err) {
     return errorResponse(err, 'POST /api/google-ads/[feedId]/labels')
   }

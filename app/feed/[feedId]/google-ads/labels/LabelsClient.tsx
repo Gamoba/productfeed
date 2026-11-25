@@ -165,20 +165,24 @@ export function LabelsClient(props: Props) {
     setError(null)
     const json = await post(`/api/google-ads/${feedId}/labels/recompute`, labelId ? { labelId } : {})
     setBusy(null)
-    if (json) {
-      const r = json.result as {
-        labels: { name: string; assigned: number; entities: number; moved: number; warnings: string[] }[]
-        warnings: string[]
-      }
-      const per = r.labels ?? []
-      setNote(
-        per.length === 1
-          ? `${per[0].name}: ${formatNumber(per[0].assigned)} af ${formatNumber(per[0].entities)} har fået et label · ${formatNumber(per[0].moved)} skiftede værdi.`
-          : `${per.length} labels genberegnet · ${formatNumber(per.reduce((n, l) => n + l.moved, 0))} skiftede værdi.`
-      )
-      setWarnings([...(r.warnings ?? []), ...per.flatMap((l) => l.warnings.map((w) => `${l.name}: ${w}`))])
-    }
+    if (json) showRecompute(json)
     router.refresh()
+  }
+
+  // Shows what a recalculation did (also when it ran inside a save request).
+  function showRecompute(json: Record<string, unknown> | null) {
+    if (!json?.result) return
+    const r = json.result as {
+      labels: { name: string; assigned: number; entities: number; moved: number; warnings: string[] }[]
+      warnings: string[]
+    }
+    const per = r.labels ?? []
+    setNote(
+      per.length === 1
+        ? `${per[0].name}: ${formatNumber(per[0].assigned)} af ${formatNumber(per[0].entities)} har fået et label · ${formatNumber(per[0].moved)} skiftede værdi.`
+        : `${per.length} labels genberegnet · ${formatNumber(per.reduce((n, l) => n + l.moved, 0))} skiftede værdi.`
+    )
+    setWarnings([...(r.warnings ?? []), ...per.flatMap((l) => l.warnings.map((w) => `${l.name}: ${w}`))])
   }
 
   // ── Labels ─────────────────────────────────────────────────────────────────
@@ -189,7 +193,8 @@ export function LabelsClient(props: Props) {
     const after = { ...editedLabel(before), level: feedMode }
     setBusy(before.id)
     setError(null)
-    const ok = await post(`/api/google-ads/${feedId}/labels`, { action: 'save', label: after })
+    const remeasure = before.level !== after.level || before.window_days !== after.window_days
+    const ok = await post(`/api/google-ads/${feedId}/labels`, { action: 'save', label: after, recompute: remeasure })
     setBusy(null)
     if (!ok) return
     setLabelDraft((d) => {
@@ -197,8 +202,9 @@ export function LabelsClient(props: Props) {
       delete next[before.id]
       return next
     })
-    if (before.level !== after.level || before.window_days !== after.window_days) {
-      await recompute(before.id)
+    if (remeasure) {
+      showRecompute(ok)
+      router.refresh()
     } else {
       setNote('Gemt. Intet ved det, der måles, er ændret, så der er ikke genberegnet.')
       router.refresh()
@@ -238,9 +244,15 @@ export function LabelsClient(props: Props) {
 
   async function saveBucket(b: Bucket) {
     const after = editedBucket(b)
+    const moves =
+      b.priority !== after.priority ||
+      b.match_type !== after.match_type ||
+      b.is_fallback !== after.is_fallback ||
+      rulesKey(b.rules) !== rulesKey(after.rules)
     setBusy(b.id)
     setError(null)
-    const ok = await post(`/api/google-ads/${feedId}/buckets`, { bucket: after })
+    // A change that moves products is recalculated in the same request.
+    const ok = await post(`/api/google-ads/${feedId}/buckets`, { bucket: after, recompute: moves })
     setBusy(null)
     if (!ok) return
     setBucketDraft((d) => {
@@ -248,12 +260,10 @@ export function LabelsClient(props: Props) {
       delete next[b.id]
       return next
     })
-    const moves =
-      b.priority !== after.priority ||
-      b.match_type !== after.match_type ||
-      b.is_fallback !== after.is_fallback ||
-      rulesKey(b.rules) !== rulesKey(after.rules)
-    if (moves) await recompute(b.label_id)
+    if (moves) {
+      showRecompute(ok)
+      router.refresh()
+    }
     else {
       setNote('Gemt. Ingen betingelse er ændret, så der er ikke genberegnet.')
       router.refresh()
@@ -279,13 +289,16 @@ export function LabelsClient(props: Props) {
     const ghostId = `${GHOST_PREFIX}${labelId}:${bucket.name}`
     setGhosts((g) => [...g, { ...bucket, id: ghostId, feed_id: '', description: null }])
     setCompose(null)
-    const ok = await post(`/api/google-ads/${feedId}/buckets`, { bucket })
+    const ok = await post(`/api/google-ads/${feedId}/buckets`, { bucket, recompute: fallback })
     if (!ok) {
       setGhosts((g) => g.filter((x) => x.id !== ghostId))
       setCompose({ labelId, name, value, touched: true, fallback })
       return
     }
-    if (fallback) await recompute(labelId)
+    if (fallback) {
+      showRecompute(ok)
+      router.refresh()
+    }
     else router.refresh()
   }
 
@@ -293,7 +306,7 @@ export function LabelsClient(props: Props) {
     if (!confirm(`Slet bucketen “${b.name}”? Varerne i den går videre til de næste buckets.`)) return
     setError(null)
     setPendingDelete((s) => new Set(s).add(b.id))
-    const ok = await call(`/api/google-ads/${feedId}/buckets?id=${b.id}`, { method: 'DELETE' })
+    const ok = await call(`/api/google-ads/${feedId}/buckets?id=${b.id}&recompute=1`, { method: 'DELETE' })
     if (!ok) {
       setPendingDelete((s) => {
         const next = new Set(s)
@@ -303,7 +316,8 @@ export function LabelsClient(props: Props) {
       return
     }
     setSelBucketId(null)
-    await recompute(b.label_id)
+    showRecompute(ok)
+    router.refresh()
   }
 
   // ── Render ─────────────────────────────────────────────────────────────────
