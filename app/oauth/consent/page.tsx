@@ -53,8 +53,8 @@ export default async function ConsentPage({
           {agencies.length ? <> in {agencies.join(', ')}</> : null}, on every shop you can open.
         </p>
         <ul className="oc-list">
-          <li>Read shops, feeds, products, mapping, rules and performance</li>
-          <li>Change mapping, include / exclude rules and feed settings. Changes wait for approval unless your agency has turned that off.</li>
+          <li>Read shops, feeds, products, mapping, rules, labels, AI titles and performance</li>
+          <li>Change mapping, include / exclude rules, feed settings, Google Ads labels and AI Titles, and generate AI titles. Changes wait for approval unless your agency has turned that off.</li>
           <li>Start a product sync (at most once an hour per feed)</li>
           <li>Never writes to your Shopify store, and can&apos;t change connections, users or delete anything</li>
         </ul>

@@ -32,12 +32,27 @@ import { ADVANCED_CATEGORIES, COLLAPSIBLE_SECTIONS, REQUIRED_FIELDS, STANDARD_FI
 import { extractWarnings, scheduleLabel, type FilterConfig, type MappingEntry } from '@/lib/ops/feedConfig'
 import { clientName, listChanges, proposeChange, type ChangeDetail, type ProposeResult } from '@/lib/mcp/changes'
 import type { McpCaller } from '@/lib/mcp/auth'
+import {
+  BUCKET_METRICS,
+  BUCKET_OPERATORS,
+  listBuckets as listLabelBuckets,
+  listLabels,
+  recomputeFeed,
+  recomputeLabel,
+  type BucketRule,
+} from '@/lib/googleAdsBuckets'
+import * as titleBuckets from '@/lib/optimizationBuckets'
+import * as titleSvc from '@/lib/titleOptimizationService'
+import * as titleWorkshop from '@/lib/bucketExamples'
+import { MAX_RUN_PRODUCTS } from '@/lib/ops/titles'
 
 const INSTRUCTIONS = `FeedFlow builds product feeds (Google Shopping and other channels) from an agency's shops.
 Hierarchy: agency → shop → feed (one channel + country). Start with list_shops to get shop and feed ids.
 Reads are free. Every change (set_mapping, set_rules, set_feed_settings) is a proposal: it is applied at once only if the agency allows changes without approval; otherwise it waits for a person to approve it in FeedFlow under Shop › API / MCP. Always tell the user which it was.
 FeedFlow never writes to Shopify. Product data comes from Shopify (read-only); FeedFlow decides how it is mapped and filtered into the feed.
-Before changing a mapping, read get_mapping and check the result on real products with search_products.`
+Before changing a mapping, read get_mapping and check the result on real products with search_products.
+Labels: custom labels (custom_label_0–4) computed from Google Ads performance. Read get_labels before set_label / set_label_bucket.
+AI Titles: products are grouped in buckets; each bucket has a scope (which products), instructions, and a review queue. Generating titles costs AI usage and changes the feed, so run_ai_titles is always a proposal of at most ${MAX_RUN_PRODUCTS} products.`
 
 const ok = (data: unknown): CallToolResult => ({ content: [{ type: 'text', text: JSON.stringify(data, null, 2) }] })
 const text = (message: string): CallToolResult => ({ content: [{ type: 'text', text: message }] })
@@ -517,6 +532,414 @@ export function createFeedFlowServer(caller: McpCaller): McpServer {
     })
   )
 
+  // ── Labels (Google Ads performance labels) ─────────────────────────────────
+
+  const labelRuleSchema = z.object({
+    metric: z.enum(BUCKET_METRICS),
+    operator: z.enum(BUCKET_OPERATORS),
+    value: z.number().optional().describe('Not used by is_empty / is_not_empty'),
+    window_days: z.number().int().min(1).max(365).optional().describe("Overrides the label's window for this rule"),
+  })
+  const ruleText = (r: BucketRule) =>
+    `${r.metric} ${r.operator}${r.value !== undefined ? ` ${r.value}` : ''}${r.windowDays ? ` (${r.windowDays} days)` : ''}`
+
+  server.registerTool(
+    'get_labels',
+    {
+      title: 'Google Ads labels',
+      description:
+        "The feed's custom labels (custom_label_0–4) computed from Google Ads performance: each label's values (buckets) in priority order with their rules, and how many products have each value now. Read this before set_label / set_label_bucket.",
+      inputSchema: { feed_id: feedIdArg },
+      annotations: READ,
+    },
+    tool(async ({ feed_id }: { feed_id: string }) => {
+      await feed(feed_id)
+      const [labels, lbuckets] = await Promise.all([listLabels(db, feed_id), listLabelBuckets(db, feed_id)])
+      const counts = await Promise.all(
+        lbuckets.map(async (b) => {
+          const { count } = await db
+            .from('google_ads_bucket_members')
+            .select('id', { count: 'exact', head: true })
+            .eq('bucket_id', b.id)
+          return [b.id, count ?? 0] as const
+        })
+      )
+      const n = new Map(counts)
+      return ok({
+        labels: labels.map((l) => ({
+          label_id: l.id,
+          name: l.name,
+          slot: l.slot,
+          level: l.level,
+          window_days: l.window_days,
+          in_feed: l.emit_to_feed,
+          description: l.description,
+          last_calculated: l.computed_at,
+          buckets: lbuckets
+            .filter((b) => b.label_id === l.id)
+            .map((b) => ({
+              bucket_id: b.id,
+              name: b.name,
+              value: b.value,
+              priority: b.priority,
+              match: b.match_type === 'ANY' ? 'any' : 'all',
+              catch_all: b.is_fallback,
+              rules: b.rules,
+              products: n.get(b.id) ?? 0,
+            })),
+        })),
+        metrics: BUCKET_METRICS,
+        operators: BUCKET_OPERATORS,
+      })
+    })
+  )
+
+  server.registerTool(
+    'set_label',
+    {
+      title: 'Create or change a label',
+      description:
+        'Create a custom label (leave out label_id) or change one. slot 0–4 is the custom_label_N it fills in the feed (null = not in the feed yet); level is per product or per variant; window_days is the lookback for its rules.',
+      inputSchema: {
+        feed_id: feedIdArg,
+        label_id: z.string().uuid().optional(),
+        name: z.string().min(1).max(80).optional(),
+        slot: z.number().int().min(0).max(4).nullable().optional(),
+        level: z.enum(['product', 'variant']).optional(),
+        window_days: z.union([z.literal(7), z.literal(14), z.literal(30), z.literal(90), z.literal(180), z.literal(365)]).optional(),
+        in_feed: z.boolean().optional().describe('Whether the label is written into the feed'),
+        description: z.string().max(500).nullable().optional(),
+      },
+      annotations: WRITE,
+    },
+    tool(async (a: { feed_id: string; label_id?: string; name?: string; slot?: number | null; level?: 'product' | 'variant'; window_days?: number; in_feed?: boolean; description?: string | null }) => {
+      const f = await feed(a.feed_id)
+      const prev = a.label_id ? (await listLabels(db, a.feed_id)).find((l) => l.id === a.label_id) : undefined
+      if (a.label_id && !prev) return fail('Label not found on this feed')
+      if (!a.label_id && !a.name) return fail('A new label needs a name')
+      const label = {
+        id: a.label_id,
+        name: a.name,
+        slot: a.slot,
+        level: a.level,
+        window_days: a.window_days,
+        emit_to_feed: a.in_feed,
+        description: a.description,
+      }
+      const yn = (v: boolean | undefined) => (v === undefined ? null : v ? 'yes' : 'no')
+      const details: ChangeDetail[] = [
+        a.name !== undefined && { label: 'Name', before: prev?.name ?? null, after: a.name },
+        a.slot !== undefined && { label: 'Slot', before: prev ? (prev.slot === null ? 'none' : `custom_label_${prev.slot}`) : null, after: a.slot === null ? 'none' : `custom_label_${a.slot}` },
+        a.level !== undefined && { label: 'Level', before: prev?.level ?? null, after: a.level },
+        a.window_days !== undefined && { label: 'Window', before: prev ? `${prev.window_days} days` : null, after: `${a.window_days} days` },
+        a.in_feed !== undefined && { label: 'In the feed', before: prev ? yn(prev.emit_to_feed) : null, after: yn(a.in_feed) },
+      ].filter(Boolean) as ChangeDetail[]
+      return text(await propose(f, { kind: 'label_save', label }, `Label: ${a.name ?? prev?.name ?? 'new label'}`, details))
+    })
+  )
+
+  server.registerTool(
+    'set_label_bucket',
+    {
+      title: 'Create or change a label value',
+      description:
+        "Create a value (bucket) in a label (give label_id, leave out bucket_id) or change one. Values are checked in priority order (lowest first); the first whose rules match gives the product its value. A catch-all value takes every product no other value matched. After it is applied the label is recalculated.",
+      inputSchema: {
+        feed_id: feedIdArg,
+        label_id: z.string().uuid().optional().describe('Required for a new value'),
+        bucket_id: z.string().uuid().optional(),
+        name: z.string().min(1).max(80).optional(),
+        value: z.string().min(1).max(100).optional().describe('The text written into custom_label_N'),
+        priority: z.number().int().min(0).max(1000).optional(),
+        match: z.enum(['all', 'any']).optional(),
+        catch_all: z.boolean().optional(),
+        rules: z.array(labelRuleSchema).max(20).optional(),
+        description: z.string().max(500).nullable().optional(),
+      },
+      annotations: WRITE,
+    },
+    tool(async (a: { feed_id: string; label_id?: string; bucket_id?: string; name?: string; value?: string; priority?: number; match?: 'all' | 'any'; catch_all?: boolean; rules?: z.infer<typeof labelRuleSchema>[]; description?: string | null }) => {
+      const f = await feed(a.feed_id)
+      const all = await listLabelBuckets(db, a.feed_id)
+      const prev = a.bucket_id ? all.find((b) => b.id === a.bucket_id) : undefined
+      if (a.bucket_id && !prev) return fail('Label value not found on this feed')
+      if (!a.bucket_id) {
+        if (!a.label_id || !(await listLabels(db, a.feed_id)).some((l) => l.id === a.label_id)) return fail('Give the label_id of a label on this feed')
+        if (!a.name || !a.value) return fail('A new value needs a name and a value')
+      }
+      const rules: BucketRule[] | undefined = a.rules?.map((r) => ({ metric: r.metric, operator: r.operator, value: r.value, windowDays: r.window_days }))
+      const bucket = {
+        id: a.bucket_id,
+        label_id: a.bucket_id ? undefined : a.label_id,
+        name: a.name,
+        value: a.value,
+        priority: a.priority ?? (a.bucket_id ? undefined : all.filter((b) => b.label_id === a.label_id).length),
+        match_type: a.match ? (a.match === 'any' ? ('ANY' as const) : ('ALL' as const)) : undefined,
+        rules,
+        is_fallback: a.catch_all,
+        description: a.description,
+      }
+      const details: ChangeDetail[] = [
+        a.name !== undefined && { label: 'Name', before: prev?.name ?? null, after: a.name },
+        a.value !== undefined && { label: 'Value', before: prev?.value ?? null, after: a.value },
+        a.priority !== undefined && { label: 'Priority', before: prev ? String(prev.priority) : null, after: String(a.priority) },
+        a.match !== undefined && { label: 'Match', before: prev ? (prev.match_type === 'ANY' ? 'any rule' : 'all rules') : null, after: a.match === 'any' ? 'any rule' : 'all rules' },
+        a.catch_all !== undefined && { label: 'Catch-all', before: prev ? (prev.is_fallback ? 'yes' : 'no') : null, after: a.catch_all ? 'yes' : 'no' },
+        rules && { label: 'Rules', before: prev ? prev.rules.map(ruleText).join('\n') || null : null, after: rules.map(ruleText).join('\n') || null },
+      ].filter(Boolean) as ChangeDetail[]
+      const name = a.name ?? prev?.name ?? ''
+      return text(await propose(f, { kind: 'label_bucket_save', bucket }, `Label value: ${name}`, details))
+    })
+  )
+
+  server.registerTool(
+    'recalculate_labels',
+    {
+      title: 'Recalculate labels',
+      description:
+        "Re-apply the label rules to the Google Ads figures already fetched (like the Recalculate button). Changes which products have which value; no settings change and nothing is fetched from Google. Leave out label_id for all labels.",
+      inputSchema: { feed_id: feedIdArg, label_id: z.string().uuid().optional() },
+      annotations: { readOnlyHint: false, destructiveHint: false, idempotentHint: true, openWorldHint: false },
+    },
+    tool(async ({ feed_id, label_id }: { feed_id: string; label_id?: string }) => {
+      await feed(feed_id)
+      const result = label_id ? await recomputeLabel(db, feed_id, label_id) : await recomputeFeed(db, feed_id)
+      return ok({
+        labels: result.labels.map((l) => ({
+          name: l.name,
+          slot: l.slot,
+          products: l.entities,
+          with_data: l.withData,
+          assigned: l.assigned,
+          without_value: l.unlabelled,
+          moved: l.moved,
+          values: l.perBucket.map((b) => ({ name: b.name, value: b.value, products: b.count })),
+          warnings: l.warnings,
+        })),
+        warnings: result.warnings,
+      })
+    })
+  )
+
+  // ── AI Titles ──────────────────────────────────────────────────────────────
+
+  async function titleBucket(feedId: string, bucketId: string) {
+    const b = await titleBuckets.getBucket(feedId, bucketId)
+    if (!b) throw new AppError('AI Titles bucket not found on this feed')
+    return b
+  }
+  const methodLabel = (m: string) => (m === 'rule_based' ? 'Rule-based' : 'Automatic')
+
+  server.registerTool(
+    'list_title_buckets',
+    {
+      title: 'AI Titles buckets',
+      description: "The feed's AI Titles buckets: groups of products that get titles in the same style, with how many products each has and how many titles are AI-generated, edited by hand, or waiting for review.",
+      inputSchema: { feed_id: feedIdArg },
+      annotations: READ,
+    },
+    tool(async ({ feed_id }: { feed_id: string }) => {
+      await feed(feed_id)
+      const list = await titleBuckets.listBuckets(feed_id)
+      return ok(
+        list.map((b) => ({
+          bucket_id: b.id,
+          name: b.name,
+          method: b.method,
+          products: b.memberCount,
+          ai_generated: b.aiGenerated,
+          edited_by_hand: b.humanEdited,
+          waiting_for_review: b.needsReview,
+        }))
+      )
+    })
+  )
+
+  server.registerTool(
+    'get_title_bucket',
+    {
+      title: 'AI Titles bucket',
+      description: "One bucket: its scope (include / exclude rules deciding which products it holds), the instructions and input fields the AI writes titles from, and the example titles people approved or rejected.",
+      inputSchema: { feed_id: feedIdArg, bucket_id: z.string().uuid() },
+      annotations: READ,
+    },
+    tool(async ({ feed_id, bucket_id }: { feed_id: string; bucket_id: string }) => {
+      await feed(feed_id)
+      const b = await titleBucket(feed_id, bucket_id)
+      const [filters, config, examples] = await Promise.all([
+        titleBuckets.getBucketFilters(bucket_id),
+        titleWorkshop.getBucketTitleConfig(bucket_id),
+        titleWorkshop.listBucketExamples(bucket_id),
+      ])
+      return ok({
+        bucket_id: b.id,
+        name: b.name,
+        method: b.method,
+        scope: { include: toRuleSet(filters.include as FilterConfig), exclude: toRuleSet(filters.exclude as FilterConfig) },
+        instructions: config.instructions,
+        input_fields: config.input_fields,
+        examples: examples
+          .filter((e) => e.status !== 'candidate')
+          .map((e) => ({ status: e.status, product_ref: e.product_ref, title: e.generated_title, note: e.note || null })),
+      })
+    })
+  )
+
+  server.registerTool(
+    'list_title_review',
+    {
+      title: 'AI titles waiting for review',
+      description: 'Titles the AI proposed that failed a check and wait for a person (too long, a value not found in the product data, …). Approve, edit or reject them with review_ai_titles.',
+      inputSchema: { feed_id: feedIdArg, bucket_id: z.string().uuid(), limit: z.number().int().min(1).max(100).default(30) },
+      annotations: READ,
+    },
+    tool(async ({ feed_id, bucket_id, limit }: { feed_id: string; bucket_id: string; limit: number }) => {
+      await feed(feed_id)
+      await titleBucket(feed_id, bucket_id)
+      const items = await titleSvc.listBucketReview(feed_id, bucket_id)
+      return ok({
+        total: items.length,
+        items: items.slice(0, limit).map((i) => ({
+          product_ref: i.product_ref,
+          original_title: i.original_title,
+          proposed_title: i.proposed_title,
+          issues: i.validation_issues.map((v) => `${v.code}: ${v.detail}`),
+        })),
+      })
+    })
+  )
+
+  server.registerTool(
+    'set_title_bucket',
+    {
+      title: 'Create or change an AI Titles bucket',
+      description: 'Create a bucket (leave out bucket_id; give a name) or rename one / change its method. Method "auto" lets the AI write titles from the instructions; "rule_based" builds them from per-product-type rules set on the AI Titles page.',
+      inputSchema: {
+        feed_id: feedIdArg,
+        bucket_id: z.string().uuid().optional(),
+        name: z.string().min(1).max(80).optional(),
+        method: z.enum(['auto', 'rule_based']).optional(),
+      },
+      annotations: WRITE,
+    },
+    tool(async (a: { feed_id: string; bucket_id?: string; name?: string; method?: 'auto' | 'rule_based' }) => {
+      const f = await feed(a.feed_id)
+      const prev = a.bucket_id ? await titleBucket(a.feed_id, a.bucket_id) : null
+      if (!prev && !a.name) return fail('A new bucket needs a name')
+      const details: ChangeDetail[] = [
+        a.name !== undefined && { label: 'Name', before: prev?.name ?? null, after: a.name },
+        a.method !== undefined && { label: 'Method', before: prev ? methodLabel(prev.method) : null, after: methodLabel(a.method) },
+      ].filter(Boolean) as ChangeDetail[]
+      return text(
+        await propose(f, { kind: 'title_bucket_save', bucket: { id: a.bucket_id, name: a.name, method: a.method } }, `AI Titles bucket: ${a.name ?? prev?.name ?? 'new bucket'}`, details)
+      )
+    })
+  )
+
+  server.registerTool(
+    'set_title_scope',
+    {
+      title: 'Change which products a bucket holds',
+      description: "Replace a bucket's include / exclude rules (same rule format as set_rules). When applied, the bucket holds the products the rules match, except products already in another bucket, which stay there.",
+      inputSchema: { feed_id: feedIdArg, bucket_id: z.string().uuid(), include: ruleSetSchema, exclude: ruleSetSchema },
+      annotations: WRITE,
+    },
+    tool(async ({ feed_id, bucket_id, include, exclude }: { feed_id: string; bucket_id: string; include: z.infer<typeof ruleSetSchema>; exclude: z.infer<typeof ruleSetSchema> }) => {
+      const f = await feed(feed_id)
+      const b = await titleBucket(feed_id, bucket_id)
+      const prev = await titleBuckets.getBucketFilters(bucket_id)
+      const inc = fromRuleSet(include)
+      const exc = fromRuleSet(exclude)
+      const details: ChangeDetail[] = [
+        { label: 'Include', before: readable(prev.include as FilterConfig).join('\n') || null, after: readable(inc).join('\n') || null },
+        { label: 'Exclude', before: readable(prev.exclude as FilterConfig).join('\n') || null, after: readable(exc).join('\n') || null },
+      ]
+      return text(await propose(f, { kind: 'title_scope', bucket_id, include: inc, exclude: exc }, `Scope in ${b.name}`, details))
+    })
+  )
+
+  server.registerTool(
+    'set_title_instructions',
+    {
+      title: 'Change how a bucket writes titles',
+      description: 'The instructions the AI follows for this bucket, and the input fields it reads (standard fields or metafield:<namespace>.<key>, see get_mapping → sources). Send both.',
+      inputSchema: {
+        feed_id: feedIdArg,
+        bucket_id: z.string().uuid(),
+        instructions: z.string().max(4000),
+        input_fields: z.array(z.string().max(120)).max(30),
+      },
+      annotations: WRITE,
+    },
+    tool(async ({ feed_id, bucket_id, instructions, input_fields }: { feed_id: string; bucket_id: string; instructions: string; input_fields: string[] }) => {
+      const f = await feed(feed_id)
+      const b = await titleBucket(feed_id, bucket_id)
+      const prev = await titleWorkshop.getBucketTitleConfig(bucket_id)
+      const details: ChangeDetail[] = [
+        { label: 'Instructions', before: prev.instructions || null, after: instructions || null },
+        { label: 'Input fields', before: prev.input_fields.join(', ') || null, after: input_fields.join(', ') || null },
+      ]
+      return text(await propose(f, { kind: 'title_config', bucket_id, config: { instructions, input_fields } }, `Instructions in ${b.name}`, details))
+    })
+  )
+
+  server.registerTool(
+    'review_ai_titles',
+    {
+      title: 'Approve or reject AI titles',
+      description: 'Decide on titles waiting for review (list_title_review): approve the proposed title, approve with your own edited title, or reject (the product keeps its original title). Approved titles go into the feed.',
+      inputSchema: {
+        feed_id: feedIdArg,
+        bucket_id: z.string().uuid(),
+        decisions: z
+          .array(z.object({ product_ref: z.string().min(1), action: z.enum(['approve', 'reject']), title: z.string().min(1).max(300).optional().describe('An edited title to approve instead of the proposed one') }))
+          .min(1)
+          .max(100),
+      },
+      annotations: WRITE,
+    },
+    tool(async ({ feed_id, bucket_id, decisions }: { feed_id: string; bucket_id: string; decisions: { product_ref: string; action: 'approve' | 'reject'; title?: string }[] }) => {
+      const f = await feed(feed_id)
+      const b = await titleBucket(feed_id, bucket_id)
+      const queue = new Map((await titleSvc.listBucketReview(feed_id, bucket_id)).map((i) => [i.product_ref, i]))
+      const unknown = decisions.filter((d) => !queue.has(d.product_ref)).map((d) => d.product_ref)
+      if (unknown.length) return fail(`Not waiting for review in this bucket: ${unknown.join(', ')}`)
+      const details: ChangeDetail[] = decisions.slice(0, 50).map((d) => {
+        const item = queue.get(d.product_ref)!
+        return d.action === 'reject'
+          ? { label: `Reject ${d.product_ref}`, before: item.proposed_title, after: item.original_title }
+          : { label: `Approve ${d.product_ref}`, before: item.original_title, after: d.title ?? item.proposed_title }
+      })
+      return text(await propose(f, { kind: 'title_review', bucket_id, decisions }, `Review AI titles in ${b.name}: ${decisions.length}`, details))
+    })
+  )
+
+  server.registerTool(
+    'run_ai_titles',
+    {
+      title: 'Generate AI titles',
+      description: `Generate AI titles for a bucket's products. Costs AI usage and changes the titles in the feed, so it is always a proposal, of at most ${MAX_RUN_PRODUCTS} products (ask again to continue). By default only products without a title; rerun=true also redoes AI titles (titles edited by hand are never overwritten). Titles that fail a check go to the review queue.`,
+      inputSchema: {
+        feed_id: feedIdArg,
+        bucket_id: z.string().uuid(),
+        rerun: z.boolean().default(false),
+        max_products: z.number().int().min(1).max(MAX_RUN_PRODUCTS).default(MAX_RUN_PRODUCTS),
+      },
+      annotations: { readOnlyHint: false, destructiveHint: false, idempotentHint: false, openWorldHint: true },
+    },
+    tool(async ({ feed_id, bucket_id, rerun, max_products }: { feed_id: string; bucket_id: string; rerun: boolean; max_products: number }) => {
+      const f = await feed(feed_id)
+      const b = await titleBucket(feed_id, bucket_id)
+      const plan = await titleBuckets.planBucketRun(feed_id, bucket_id, { rerun, includeHumanEdited: false })
+      if (plan.targets.length === 0) return fail('Nothing to generate: every product in this bucket already has a title. Use rerun=true to redo AI titles.')
+      const n = Math.min(plan.targets.length, max_products)
+      const details: ChangeDetail[] = [
+        { label: 'products', before: null, after: `${n} / ${plan.targets.length} (${rerun ? 'all products again (not hand-edited)' : 'products without a title'})` },
+      ]
+      return text(await propose(f, { kind: 'title_run', bucket_id, rerun, limit: n }, `Generate AI titles in ${b.name}: ${n} products`, details))
+    })
+  )
+
   return server
 
   // ── helpers ────────────────────────────────────────────────────────────────
@@ -578,6 +1001,7 @@ function checkMapping(type: string, config: Record<string, unknown>): string | n
 
 function describeOutcome(r: ProposeResult, summary: string): string {
   if (r.status === 'pending') return `${summary}: waiting for approval in FeedFlow (Shop › API / MCP), change #${r.id}. Nothing has changed yet.`
-  if (r.status === 'applied') return `${summary}: applied (the agency allows changes without approval), change #${r.id}.`
+  if (r.status === 'applied')
+    return `${summary}: applied (the agency allows changes without approval), change #${r.id}.${r.warnings?.length ? ` Note: ${r.warnings.join(' ')}` : ''}`
   return `${summary}: could not be applied: ${r.error ?? 'unknown error'} (change #${r.id}).`
 }

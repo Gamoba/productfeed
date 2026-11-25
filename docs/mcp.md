@@ -27,35 +27,37 @@ Supabase access token for that user. Every tool starts from that user and uses
 ## Tools
 
 - **Read:**
-  - `list_shops`
-  - `get_feed`
-  - `search_products`
-  - `get_mapping`
-  - `get_rules`
-  - `get_performance`
-  - `get_activity`
-  - `list_changes`
+  - `list_shops`, `get_feed`, `search_products`, `get_mapping`, `get_rules`
+  - `get_performance`, `get_activity`, `list_changes`
+  - `get_labels` (Google Ads labels with values, rules and product counts)
+  - `list_title_buckets`, `get_title_bucket`, `list_title_review` (AI Titles)
 - **Write, as proposals:**
-  - `set_mapping`
-  - `set_rules`
-  - `set_feed_settings`
-- **Sync:** `start_sync`. Read-only towards the shop, at most once an hour per feed, and within the user's normal sync rate limit.
+  - `set_mapping`, `set_rules`, `set_feed_settings`
+  - `set_label`, `set_label_bucket`: the label is recalculated once applied, as on the Labels page
+  - `set_title_bucket`, `set_title_scope`, `set_title_instructions`
+  - `review_ai_titles`: approve, edit or reject titles in the review queue
+  - `run_ai_titles`: at most 100 products per proposal, in chunks of 10 within the daily AI budget (`optimize_products_daily`), never overwriting titles edited by hand
+- **Direct:**
+  - `start_sync`: read-only towards the shop, at most once an hour per feed
+  - `recalculate_labels`: re-applies the label rules to figures already fetched
 
 Every write becomes a row in `mcp_changes`:
 - **"Apply without approval" off** (`accounts.mcp_auto_apply`, the default): the row waits on Shop › API / MCP until a member approves or rejects it.
 - **The setting on** (only owners and admins can switch it): the change applies at once.
 
-Either way it is logged in the Activity log as "Name via Claude".
+Either way it is logged in the Activity log as "Name via Claude". The changes run
+through `lib/ops` (`feedConfig.ts`, `labels.ts`, `titles.ts`), which call the same
+libraries as the pages.
 
 **Not exposed on purpose:**
 - Shopify
 - Shopify and Google Ads connections
 - Users and roles
-- Deleting shops or feeds
+- Deleting anything: shops, feeds, labels, label values, AI Titles buckets
 
 **Not built yet:**
-- Labels and buckets
-- AI Titles
+- AI Titles example workshop (generating and grading example titles)
+- Rule-based title rules per product type, and split-test custom labels on AI Titles buckets
 - Product-level performance
 
 ## Setup (once per Supabase project)
