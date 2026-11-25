@@ -26,8 +26,11 @@ export function FiltersClient({
   feedId,
   initialInclude,
   initialExclude,
+  masters = [],
 }: {
   feedId: string
+  /** The shop's master fields, for the rule field dropdown. */
+  masters?: { key: string; name: string }[]
   initialInclude: { operator: 'AND' | 'OR'; rules: FilterRule[] } | null
   initialExclude: { operator: 'AND' | 'OR'; rules: FilterRule[] } | null
 }) {
@@ -175,6 +178,7 @@ export function FiltersClient({
                     <RuleRow
                       rule={rule}
                       metafieldOptions={metafields}
+                      masterOptions={masters}
                       onChange={(patch) =>
                         setConfig((c) => ({ ...c, rules: c.rules.map((r, j) => (j === i ? { ...r, ...patch } : r)) }))
                       }

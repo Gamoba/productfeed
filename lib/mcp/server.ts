@@ -80,7 +80,7 @@ const feedIdArg = z.string().uuid().describe('Feed id from list_shops')
 const shopIdArg = z.string().uuid().describe('Shop id from list_shops')
 
 const ruleSchema = z.object({
-  field: z.string().describe("Product field: title, vendor, product_type, tags, status, handle, variants[0].price, variants[0].sku, variants[0].inventory_quantity, variants[0].barcode, or metafield:<namespace>.<key>"),
+  field: z.string().describe("Product field: title, vendor, product_type, tags, status, handle, variants[0].price, variants[0].sku, variants[0].inventory_quantity, variants[0].barcode, metafield:<namespace>.<key>, or master:<key> (a shop master field, see list_master_fields)"),
   operator: z.enum(['contains', 'does_not_contain', 'equals', 'not_equals', 'starts_with', 'ends_with', 'is_empty', 'is_not_empty', 'greater_than', 'less_than']),
   value: z.string().default(''),
   case_sensitive: z.boolean().optional(),

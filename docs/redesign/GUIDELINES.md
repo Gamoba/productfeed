@@ -17,7 +17,7 @@ The project's hard rules still apply. Shopify is read-only. Credentials are per 
 |---|---|
 | Overall | Implement the prototype's design (Design B, "Kobolt" palette) in the feed tool. The prototype has more elements than the tool has today. |
 | **CSS** (Comparison Shopping Service) | **Postponed.** It depends on a partner agreement that isn't in place. Ignore all CSS UI: the page, the CSS chips on Feeds, CSS merchants, CSS steps and CSS add-ons. |
-| **Master fields** | **Built (Nov. 2026).** Shop-level fields with logic, set up once under Shop › Master fields and used from Mapping: the type “Master field”, or `master:<key>` as a source. Table `master_fields` (migration 058); evaluated in `lib/mappingEval`. |
+| **Master fields** | **Built (Nov. 2026).** Shop-level fields with logic, set up once under Shop › Master fields and used from Mapping (the type “Master field”, or `master:<key>` as a source) and in include/exclude rules. Table `master_fields` (migration 058); evaluated in `lib/mappingEval`. |
 | Agency level | Wanted. It is really just a login or account with several users (see §2). The name "Agency" is a placeholder. |
 | Shop level | Corresponds to today's **Project** (one Shopify connection). |
 | Feed level | Changes. Feeds were Google-only, one per language. Now a feed is **market (country) × channel** (see §3). |

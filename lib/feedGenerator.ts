@@ -13,7 +13,8 @@ import {
 } from '@/lib/feedFilters'
 import { extractWithPatterns, type ExtractConfig } from '@/lib/mappingExtract'
 import { createItemEvaluator, isMappedRef, type EvalMasterField, type ItemEvaluator } from '@/lib/mappingEval'
-import { loadMasterFieldsForFeed } from '@/lib/masterFields'
+import { attachMasterResolvers, loadMasterFieldsForFeed } from '@/lib/masterFields'
+import { rulesReadMasters } from '@/lib/feedFilters'
 
 // ── Types ──────────────────────────────────────────────────────────────────
 
@@ -225,6 +226,23 @@ async function resolveItemId(
   return value || auto
 }
 
+// Rules on `master:<key>` need the shop's master fields and the feed's saved
+// mappings (a master field may read `feed:` values). Attached per product; see
+// lib/masterFields attachMasterResolvers.
+async function attachMastersForFeed(
+  db: ReturnType<typeof adminClient>,
+  feedId: string,
+  products: SupabaseProduct[],
+  marketUrl: string | null
+): Promise<void> {
+  const [masters, { data }] = await Promise.all([
+    loadMasterFieldsForFeed(db, feedId),
+    db.from('feed_mappings').select('google_field, mapping_type, config').eq('feed_id', feedId),
+  ])
+  const mappings = ((data ?? []) as FeedMapping[]).filter((m) => m.mapping_type)
+  attachMasterResolvers(products, { masters, mappings, marketUrl })
+}
+
 // ── Filter counts (used by dashboard) ──────────────────────────────────────
 
 export async function countFilteredProducts(
@@ -260,8 +278,11 @@ export async function countFilteredProducts(
     .map((f) => f.slice('metafield:'.length))
     .filter((rest) => rest.includes('.'))
     .map((rest) => ({ namespace: rest.slice(0, rest.indexOf('.')), key: rest.slice(rest.indexOf('.') + 1) }))
-  const needsMetafields = metafieldKeys.length > 0
-  const needsAiTitles = ruleFields.includes('ai_optimized_title')
+  // A master field can read anything (metafields, AI title, other mappings),
+  // so rules on one fetch the full rows.
+  const usesMasters = rulesReadMasters(filterRows)
+  const needsMetafields = usesMasters || metafieldKeys.length > 0
+  const needsAiTitles = usesMasters || ruleFields.includes('ai_optimized_title')
   const columns = countColumns(ruleFields)
 
   const { data: shopSettingsData } = await db
@@ -270,12 +291,13 @@ export async function countFilteredProducts(
     .eq('feed_id', feedId)
     .maybeSingle()
   const [rawProducts, marketUrl] = await Promise.all([
-    fetchAllActiveProducts(db, feedId, { withMetafields: needsMetafields, columns, metafieldKeys }),
+    fetchAllActiveProducts(db, feedId, { withMetafields: needsMetafields, columns, metafieldKeys: usesMasters ? undefined : metafieldKeys }),
     resolveFeedBaseUrl(db, feedId, (shopSettingsData?.market_url as string | null) ?? null),
   ])
   // A rule on ai_optimized_title must count the same products as the
   // generator emits, so the accepted titles are attached for those.
   if (needsAiTitles) await attachOptimizedTitles(db, feedId, rawProducts)
+  if (usesMasters) await attachMastersForFeed(db, feedId, rawProducts, marketUrl)
   const filtered = applyFeedFilters(rawProducts, filterRows, marketUrl)
 
   return { total: rawProducts.length, included: filtered.length }
@@ -355,13 +377,15 @@ export async function extractCoverage(feedId: string, config: ExtractConfig): Pr
   const needsMetafields =
     fromMapping || // can't tell cheaply what the referenced mapping reads
     field.startsWith('metafield:') ||
-    filterRows.some((f) => (f.rules ?? []).some((r) => r.field?.startsWith('metafield:')))
+    filterRows.some((f) => (f.rules ?? []).some((r) => r.field?.startsWith('metafield:'))) ||
+    rulesReadMasters(filterRows)
 
   const [rawProducts, marketUrl] = await Promise.all([
     fetchAllActiveProducts(db, feedId, { withMetafields: needsMetafields }),
     resolveFeedBaseUrl(db, feedId, (shopSettingsData?.market_url as string | null) ?? null),
   ])
   await attachOptimizedTitles(db, feedId, rawProducts)
+  if (rulesReadMasters(filterRows)) await attachMastersForFeed(db, feedId, rawProducts, marketUrl)
   const products = applyFeedFilters(rawProducts, filterRows, marketUrl)
 
   const patterns = config.patterns ?? []
@@ -673,6 +697,7 @@ export async function generateFeed(feedId: string, input: FeedInput = {}): Promi
     return xmlLine(`custom_label_${lbl.index}`, lbl.value)
   }
 
+  if (rulesReadMasters(filterRows)) await attachMastersForFeed(db, feedId, rawProducts, marketUrl)
   const products = applyFeedFilters(rawProducts, filterRows, marketUrl)
 
   const needsAi = mappings.some((m) => m.mapping_type === 'AI')
@@ -850,6 +875,7 @@ export async function generatePreview(
   const filterRows = (filtersData ?? []) as FeedFilter[]
   const idMapping = mappings.find((m) => m.google_field === 'id')
 
+  const usesMasters = rulesReadMasters(filterRows)
   let filteredProducts: SupabaseProduct[]
   if (sampling) {
     // AI titles are attached page by page, before filtering, exactly as the
@@ -863,6 +889,7 @@ export async function generatePreview(
           const opt = titles.get(p.shopify_id)
           if (opt) (p as Record<string, unknown>).optimized_title = opt
         }
+        if (usesMasters) attachMasterResolvers(page, { masters, mappings, marketUrl })
         for (const p of applyFeedFilters(page, filterRows, marketUrl)) {
           filteredProducts.push(p)
           rowsSoFar += feedMode === 'variant' ? (p.variants as unknown[]).length : 1
@@ -873,6 +900,7 @@ export async function generatePreview(
   } else {
     const rawProducts = input.products!
     await attachOptimizedTitles(db, feedId, rawProducts)
+    if (usesMasters) attachMasterResolvers(rawProducts, { masters, mappings, marketUrl })
     filteredProducts = applyFeedFilters(rawProducts, filterRows, marketUrl)
   }
 
@@ -981,6 +1009,7 @@ export async function feedView(
   const copies = products.map((p) => ({ ...p }) as SupabaseProduct)
   await attachOptimizedTitles(db, feedId, copies)
 
+  if (rulesReadMasters(filterRows)) attachMasterResolvers(copies, { masters, mappings, marketUrl })
   const out = new Map<string, FeedViewItem>()
   for (const raw of copies) {
     const scope = explainScope(raw, filterRows, marketUrl)
@@ -1078,9 +1107,11 @@ export async function scopePreview(
     .eq('feed_id', feedId)
     .maybeSingle()
 
-  const needsMetafields = filters.some((f) => (f.rules ?? []).some((r) => r.field?.startsWith('metafield:')))
+  const usesMasters = rulesReadMasters(filters)
+  const needsMetafields = usesMasters || filters.some((f) => (f.rules ?? []).some((r) => r.field?.startsWith('metafield:')))
   const marketUrl = await resolveFeedBaseUrl(db, feedId, (shopSettingsData?.market_url as string | null) ?? null)
   const products = await scopeCatalogue(db, feedId, needsMetafields)
+  if (usesMasters) await attachMastersForFeed(db, feedId, products, marketUrl)
 
   const includeFilter = filters.find((f) => f.filter_type === 'include')
   const excludeFilter = filters.find((f) => f.filter_type === 'exclude')

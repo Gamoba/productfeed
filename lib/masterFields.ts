@@ -4,7 +4,9 @@
 // lib/ops/masterFields (shared by the UI and the MCP tools).
 
 import type { SupabaseClient } from '@supabase/supabase-js'
-import type { EvalMasterField } from './mappingEval'
+import { createItemEvaluator, MASTER_FIELD_PREFIX, type EvalMapping, type EvalMasterField } from './mappingEval'
+import { MASTER_RESOLVER, resolveField } from './feedFilters'
+import type { SupabaseProduct } from './sync'
 
 export type MasterField = EvalMasterField & {
   id: string
@@ -72,4 +74,30 @@ export function masterUsage(
     for (const hit of JSON.stringify(cfg).matchAll(/"master:([a-z0-9_]+)"/g)) add(hit[1], m.feed_id)
   }
   return out
+}
+
+/**
+ * Lets include/exclude rules read `master:<key>` (lib/feedFilters). Each
+ * product gets a resolver that evaluates the master field lazily, with the
+ * feed's mappings for its `feed:` references and the product's accepted AI
+ * title. Not enumerable, so it never ends up in JSON; re-attaching replaces it.
+ */
+export function attachMasterResolvers(
+  products: SupabaseProduct[],
+  ctx: { masters: EvalMasterField[]; mappings: EvalMapping[]; marketUrl: string | null }
+): void {
+  for (const product of products) {
+    let ev: ReturnType<typeof createItemEvaluator> | null = null
+    const t = (product as Record<string, unknown>).optimized_title
+    const resolve = (key: string) => {
+      ev ??= createItemEvaluator({
+        mappings: ctx.mappings,
+        masters: ctx.masters,
+        resolveSource: (f) => resolveField(f, product, ctx.marketUrl),
+        aiTitle: typeof t === 'string' && t.trim() ? t : null,
+      })
+      return ev.resolve(MASTER_FIELD_PREFIX + key)
+    }
+    Object.defineProperty(product, MASTER_RESOLVER, { value: resolve, enumerable: false, configurable: true, writable: true })
+  }
 }

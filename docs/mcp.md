@@ -31,7 +31,7 @@ Supabase access token for that user. Every tool starts from that user and uses
   - `get_performance`, `get_activity`, `list_changes`
   - `get_labels` (Google Ads labels with values, rules and product counts)
   - `list_title_buckets`, `get_title_bucket`, `list_title_review` (AI Titles)
-  - `list_master_fields` (the shop's master fields and which feeds use them)
+  - `list_master_fields` (the shop's master fields and which feeds use them). Rules in `set_rules` may name `master:<key>` as their field.
 - **Write, as proposals:**
   - `set_mapping`, `set_rules`, `set_feed_settings`
   - `set_label`, `set_label_bucket`: the label is recalculated once applied, as on the Labels page
