@@ -7,7 +7,7 @@
      have not been redesigned yet still pick up the new palette. */
 
   /* typography (fonts are loaded by next/font in app/layout.tsx) */
-  --font: var(--font-outfit), "Avenir Next", "Segoe UI", system-ui, sans-serif;
+  --font: "Twemoji Country Flags", var(--font-outfit), "Avenir Next", "Segoe UI", system-ui, sans-serif;
   --code: var(--font-jetbrains), ui-monospace, Menlo, monospace; /* code/XML and API tokens only */
 
   /* surfaces */

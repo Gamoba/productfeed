@@ -1,0 +1,6 @@
+TwemojiCountryFlags.woff2 — country flag subset of Twemoji Mozilla, from the
+country-flag-emoji-polyfill package (https://github.com/talkjs/country-flag-emoji-polyfill).
+
+Flag artwork: Twemoji, Copyright Twitter, Inc and other contributors,
+https://github.com/twitter/twemoji — licensed under CC-BY 4.0,
+https://creativecommons.org/licenses/by/4.0/
