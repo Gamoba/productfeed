@@ -4,6 +4,7 @@ import { adminDb } from '@/lib/feeds'
 import { getMemberships } from '@/lib/accounts'
 import { errorResponse } from '@/lib/errors'
 import { channelOf, type ChannelId } from '@/lib/channels'
+import { staleSyncDays } from '@/lib/syncSchedule'
 
 // GET /api/shell — the small, cheap data set the app shell (sidebar, breadcrumbs,
 // switchers, user menu) needs on every page: who the user is, their accounts,
@@ -12,8 +13,26 @@ export type ShellData = {
   user: { email: string; name: string }
   accounts: { id: string; name: string; role: 'owner' | 'admin' | 'member' }[]
   projects: { id: string; accountId: string; name: string; shopUrl: string | null }[]
-  feeds: { id: string; name: string; projectId: string; channel: ChannelId; country: string | null }[]
+  feeds: {
+    id: string
+    name: string
+    projectId: string
+    channel: ChannelId
+    country: string | null
+    /** For the top bar's status pill and the "Needs attention" list. */
+    status: FeedStatus
+    errors: number
+    staleDays: number | null
+  }[]
+  attention: {
+    /** Changes from assistants waiting for approval, per shop. */
+    pendingChanges: { projectId: string; count: number }[]
+    /** Automatic runs that failed in the last 7 days (newest first). */
+    failures: { feedId: string | null; projectId: string | null; feedLabel: string | null; action: string; message: string | null; at: string }[]
+  }
 }
+
+export type FeedStatus = 'running' | 'errors' | 'not_generated' | 'stale'
 
 export async function GET() {
   const supabase = await createSupabaseServerClient()
@@ -57,11 +76,18 @@ export async function GET() {
     if (projectIds.length) {
       const { data: feedRows, error: feedErr } = await db
         .from('feeds')
-        .select('id, name, project_id, channel')
+        .select('*')
         .in('project_id', projectIds)
         .order('created_at', { ascending: true })
       if (feedErr) throw feedErr
-      const rows = (feedRows ?? []) as { id: string; name: string; project_id: string; channel: string }[]
+      const rows = (feedRows ?? []) as { id: string; name: string; project_id: string; channel: string; last_synced_at?: string | null }[]
+      // Small columns only: never xml_content.
+      const { data: caches } = rows.length
+        ? await db.from('feed_cache').select('feed_id, generated_at, validation_errors').in('feed_id', rows.map((r) => r.id))
+        : { data: [] }
+      const cache = new Map(
+        ((caches ?? []) as { feed_id: string; generated_at: string | null; validation_errors: { type?: string }[] | null }[]).map((c) => [c.feed_id, c])
+      )
 
       // The feed's market (country) for the flag. Lives in shop_settings today.
       const country = new Map<string, string | null>()
@@ -81,8 +107,11 @@ export async function GET() {
         projectId: r.project_id,
         channel: channelOf(r.channel).id,
         country: country.get(r.id) ?? null,
+        ...feedState(cache.get(r.id), r.last_synced_at ?? null),
       }))
     }
+
+    const attention = await loadAttention(db, accountIds, projectIds)
 
     const meta = (user.user_metadata ?? {}) as { full_name?: string; name?: string }
     const body: ShellData = {
@@ -102,9 +131,63 @@ export async function GET() {
         shopUrl: p.source_type === 'feed_url' ? (p.primary_domain ?? null) : p.shop_url,
       })),
       feeds,
+      attention,
     }
     return NextResponse.json(body)
   } catch (err) {
     return errorResponse(err, 'GET /api/shell')
   }
+}
+
+function feedState(
+  cache: { generated_at: string | null; validation_errors: { type?: string }[] | null } | undefined,
+  lastSynced: string | null
+): { status: FeedStatus; errors: number; staleDays: number | null } {
+  const errors = (cache?.validation_errors ?? []).filter((i) => i?.type === 'error').length
+  const staleDays = staleSyncDays(lastSynced)
+  const status: FeedStatus = !cache?.generated_at ? 'not_generated' : errors > 0 ? 'errors' : staleDays !== null ? 'stale' : 'running'
+  return { status, errors, staleDays }
+}
+
+// Best effort: either table may be missing on an older database, and the shell
+// must load regardless.
+async function loadAttention(
+  db: ReturnType<typeof adminDb>,
+  accountIds: string[],
+  projectIds: string[]
+): Promise<ShellData['attention']> {
+  const out: ShellData['attention'] = { pendingChanges: [], failures: [] }
+  if (!accountIds.length) return out
+  const since = new Date(Date.now() - 7 * 86_400_000).toISOString()
+  const [pending, failed] = await Promise.all([
+    projectIds.length
+      ? db.from('mcp_changes').select('project_id').eq('status', 'pending').in('project_id', projectIds).limit(500)
+      : Promise.resolve({ data: [], error: null }),
+    db
+      .from('activity_log')
+      .select('feed_id, project_id, feed_label, action, after, created_at')
+      .in('account_id', accountIds)
+      .is('user_id', null)
+      .gte('created_at', since)
+      .order('created_at', { ascending: false })
+      .limit(20),
+  ])
+  if (!pending.error) {
+    const n = new Map<string, number>()
+    for (const r of (pending.data ?? []) as { project_id: string | null }[]) {
+      if (r.project_id) n.set(r.project_id, (n.get(r.project_id) ?? 0) + 1)
+    }
+    out.pendingChanges = [...n].map(([projectId, count]) => ({ projectId, count }))
+  }
+  if (!failed.error) {
+    out.failures = ((failed.data ?? []) as { feed_id: string | null; project_id: string | null; feed_label: string | null; action: string; after: string | null; created_at: string }[]).map((r) => ({
+      feedId: r.feed_id,
+      projectId: r.project_id,
+      feedLabel: r.feed_label,
+      action: r.action,
+      message: r.after,
+      at: r.created_at,
+    }))
+  }
+  return out
 }

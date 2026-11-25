@@ -9,6 +9,9 @@ This version has breaking changes — APIs, conventions, and file structure may 
 
 UI and structure work for the redesign follows `docs/redesign/GUIDELINES.md`. It covers scope decisions (CSS and Master fields are postponed), the Agency → Shop → Feed hierarchy, page notes and the chosen visual system. Read it before redesign work.
 
+- **Keep the two branches in sync.** `feed-tool-gennemgang` (Danish UI) and `feed-tool-gennemgang-en` (English UI) carry the same code; only UI text differs. Make every change on both.
+- **Feed changes go through `lib/ops/*`.** The UI and the MCP tools (Claude) share that code, so a rule added there applies to both. See `docs/mcp.md` for the MCP server and `docs/go-live.md` for the merge and release checklist.
+
 # Shopify is strictly read-only — never write
 
 This application must **NEVER** write to, update, or delete data in Shopify via the API. The rule applies for the entire lifetime of the project, regardless of how a feature request is framed.

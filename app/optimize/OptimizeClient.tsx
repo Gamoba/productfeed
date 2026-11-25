@@ -1,5 +1,6 @@
 'use client'
 
+import { SetupStepFooter } from '@/app/components/SetupStepFooter'
 import { useState } from 'react'
 import { BucketListPanel } from './BucketListPanel'
 import { SettingsPanel } from './SettingsPanel'
@@ -57,6 +58,12 @@ export function OptimizeClient({
           <SettingsPanel feedId={feedId} initialSettings={initialSettings} />
         </section>
       )}
+
+      <SetupStepFooter
+        step={3}
+        back={{ href: `/feed/${feedId}/filters`, label: 'Tilbage til Inkludér / ekskludér' }}
+        next={{ href: `/feed/${feedId}/google-ads/labels`, label: 'Videre til Labels' }}
+      />
     </div>
   )
 }

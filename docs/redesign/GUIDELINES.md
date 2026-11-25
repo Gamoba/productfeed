@@ -171,7 +171,8 @@ The `feedflow-design` skill (`.claude/skills/feedflow-design/`) has been rewritt
 
 ## 6. Copy and tone
 
-- The UI language is **Danish**. Feature and page names stay in English where the prototype uses English (Overview, Products, Mapping, AI Titles, Labels, Settings).
+- **Two languages, two branches.** `feed-tool-gennemgang` is the Danish UI, and `feed-tool-gennemgang-en` is the same app in English. Every change is made on both branches; only UI text differs between them. Work in English first, then port.
+- In the Danish UI, feature and page names stay in English where the prototype uses English (Overview, Products, Mapping, AI Titles, Labels, Settings).
 - Keep it plain, short and direct. Address the user as "du" or "I/jeres".
 - No exclamation marks and no marketing language. Use concrete numbers.
 - Each page's lede says why the page exists. Subtitles explain the why, for example "Tjekkes oppefra. Første match vinder."
@@ -186,6 +187,18 @@ The `feedflow-design` skill (`.claude/skills/feedflow-design/`) has been rewritt
 - The agency pages Monitoring, Connected companies and Partner levels, the "Spørg Flow" AI chat, and the Design A and C variants.
 - The prototype's leftover "Labels" mapping type, unless someone confirms it.
 - Anything that writes to Shopify. Product actions such as "Ekskludér fra feed" and "Skriv titel selv" only change FeedFlow's own feed data.
+
+- The **campaign filter** in Settings and the **Plan column** on the agency dashboard. Both are in the prototype, but skipped for now (Nov. 2026).
+
+---
+
+## 7a. Status (Nov. 2026)
+
+**Built:** the app shell (sidebar per level, breadcrumbs with the feed switcher, the "Feed running" status pill, search on ⌘K / Ctrl+K and "Needs attention"), the Agency → Shop → Feed hierarchy, all feed pages from §4, the step footer on the five setup pages, the Mapping Live preview with "One field" and "One product", flag emoji (with a font fallback on Windows) and the phone-width layout.
+
+**Skipped for now:** the campaign filter in Settings and the Plan column on the agency dashboard (see §7).
+
+**Still open:** the questions in §8.
 
 ---
 

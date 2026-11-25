@@ -1,5 +1,6 @@
 'use client'
 
+import { SetupStepFooter } from '@/app/components/SetupStepFooter'
 import Link from 'next/link'
 import { useRouter } from 'next/navigation'
 import { useState } from 'react'
@@ -318,6 +319,11 @@ export function LabelsClient(props: Props) {
             Gå til Performance
           </Link>
         </section>
+        <SetupStepFooter
+          step={4}
+          back={{ href: `/feed/${feedId}/optimize`, label: 'Tilbage til AI Titles' }}
+          next={{ href: `/feed/${feedId}/preview`, label: 'Videre til Preview & eksport' }}
+        />
       </div>
     )
   }
@@ -481,6 +487,12 @@ export function LabelsClient(props: Props) {
       <p className="lb-muted lb-foot">
         Labels beregnes og vises her. Intet skrives til feedet eller sendes til Merchant Center endnu.
       </p>
+
+      <SetupStepFooter
+        step={4}
+        back={{ href: `/feed/${feedId}/optimize`, label: 'Tilbage til AI Titles' }}
+        next={{ href: `/feed/${feedId}/preview`, label: 'Videre til Preview & eksport' }}
+      />
     </div>
   )
 }
