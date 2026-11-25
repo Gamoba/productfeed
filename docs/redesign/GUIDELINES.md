@@ -17,7 +17,7 @@ The project's hard rules still apply. Shopify is read-only. Credentials are per 
 |---|---|
 | Overall | Implement the prototype's design (Design B, "Kobolt" palette) in the feed tool. The prototype has more elements than the tool has today. |
 | **CSS** (Comparison Shopping Service) | **Postponed.** It depends on a partner agreement that isn't in place. Ignore all CSS UI: the page, the CSS chips on Feeds, CSS merchants, CSS steps and CSS add-ons. |
-| **Master fields** | **Postponed.** The idea stays: shop-level fields with logic that is set up once and referenced from mapping. Build the feeds first. |
+| **Master fields** | **Built (Nov. 2026).** Shop-level fields with logic, set up once under Shop › Master fields and used from Mapping: the type “Master field”, or `master:<key>` as a source. Table `master_fields` (migration 058); evaluated in `lib/mappingEval`. |
 | Agency level | Wanted. It is really just a login or account with several users (see §2). The name "Agency" is a placeholder. |
 | Shop level | Corresponds to today's **Project** (one Shopify connection). |
 | Feed level | Changes. Feeds were Google-only, one per language. Now a feed is **market (country) × channel** (see §3). |
@@ -183,7 +183,6 @@ The `feedflow-design` skill (`.claude/skills/feedflow-design/`) has been rewritt
 ## 7. What not to build now
 
 - CSS, anywhere.
-- Master fields.
 - The agency pages Monitoring, Connected companies and Partner levels, the "Spørg Flow" AI chat, and the Design A and C variants.
 - The prototype's leftover "Labels" mapping type, unless someone confirms it.
 - Anything that writes to Shopify. Product actions such as "Ekskludér fra feed" and "Skriv titel selv" only change FeedFlow's own feed data.
@@ -194,7 +193,7 @@ The `feedflow-design` skill (`.claude/skills/feedflow-design/`) has been rewritt
 
 ## 7a. Status (Nov. 2026)
 
-**Built:** the app shell (sidebar per level, breadcrumbs with the feed switcher, the "Feed running" status pill, search on ⌘K / Ctrl+K and "Needs attention"), the Agency → Shop → Feed hierarchy, all feed pages from §4, the step footer on the five setup pages, the Mapping Live preview with "One field" and "One product", flag emoji (with a font fallback on Windows) and the phone-width layout.
+**Built:** the app shell (sidebar per level, breadcrumbs with the feed switcher, the "Feed running" status pill, search on ⌘K / Ctrl+K and "Needs attention"), the Agency → Shop → Feed hierarchy, all feed pages from §4, the step footer on the five setup pages, the Mapping Live preview with "One field" and "One product", Master fields (shop level, used from Mapping and by Claude), flag emoji (with a font fallback on Windows) and the phone-width layout.
 
 **Skipped for now:** the campaign filter in Settings and the Plan column on the agency dashboard (see §7).
 

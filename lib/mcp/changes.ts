@@ -35,6 +35,7 @@ import {
 } from '@/lib/ops/titles'
 import type { OptFilterConfig } from '@/lib/titleOptimizationService'
 import type { BucketTitleConfig } from '@/lib/bucketExamples'
+import { deleteMasterField, saveMasterField, type MasterFieldInput } from '@/lib/ops/masterFields'
 
 export type ChangePayload =
   | { kind: 'mapping'; entries: MappingEntry[] }
@@ -49,6 +50,9 @@ export type ChangePayload =
   | { kind: 'title_config'; bucket_id: string; config: BucketTitleConfig }
   | { kind: 'title_review'; bucket_id: string; decisions: TitleDecision[] }
   | { kind: 'title_run'; bucket_id: string; rerun: boolean; limit: number }
+  // Shop-level (no feed): applied to the change's project_id.
+  | { kind: 'master_field_save'; field: MasterFieldInput }
+  | { kind: 'master_field_delete'; key: string }
 
 export type ChangeDetail = { label: string; before: string | null; after: string | null }
 
@@ -87,6 +91,8 @@ export const AREA: Record<ChangePayload['kind'], string> = {
   title_config: 'AI Titles',
   title_review: 'AI Titles',
   title_run: 'AI Titles',
+  master_field_save: 'Master fields',
+  master_field_delete: 'Master fields',
 }
 
 export function displayName(user: Pick<User, 'email' | 'user_metadata'>): string {
@@ -107,8 +113,19 @@ export async function clientName(db: SupabaseClient, clientId: string | null): P
   }
 }
 
-function run(db: SupabaseClient, ctx: { user: User; via: string }, feedId: string, p: ChangePayload): Promise<OpResult> {
+// `target`: the feed for feed changes, the shop (project) for shop-level ones.
+function run(
+  db: SupabaseClient,
+  ctx: { user: User; via: string },
+  target: { feedId: string | null; projectId: string | null },
+  p: ChangePayload
+): Promise<OpResult> {
+  const feedId = target.feedId ?? ''
   switch (p.kind) {
+    case 'master_field_save':
+      return saveMasterField(db, ctx, target.projectId ?? '', p.field)
+    case 'master_field_delete':
+      return deleteMasterField(db, ctx, target.projectId ?? '', p.key)
     case 'mapping':
       return applyMappings(db, ctx, feedId, p.entries)
     case 'filters':
@@ -139,7 +156,8 @@ function run(db: SupabaseClient, ctx: { user: User; via: string }, feedId: strin
 export type ProposeInput = {
   user: User
   client: string
-  feed: { id: string; project_id: string | null; account_id: string }
+  /** id is null for a shop-level change (master fields). */
+  feed: { id: string | null; project_id: string | null; account_id: string }
   payload: ChangePayload
   summary: string
   details: ChangeDetail[]
@@ -155,7 +173,7 @@ export async function proposeChange(db: SupabaseClient, input: ProposeInput): Pr
     .maybeSingle<{ mcp_auto_apply: boolean }>()
   if (accErr) dbError('proposeChange account', accErr)
   const auto = !!account?.mcp_auto_apply
-  const label = (await feedLabel(db, input.feed.id))?.label ?? null
+  const label = input.feed.id ? ((await feedLabel(db, input.feed.id))?.label ?? null) : null
 
   const { data: row, error } = await db
     .from('mcp_changes')
@@ -178,7 +196,7 @@ export async function proposeChange(db: SupabaseClient, input: ProposeInput): Pr
   if (error) dbError('proposeChange insert', error)
   if (!auto) return { id: row.id, status: 'pending' }
 
-  const result = await run(db, { user: input.user, via: input.client }, input.feed.id, input.payload)
+  const result = await run(db, { user: input.user, via: input.client }, { feedId: input.feed.id, projectId: input.feed.project_id }, input.payload)
   const status: ChangeStatus = result.error ? 'failed' : 'applied'
   await db
     .from('mcp_changes')
@@ -211,9 +229,9 @@ export async function decideChange(
   if (error) dbError('decideChange', error)
   const row = (claimed?.[0] as ChangeRow | undefined) ?? null
   if (!row) throw new AppError('The change has already been handled', 409)
-  if (!approve || !row.feed_id) {
-    if (row.feed_id) {
-      await logActivity(db, { user: actor, feedId: row.feed_id, area: AREA[row.kind], action: `Change from ${row.client_name ?? 'assistant'} rejected`, after: row.summary })
+  if (!approve || (!row.feed_id && !row.project_id)) {
+    if (row.feed_id || row.project_id) {
+      await logActivity(db, { user: actor, feedId: row.feed_id ?? undefined, projectId: row.project_id ?? undefined, area: AREA[row.kind], action: `Change from ${row.client_name ?? 'assistant'} rejected`, after: row.summary })
     }
     return { id: row.id, status: 'rejected' }
   }
@@ -225,13 +243,13 @@ export async function decideChange(
     const { data } = await db.auth.admin.getUserById(row.requested_by)
     if (data?.user) requester = data.user
   }
-  const result = await run(db, { user: requester, via: row.client_name ?? 'AI assistant' }, row.feed_id, row.payload)
+  const result = await run(db, { user: requester, via: row.client_name ?? 'AI assistant' }, { feedId: row.feed_id, projectId: row.project_id }, row.payload)
   if (result.error) {
     await db.from('mcp_changes').update({ status: 'failed', error: result.error }).eq('id', row.id)
     return { id: row.id, status: 'failed', error: result.error }
   }
   if (requester.id !== actor.id) {
-    await logActivity(db, { user: actor, feedId: row.feed_id, area: AREA[row.kind], action: `Change from ${row.client_name ?? 'assistant'} approved`, after: row.summary })
+    await logActivity(db, { user: actor, feedId: row.feed_id ?? undefined, projectId: row.project_id ?? undefined, area: AREA[row.kind], action: `Change from ${row.client_name ?? 'assistant'} approved`, after: row.summary })
   }
   return { id: row.id, status: 'applied', warnings: result.warnings }
 }

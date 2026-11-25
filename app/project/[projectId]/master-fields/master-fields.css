@@ -1,0 +1,38 @@
+/* Shop › Master fields (Design B). */
+.mf { display: flex; flex-direction: column; gap: 14px; animation: mf-in .35s ease both; }
+@keyframes mf-in { from { opacity: 0; transform: translateY(10px); } to { opacity: 1; transform: none; } }
+.mf-head { display: flex; align-items: flex-start; justify-content: space-between; gap: 16px; flex-wrap: wrap; }
+.mf-head h1 { margin: 0; font-size: clamp(24px, 3vw, 30px); font-weight: 500; text-wrap: balance; }
+.mf-lede { margin: 4px 0 0; font-size: 13px; color: var(--muted); max-width: 78ch; }
+.mf-muted { color: var(--muted); font-size: 12.5px; margin: 0; }
+.mf-foot { padding: 0 4px; }
+.mf-form { display: flex; flex-direction: column; gap: 14px; }
+.mf-form h3, .mf-empty h3 { margin: 0; font-size: 14px; font-weight: 500; }
+.mf-fields { display: grid; grid-template-columns: repeat(auto-fit, minmax(220px, 1fr)); gap: 12px; }
+.mf-fields label { display: flex; flex-direction: column; gap: 4px; font-size: 12px; color: var(--muted); }
+.mf-key { font-family: var(--code); font-size: 12px; color: var(--card-fg); padding: 8px 0; }
+.mf-actions { display: flex; justify-content: flex-end; gap: 8px; }
+.mf-empty { display: flex; flex-direction: column; align-items: flex-start; gap: 8px; }
+.mf-empty p { margin: 0; font-size: 13px; color: var(--muted); max-width: 70ch; }
+.mf-table { width: 100%; border-collapse: collapse; font-size: 12.5px; }
+.mf-table th { text-align: left; font-size: 11px; font-weight: 500; color: var(--muted); letter-spacing: .02em; padding: 10px 12px; border-bottom: 1px solid var(--line); }
+.mf-table td { padding: 10px 12px; border-top: 1px solid var(--line); vertical-align: top; }
+.mf-table tbody tr:first-child td { border-top: 0; }
+.mf-table td b { display: block; font-weight: 500; font-size: 13px; }
+.mf-table td small { display: block; color: var(--muted); font-size: 12px; margin-top: 2px; overflow-wrap: anywhere; }
+.mf-act { text-align: right; white-space: nowrap; }
+.mf-act .link { background: none; border: 0; cursor: pointer; font: inherit; color: var(--accent-ink); font-weight: 500; font-size: 12.5px; }
+.mf-act .shell-pop { display: inline-block; margin-left: 8px; vertical-align: middle; }
+.shell-menu-item.neg { color: var(--bad); }
+.mf-act .link.neg { color: var(--bad); }
+.mf-confirm { display: inline-flex; gap: 10px; align-items: center; font-size: 12.5px; }
+.mf-more { width: 28px; height: 28px; border-radius: 50%; border: 0; background: none; font-size: 16px; line-height: 1; color: var(--muted); cursor: pointer; }
+.mf-more:hover, .mf-more[aria-expanded="true"] { background: var(--card-2); color: var(--card-fg); }
+@media (max-width: 820px) {
+  .mf-table thead { display: none; }
+  .mf-table tr { display: grid; grid-template-columns: 1fr auto; padding: 8px 0; border-top: 1px solid var(--line); }
+  .mf-table tbody tr:first-child { border-top: 0; }
+  .mf-table td { border: 0; padding: 4px 12px; }
+  .mf-act { grid-row: 1; grid-column: 2; }
+}
+@media (prefers-reduced-motion: reduce) { .mf { animation: none; } }

@@ -12,7 +12,8 @@ import {
   type FeedFilter,
 } from '@/lib/feedFilters'
 import { extractWithPatterns, type ExtractConfig } from '@/lib/mappingExtract'
-import { createItemEvaluator, isFeedFieldRef, type ItemEvaluator } from '@/lib/mappingEval'
+import { createItemEvaluator, isMappedRef, type EvalMasterField, type ItemEvaluator } from '@/lib/mappingEval'
+import { loadMasterFieldsForFeed } from '@/lib/masterFields'
 
 // ── Types ──────────────────────────────────────────────────────────────────
 
@@ -26,6 +27,7 @@ type MappingType =
   | 'STRIP_HTML'
   | 'LOOKUP'
   | 'EXTRACT'
+  | 'MASTER'
   | 'AI'
 
 type Config = Record<string, unknown>
@@ -106,9 +108,11 @@ function xmlEscape(str: string): string {
 
 // The per-item mapping evaluator (lib/mappingEval): source fields read through
 // resolveField, `feed:<field>` references read other mappings' final values,
-// and an accepted AI title is applied to the title mapping.
+// `master:<key>` reads the shop's master fields, and an accepted AI title is
+// applied to the title mapping.
 function itemEvaluator(
   mappings: FeedMapping[],
+  masters: EvalMasterField[],
   item: SupabaseProduct,
   marketUrl: string | null,
   aiTitle: string | null,
@@ -116,6 +120,7 @@ function itemEvaluator(
 ): ItemEvaluator {
   return createItemEvaluator({
     mappings,
+    masters,
     resolveSource: (field) => resolveField(field, item, marketUrl),
     aiTitle,
     aiPlaceholder,
@@ -331,9 +336,9 @@ export async function extractCoverage(feedId: string, config: ExtractConfig): Pr
   const db = adminClient()
   const field = config.field ?? ''
 
-  // A `feed:<field>` source reads another mapping's value, so the SAVED
-  // mappings are needed (unsaved edits to that other field aren't seen).
-  const fromMapping = isFeedFieldRef(field)
+  // A `feed:<field>` / `master:<key>` source reads another mapping's value, so
+  // the SAVED mappings are needed (unsaved edits to that other field aren't seen).
+  const fromMapping = isMappedRef(field)
   const [{ data: settingsData }, { data: shopSettingsData }, { data: filtersData }, { data: mappingsData }] =
     await Promise.all([
       db.from('feed_settings').select('feed_mode').eq('feed_id', feedId).maybeSingle(),
@@ -346,6 +351,7 @@ export async function extractCoverage(feedId: string, config: ExtractConfig): Pr
   const feedMode = (settingsData?.feed_mode as 'product' | 'variant') ?? 'product'
   const filterRows = (filtersData ?? []) as FeedFilter[]
   const mappings = ((mappingsData ?? []) as FeedMapping[]).filter((m) => m.mapping_type)
+  const masters = fromMapping ? await loadMasterFieldsForFeed(db, feedId) : []
   const needsMetafields =
     fromMapping || // can't tell cheaply what the referenced mapping reads
     field.startsWith('metafield:') ||
@@ -368,7 +374,7 @@ export async function extractCoverage(feedId: string, config: ExtractConfig): Pr
   const check = (item: SupabaseProduct, id: string) => {
     total++
     const input = fromMapping
-      ? itemEvaluator(mappings, item, marketUrl, aiTitleFor(item)).resolve(field)
+      ? itemEvaluator(mappings, masters, item, marketUrl, aiTitleFor(item)).resolve(field)
       : resolveField(field, item, marketUrl)
     const r = extractWithPatterns(input, patterns, config.lookup)
     if (r.patternIndex >= 0) {
@@ -644,6 +650,7 @@ export async function generateFeed(feedId: string, input: FeedInput = {}): Promi
   const mappings = ((mappingsData ?? []) as FeedMapping[]).filter(
     (m) => m.mapping_type && m.mapping_type !== ('' as MappingType)
   )
+  const masters = await loadMasterFieldsForFeed(db, feedId)
 
   const filterRows = (filtersData ?? []) as FeedFilter[]
   const idMapping = mappings.find((m) => m.google_field === 'id')
@@ -683,7 +690,7 @@ export async function generateFeed(feedId: string, input: FeedInput = {}): Promi
       // The accepted AI title is applied inside the evaluator: it replaces the
       // title mapping (an AI-type one costs no API call), except a skip-empty
       // Combine, which builds on it — see lib/mappingEval.
-      const ev = itemEvaluator(mappings, product, marketUrl, aiTitleFor(product))
+      const ev = itemEvaluator(mappings, masters, product, marketUrl, aiTitleFor(product))
 
       // g:id: the id mapping if any, else shopify_id. item_group_id mappings are
       // skipped — no meaning in product mode (no variant grouping).
@@ -725,7 +732,7 @@ export async function generateFeed(feedId: string, input: FeedInput = {}): Promi
         const addedFields = new Set<string>()
         // Same AI-title handling as product mode. The AI title is
         // product-level, so every variant of the product carries it.
-        const ev = itemEvaluator(mappings, vProduct, marketUrl, aiTitleFor(product))
+        const ev = itemEvaluator(mappings, masters, vProduct, marketUrl, aiTitleFor(product))
 
         for (const mapping of mappings) {
           if (mapping.google_field === 'id' || mapping.google_field === 'item_group_id') continue
@@ -839,6 +846,7 @@ export async function generatePreview(
   const mappings = ((mappingsData ?? []) as FeedMapping[]).filter(
     (m) => m.mapping_type && m.mapping_type !== ('' as MappingType)
   )
+  const masters = await loadMasterFieldsForFeed(db, feedId)
   const filterRows = (filtersData ?? []) as FeedFilter[]
   const idMapping = mappings.find((m) => m.google_field === 'id')
 
@@ -880,7 +888,7 @@ export async function generatePreview(
       // '__AI__' stands in for AI mappings (no API call in a preview). The
       // evaluator applies the AI title first, so an AI-mapped title shows the
       // optimised title the feed really emits, not the placeholder.
-      const ev = itemEvaluator(mappings, product, marketUrl, aiTitleFor(product), '__AI__')
+      const ev = itemEvaluator(mappings, masters, product, marketUrl, aiTitleFor(product), '__AI__')
       for (const mapping of mappings) {
         if (mapping.google_field === 'id') {
           // AI-type id mappings would need an API call; show the auto id then.
@@ -909,7 +917,7 @@ export async function generatePreview(
           `${product.shopify_id}_${variant.id}`
         )
         const fields: Record<string, string> = {}
-        const ev = itemEvaluator(mappings, vProduct, marketUrl, aiTitleFor(product), '__AI__')
+        const ev = itemEvaluator(mappings, masters, vProduct, marketUrl, aiTitleFor(product), '__AI__')
 
         fields['id'] = await resolveItemId(
           ev, idMapping?.mapping_type === 'AI' ? undefined : idMapping, vProduct, null
@@ -966,6 +974,7 @@ export async function feedView(
   const mappings = ((mappingsData ?? []) as FeedMapping[]).filter(
     (m) => m.mapping_type && m.mapping_type !== ('' as MappingType)
   )
+  const masters = await loadMasterFieldsForFeed(db, feedId)
   const filterRows = (filtersData ?? []) as FeedFilter[]
 
   // Copies: attachOptimizedTitles writes onto the objects it is given.
@@ -979,7 +988,7 @@ export async function feedView(
     const fields: Record<string, string> = {}
     // Same evaluator as generatePreview: '__AI__' for AI mappings (no API call),
     // the accepted AI title applied first.
-    const ev = itemEvaluator(mappings, product, marketUrl, aiTitleFor(product), '__AI__')
+    const ev = itemEvaluator(mappings, masters, product, marketUrl, aiTitleFor(product), '__AI__')
     for (const mapping of mappings) {
       if (mapping.google_field === 'id') {
         fields['id'] = await resolveItemId(

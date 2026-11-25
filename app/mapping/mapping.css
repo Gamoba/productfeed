@@ -223,3 +223,8 @@
 .lp-muted { color: var(--muted); font-size: 12.5px; margin: 0; }
 @media (max-width: 820px) { .lp-row { grid-template-columns: 1fr; gap: 2px; } }
 @media (prefers-reduced-motion: reduce) { .lp-panel { animation: none; } }
+
+/* Shop › Master fields: the rule editor and its preview controls. */
+.mf-editor { gap: 10px; }
+.mf-preview { display: flex; flex-wrap: wrap; gap: 12px; align-items: flex-end; }
+.mf-preview label { display: flex; flex-direction: column; gap: 4px; font-size: 12px; color: var(--muted); min-width: 220px; flex: 1; }

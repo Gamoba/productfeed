@@ -134,7 +134,7 @@ type LogLine = Omit<ActivityInput, 'feedId' | 'feedLabel' | 'projectId' | 'accou
 
 // Runs `task` after the response has been sent (Next's after()). Outside a
 // request (scripts, tests) there is no response to wait for, so it runs at once.
-async function afterResponse(task: () => Promise<void>): Promise<void> {
+export async function afterResponse(task: () => Promise<void>): Promise<void> {
   try {
     after(task)
   } catch {
@@ -142,7 +142,7 @@ async function afterResponse(task: () => Promise<void>): Promise<void> {
   }
 }
 
-async function refreshFeedCache(db: SupabaseClient, feedId: string): Promise<void> {
+export async function refreshFeedCache(db: SupabaseClient, feedId: string): Promise<void> {
   const started = Date.now()
   // Two branches depending on whether the feed has been generated before:
   //   - feed_cache row exists  → just re-run validation and update the row

@@ -5,8 +5,8 @@
 //   shop     — /project/[projectId]
 //   feed     — /feed/[feedId]/...
 //
-// Only pages that exist are listed. Postponed areas (CSS, Master fields, agency
-// sub-pages, shop tools and account pages) are added when they are built.
+// Only pages that exist are listed. Postponed areas (CSS, agency sub-pages,
+// shop tools and account pages) are added when they are built.
 
 import type { IconName } from './icons'
 
@@ -111,8 +111,8 @@ export function feedNav(feedId: string): NavEntry[] {
   ]
 }
 
-// In the prototype's order. Master fields and the Konto group are placeholders
-// (app/components/PlaceholderPage.tsx) until it's decided what they hold. CSS
+// In the prototype's order. The Konto group is a placeholder
+// (app/components/PlaceholderPage.tsx) until it's decided what it holds. CSS
 // is left out on purpose (GUIDELINES §1).
 export function shopNav(projectId: string): NavEntry[] {
   const p = (path: string) => `/project/${projectId}/${path}`

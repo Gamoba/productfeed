@@ -18,6 +18,15 @@
 //   - a cycle (title reads feed:size, size reads feed:title) is cut: the field
 //     that closes the loop reads '' instead of recursing forever.
 //
+// ── Master fields ("master:<key>") ─────────────────────────────────────────
+//
+// A master field is a rule set up once on the shop (table master_fields,
+// lib/masterFields). It is read like a `feed:` reference: `master:<key>` as a
+// source anywhere, or the MASTER mapping type, which takes the whole value and
+// then applies the field's own Only-if/transforms. A master field's own `feed:`
+// references read the feed that uses it. Same memo and cycle rules; a master
+// field that doesn't exist (or isn't loaded) reads ''.
+//
 // ── The accepted AI title ──────────────────────────────────────────────────
 //
 // An accepted AI title has always REPLACED the title mapping outright. That
@@ -35,6 +44,14 @@ import { applyExtract } from './mappingExtract'
 import { applyLookup, type LookupConfig } from './mappingLookup'
 
 export const FEED_FIELD_PREFIX = 'feed:'
+export const MASTER_FIELD_PREFIX = 'master:'
+
+/** A shop-level master field, as the evaluator needs it. */
+export type EvalMasterField = {
+  key: string
+  mapping_type: string
+  config: Record<string, unknown>
+}
 
 export type EvalMapping = {
   google_field: string
@@ -44,6 +61,15 @@ export type EvalMapping = {
 
 export function isFeedFieldRef(field: string): boolean {
   return field.startsWith(FEED_FIELD_PREFIX)
+}
+
+export function isMasterFieldRef(field: string): boolean {
+  return field.startsWith(MASTER_FIELD_PREFIX)
+}
+
+/** Reads another mapping's or a master field's value rather than a source field. */
+export function isMappedRef(field: string): boolean {
+  return isFeedFieldRef(field) || isMasterFieldRef(field)
 }
 
 /** The main function of every non-AI mapping type. AI returns null. */
@@ -80,6 +106,8 @@ export function mainValue(
       return applyLookup(field(), config as LookupConfig)
     case 'EXTRACT':
       return applyExtract(config, resolve).value
+    case 'MASTER':
+      return config.master ? resolve(MASTER_FIELD_PREFIX + String(config.master)) : ''
     case 'AI':
       return null
     default:
@@ -122,15 +150,28 @@ export function createItemEvaluator(opts: {
   aiTitle?: string | null
   // Returned for AI mappings by value() — the preview's "__AI__".
   aiPlaceholder?: string
+  // The shop's master fields (lib/masterFields).
+  masters?: EvalMasterField[]
 }): ItemEvaluator {
   const { resolveSource, aiTitle, aiPlaceholder } = opts
   const byField = new Map<string, EvalMapping>()
   for (const m of opts.mappings) if (m.mapping_type) byField.set(m.google_field, m)
+  // Keyed by the full reference, so they share the memo without clashing.
+  const byMaster = new Map<string, EvalMapping>()
+  for (const m of opts.masters ?? []) {
+    if (m.mapping_type && m.mapping_type !== 'AI') {
+      byMaster.set(MASTER_FIELD_PREFIX + m.key, { google_field: MASTER_FIELD_PREFIX + m.key, mapping_type: m.mapping_type, config: m.config })
+    }
+  }
 
   const memo = new Map<string, string>()
   const inProgress = new Set<string>()
 
   const resolve: FieldResolver = (field) => {
+    if (isMasterFieldRef(field)) {
+      const m = byMaster.get(field)
+      return m ? (computeSync(m) ?? '') : ''
+    }
     if (!isFeedFieldRef(field)) return resolveSource(field)
     const gf = field.slice(FEED_FIELD_PREFIX.length)
     const m = byField.get(gf)

@@ -164,6 +164,8 @@ export function describeMapping(type: string | null | undefined, config: Record<
       return field ? `${field} without HTML` : 'Without HTML'
     case 'LOOKUP':
       return field ? `Lookup table on ${field}` : 'Lookup table'
+    case 'MASTER':
+      return `Master field: ${String(c.master ?? '')}`
     case 'AI':
       return 'AI'
     default:

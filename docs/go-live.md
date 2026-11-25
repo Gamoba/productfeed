@@ -17,6 +17,8 @@ left as it is.
   into the branch first, test, then merge the branch into `master`.
 - **Database:** migrations 052–057 have already run on production (backup
   taken first, rollback script in `supabase/rollback/rollback_057_to_051.sql`).
+  058 (master fields, a new table only) has run too; rollback in
+  `supabase/rollback/rollback_058.sql`.
   `master` keeps working on that schema in the meantime (trigger in 052).
 - **Environment variables:** none new. The branch reads the same variables as
   `master`.
