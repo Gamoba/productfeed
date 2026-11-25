@@ -1,5 +1,5 @@
 import { redirect } from 'next/navigation'
-import { createSupabaseServerClient } from '@/lib/supabase-server'
+import { createSupabaseServerClient, getSessionUser } from '@/lib/supabase-server'
 import { adminDb } from '@/lib/feeds'
 import { getAgencyOverview } from '@/lib/agencyOverview'
 import { AgencyDashboardClient } from './agency/AgencyDashboardClient'
@@ -10,7 +10,7 @@ export default async function HomePage() {
   const supabase = await createSupabaseServerClient()
   const {
     data: { user },
-  } = await supabase.auth.getUser()
+  } = await getSessionUser(supabase)
 
   if (!user) redirect('/login')
 

@@ -1,6 +1,6 @@
 'use server'
 
-import { createSupabaseServerClient } from '@/lib/supabase-server'
+import { createSupabaseServerClient, getSessionUser } from '@/lib/supabase-server'
 import { adminDb, getOwnedProject } from '@/lib/feeds'
 import { getAccountRole } from '@/lib/accounts'
 import { logActivity } from '@/lib/activity'
@@ -11,7 +11,7 @@ async function sessionUser() {
   const supabase = await createSupabaseServerClient()
   const {
     data: { user },
-  } = await supabase.auth.getUser()
+  } = await getSessionUser(supabase)
   return { supabase, user }
 }
 

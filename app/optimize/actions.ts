@@ -4,7 +4,7 @@
 // then delegate to the headless service layer (lib/titleOptimizationService).
 // Reads return { data } | { error }; mutations return { error? }.
 
-import { createSupabaseServerClient } from '@/lib/supabase-server'
+import { createSupabaseServerClient, getSessionUser } from '@/lib/supabase-server'
 import { adminDb, getOwnedFeed } from '@/lib/feeds'
 import { logActivity, type Actor } from '@/lib/activity'
 import { enforceRateLimit } from '@/lib/rateLimit'
@@ -21,7 +21,7 @@ async function requireOwnedFeed(feedId: string): Promise<{ userId: string; user:
   const supabase = await createSupabaseServerClient()
   const {
     data: { user },
-  } = await supabase.auth.getUser()
+  } = await getSessionUser(supabase)
   if (!user) return { error: 'Unauthorized' }
   const owned = await getOwnedFeed(user.id, feedId)
   if (!owned) return { error: 'Feed ikke fundet' }

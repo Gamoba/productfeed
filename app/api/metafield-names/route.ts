@@ -1,4 +1,4 @@
-import { createSupabaseServerClient } from '@/lib/supabase-server'
+import { createSupabaseServerClient, getSessionUser } from '@/lib/supabase-server'
 import { getOwnedFeed } from '@/lib/feeds'
 import { getMetafieldNameMap } from '@/lib/metafieldDefinitions'
 
@@ -12,7 +12,7 @@ export async function GET(req: Request) {
   const supabase = await createSupabaseServerClient()
   const {
     data: { user },
-  } = await supabase.auth.getUser()
+  } = await getSessionUser(supabase)
   if (!user) return Response.json({ error: 'Unauthorized' }, { status: 401 })
 
   const feedId = new URL(req.url).searchParams.get('feedId')

@@ -1,5 +1,5 @@
 import { NextResponse } from 'next/server'
-import { createSupabaseServerClient } from '@/lib/supabase-server'
+import { createSupabaseServerClient, getSessionUser } from '@/lib/supabase-server'
 import Anthropic from '@anthropic-ai/sdk'
 import type { SupabaseProduct } from '@/lib/sync'
 import { adminDb, getOwnedFeed } from '@/lib/feeds'
@@ -204,7 +204,7 @@ export async function POST(req: Request) {
   const supabase = await createSupabaseServerClient()
   const {
     data: { user },
-  } = await supabase.auth.getUser()
+  } = await getSessionUser(supabase)
 
   if (!user) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
 

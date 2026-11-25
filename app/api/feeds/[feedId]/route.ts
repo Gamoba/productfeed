@@ -1,5 +1,5 @@
 import { NextResponse } from 'next/server'
-import { createSupabaseServerClient } from '@/lib/supabase-server'
+import { createSupabaseServerClient, getSessionUser } from '@/lib/supabase-server'
 import { adminDb, getOwnedFeed, purgeFeedProducts } from '@/lib/feeds'
 import { errorResponse } from '@/lib/errors'
 import { feedLabel, logActivity } from '@/lib/activity'
@@ -13,7 +13,7 @@ export async function DELETE(
   const supabase = await createSupabaseServerClient()
   const {
     data: { user },
-  } = await supabase.auth.getUser()
+  } = await getSessionUser(supabase)
   if (!user) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
 
   const owned = await getOwnedFeed(user.id, feedId)
@@ -54,7 +54,7 @@ export async function PATCH(
   const supabase = await createSupabaseServerClient()
   const {
     data: { user },
-  } = await supabase.auth.getUser()
+  } = await getSessionUser(supabase)
   if (!user) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
 
   const owned = await getOwnedFeed(user.id, feedId)

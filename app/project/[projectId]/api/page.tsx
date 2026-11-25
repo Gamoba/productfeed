@@ -1,6 +1,6 @@
 import { headers } from 'next/headers'
 import { redirect, notFound } from 'next/navigation'
-import { createSupabaseServerClient } from '@/lib/supabase-server'
+import { createSupabaseServerClient, getSessionUser } from '@/lib/supabase-server'
 import { adminDb, getOwnedProject } from '@/lib/feeds'
 import { getAccountRole } from '@/lib/accounts'
 import { listChanges } from '@/lib/mcp/changes'
@@ -17,7 +17,7 @@ export default async function ApiMcpPage({ params }: { params: Promise<{ project
   const supabase = await createSupabaseServerClient()
   const {
     data: { user },
-  } = await supabase.auth.getUser()
+  } = await getSessionUser(supabase)
   if (!user) redirect('/login')
 
   const project = await getOwnedProject(user.id, projectId)

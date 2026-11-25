@@ -1,6 +1,6 @@
 'use server'
 
-import { createSupabaseServerClient } from '@/lib/supabase-server'
+import { createSupabaseServerClient, getSessionUser } from '@/lib/supabase-server'
 import { validateFeed, type ValidationResult } from '@/lib/feedValidator'
 import { adminDb, getOwnedFeed } from '@/lib/feeds'
 
@@ -10,7 +10,7 @@ export async function runFeedValidation(
   const supabase = await createSupabaseServerClient()
   const {
     data: { user },
-  } = await supabase.auth.getUser()
+  } = await getSessionUser(supabase)
 
   if (!user) return { error: 'Ikke logget ind' }
 

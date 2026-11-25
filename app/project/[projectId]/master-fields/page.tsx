@@ -1,5 +1,5 @@
 import { redirect, notFound } from 'next/navigation'
-import { createSupabaseServerClient } from '@/lib/supabase-server'
+import { createSupabaseServerClient, getSessionUser } from '@/lib/supabase-server'
 import { adminDb, getOwnedProject } from '@/lib/feeds'
 import { loadMasterFields, masterUsage } from '@/lib/masterFields'
 import { channelOf } from '@/lib/channels'
@@ -14,7 +14,7 @@ export default async function MasterFieldsPage({ params }: { params: Promise<{ p
   const supabase = await createSupabaseServerClient()
   const {
     data: { user },
-  } = await supabase.auth.getUser()
+  } = await getSessionUser(supabase)
   if (!user) redirect('/login')
 
   if (!(await getOwnedProject(user.id, projectId))) notFound()

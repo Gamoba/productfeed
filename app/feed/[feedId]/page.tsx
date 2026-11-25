@@ -1,5 +1,5 @@
 import { redirect, notFound } from 'next/navigation'
-import { createSupabaseServerClient } from '@/lib/supabase-server'
+import { createSupabaseServerClient, getSessionUser } from '@/lib/supabase-server'
 import { adminDb, getOwnedFeed } from '@/lib/feeds'
 import { FeedClient } from '@/app/feed/FeedClient'
 import { REQUIRED_GOOGLE_FIELDS, type ValidationIssue, type ValidationResult } from '@/lib/feedValidator'
@@ -22,7 +22,7 @@ export default async function FeedDetailPage({
   const supabase = await createSupabaseServerClient()
   const {
     data: { user },
-  } = await supabase.auth.getUser()
+  } = await getSessionUser(supabase)
   if (!user) redirect('/login')
 
   const feed = await getOwnedFeed(user.id, feedId)

@@ -1,5 +1,5 @@
 import { NextResponse } from 'next/server'
-import { createSupabaseServerClient } from '@/lib/supabase-server'
+import { createSupabaseServerClient, getSessionUser } from '@/lib/supabase-server'
 import { adminDb, getOwnedFeed } from '@/lib/feeds'
 import { saveBucket, deleteBucket, listBuckets, recomputeLabel, type Bucket } from '@/lib/googleAdsBuckets'
 import { logActivity } from '@/lib/activity'
@@ -13,7 +13,7 @@ async function guard(feedId: string) {
   const supabase = await createSupabaseServerClient()
   const {
     data: { user },
-  } = await supabase.auth.getUser()
+  } = await getSessionUser(supabase)
   if (!user) return { error: NextResponse.json({ error: 'Unauthorized' }, { status: 401 }) }
   const feed = await getOwnedFeed(user.id, feedId)
   if (!feed) return { error: NextResponse.json({ error: 'Not found' }, { status: 404 }) }

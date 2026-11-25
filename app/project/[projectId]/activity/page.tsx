@@ -1,5 +1,5 @@
 import { redirect, notFound } from 'next/navigation'
-import { createSupabaseServerClient } from '@/lib/supabase-server'
+import { createSupabaseServerClient, getSessionUser } from '@/lib/supabase-server'
 import { adminDb, getOwnedProject } from '@/lib/feeds'
 import { ACTIVITY_LIMIT, getShopActivity } from '@/lib/activity'
 import { ActivityClient } from './ActivityClient'
@@ -12,7 +12,7 @@ export default async function ActivityPage({ params }: { params: Promise<{ proje
   const supabase = await createSupabaseServerClient()
   const {
     data: { user },
-  } = await supabase.auth.getUser()
+  } = await getSessionUser(supabase)
   if (!user) redirect('/login')
 
   const project = await getOwnedProject(user.id, projectId)

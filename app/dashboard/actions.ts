@@ -1,6 +1,6 @@
 'use server'
 
-import { createSupabaseServerClient } from '@/lib/supabase-server'
+import { createSupabaseServerClient, getSessionUser } from '@/lib/supabase-server'
 import { adminDb, getOwnedFeed } from '@/lib/feeds'
 import { applyAdsSchedule, applyFeedMode, applyFeedSchedule } from '@/lib/ops/feedConfig'
 
@@ -10,7 +10,7 @@ async function access(feedId: string) {
   const supabase = await createSupabaseServerClient()
   const {
     data: { user },
-  } = await supabase.auth.getUser()
+  } = await getSessionUser(supabase)
   if (!user) return { error: 'Unauthorized' } as const
   if (!(await getOwnedFeed(user.id, feedId))) return { error: 'Feed ikke fundet' } as const
   return { user }
