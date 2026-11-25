@@ -5,7 +5,7 @@
 
 import type { SupabaseClient } from '@supabase/supabase-js'
 import { createItemEvaluator, MASTER_FIELD_PREFIX, type EvalMapping, type EvalMasterField } from './mappingEval'
-import { MASTER_RESOLVER, resolveField } from './feedFilters'
+import { MASTER_NAMES, MASTER_RESOLVER, resolveField, type MasterNames } from './feedFilters'
 import type { SupabaseProduct } from './sync'
 
 export type MasterField = EvalMasterField & {
@@ -84,8 +84,9 @@ export function masterUsage(
  */
 export function attachMasterResolvers(
   products: SupabaseProduct[],
-  ctx: { masters: EvalMasterField[]; mappings: EvalMapping[]; marketUrl: string | null }
+  ctx: { masters: (EvalMasterField & { name?: string })[]; mappings: EvalMapping[]; marketUrl: string | null }
 ): void {
+  const names: MasterNames = new Map(ctx.masters.map((m) => [m.key, m.name ?? m.key]))
   for (const product of products) {
     let ev: ReturnType<typeof createItemEvaluator> | null = null
     const t = (product as Record<string, unknown>).optimized_title
@@ -99,5 +100,11 @@ export function attachMasterResolvers(
       return ev.resolve(MASTER_FIELD_PREFIX + key)
     }
     Object.defineProperty(product, MASTER_RESOLVER, { value: resolve, enumerable: false, configurable: true, writable: true })
+    Object.defineProperty(product, MASTER_NAMES, { value: names, enumerable: false, configurable: true, writable: true })
   }
+}
+
+/** Master field key → name for a feed's shop, for rule text. */
+export async function masterNamesForFeed(db: SupabaseClient, feedId: string): Promise<MasterNames> {
+  return new Map((await loadMasterFieldsForFeed(db, feedId)).map((m) => [m.key, m.name]))
 }

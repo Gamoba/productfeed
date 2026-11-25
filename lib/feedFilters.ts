@@ -32,6 +32,9 @@ export type FeedFilter = {
 // one attach a resolver to each product first (lib/masterFields,
 // attachMasterResolvers); without it the field reads ''.
 export const MASTER_RESOLVER = '__masterResolve'
+// Attached with the resolver: master field key → name, for rule text.
+export const MASTER_NAMES = '__masterNames'
+export type MasterNames = Map<string, string>
 
 /** Whether any rule reads a master field, so the caller must attach resolvers. */
 export function rulesReadMasters(filters: { rules?: { field?: string }[] | null }[]): boolean {
@@ -246,14 +249,18 @@ const FIELD_LABEL: Record<string, string> = {
   'variants[0].barcode': 'stregkode',
 }
 
-function fieldLabel(field: string): string {
-  if (field.startsWith('master:')) return `${field.slice('master:'.length)} (master)`
+function fieldLabel(field: string, names?: MasterNames): string {
+  if (field.startsWith('master:')) {
+    const key = field.slice('master:'.length)
+    return `${names?.get(key) ?? key} (master)`
+  }
   return FIELD_LABEL[field] ?? field.replace(/^metafield:/, '')
 }
 
-export function describeRule(rule: FeedFilterRule): string {
+/** `names`: master field key → name, so a master rule reads by its name. */
+export function describeRule(rule: FeedFilterRule, names?: MasterNames): string {
   const op = OP_LABEL[rule.operator] ?? rule.operator
-  const field = fieldLabel(rule.field)
+  const field = fieldLabel(rule.field, names)
   return NO_VALUE_OPS.has(rule.operator) ? `${field} ${op}` : `${field} ${op} ${rule.value}`
 }
 
@@ -282,11 +289,11 @@ export function explainScope(
     // so name them all.
     if (excludeFilter.operator === 'OR') {
       const hit = active.find((r) => evalFilterRule(r, product, marketUrl))
-      if (hit) return { inFeed: false, reason: `Regel: ${describeRule(hit)}` }
+      if (hit) return { inFeed: false, reason: `Regel: ${describeRule(hit, (product as Record<string, unknown>)[MASTER_NAMES] as MasterNames | undefined)}` }
     }
     return {
       inFeed: false,
-      reason: `${active.length === 1 ? 'Regel' : 'Regler'}: ${active.map(describeRule).join(' og ')}`,
+      reason: `${active.length === 1 ? 'Regel' : 'Regler'}: ${active.map((r) => describeRule(r, (product as Record<string, unknown>)[MASTER_NAMES] as MasterNames | undefined)).join(' og ')}`,
     }
   }
   return { inFeed: true }
