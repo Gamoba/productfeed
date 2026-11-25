@@ -4,6 +4,7 @@ import type { SupabaseProduct } from '@/lib/sync'
 import {
   resolveField,
   applyFeedFilters,
+  activeFilterSides,
   explainScope,
   describeRule,
   isActiveRule,
@@ -226,29 +227,75 @@ export async function countFilteredProducts(
 ): Promise<{ total: number; included: number }> {
   const db = adminClient()
 
-  const [{ data: shopSettingsData }, { data: filtersData }] = await Promise.all([
-    db.from('shop_settings').select('market_url').eq('feed_id', feedId).maybeSingle(),
-    db.from('feed_filters').select('filter_type, operator, rules').eq('feed_id', feedId),
-  ])
+  const { data: filtersData } = await db
+    .from('feed_filters')
+    .select('filter_type, operator, rules')
+    .eq('feed_id', feedId)
   const filterRows = (filtersData ?? []) as FeedFilter[]
+  const sides = activeFilterSides(filterRows)
 
-  // Metafields are only read by `metafield:` filter fields (resolveField). When
-  // no rule uses one, counting skips the embed — on BWH that's most of the
-  // read, and this runs on every overview / dashboard load.
-  const needsMetafields = filterRows.some((f) =>
-    (f.rules ?? []).some((r) => r.field?.startsWith('metafield:'))
-  )
+  // No rule that filters anything: every active product is in the feed, and
+  // the database can count them without sending a single row (~0.1 s instead
+  // of ~4 s for 2.5k products). Most feeds look like this.
+  if (!sides.include && !sides.exclude) {
+    const { count, error } = await db
+      .from('products')
+      .select('id', { count: 'exact', head: true })
+      .eq('feed_id', feedId)
+      .eq('status', 'active')
+    if (error) throw new Error(`Product count failed: ${error.message}`)
+    return { total: count ?? 0, included: count ?? 0 }
+  }
 
+  // With rules, fetch only the columns they read (no body_html, images…),
+  // only the metafields the rules name, AI titles only for title rules.
+  const ruleFields = [sides.include, sides.exclude].flatMap((f) => (f?.rules ?? []).map((r) => r.field ?? ''))
+  const metafieldKeys = ruleFields
+    .filter((f) => f.startsWith('metafield:'))
+    .map((f) => f.slice('metafield:'.length))
+    .filter((rest) => rest.includes('.'))
+    .map((rest) => ({ namespace: rest.slice(0, rest.indexOf('.')), key: rest.slice(rest.indexOf('.') + 1) }))
+  const needsMetafields = metafieldKeys.length > 0
+  const needsAiTitles = ruleFields.includes('ai_optimized_title')
+  const columns = countColumns(ruleFields)
+
+  const { data: shopSettingsData } = await db
+    .from('shop_settings')
+    .select('market_url')
+    .eq('feed_id', feedId)
+    .maybeSingle()
   const [rawProducts, marketUrl] = await Promise.all([
-    fetchAllActiveProducts(db, feedId, { withMetafields: needsMetafields }),
+    fetchAllActiveProducts(db, feedId, { withMetafields: needsMetafields, columns, metafieldKeys }),
     resolveFeedBaseUrl(db, feedId, (shopSettingsData?.market_url as string | null) ?? null),
   ])
-  // Hydrate here too: a filter rule on ai_optimized_title must count the same
-  // number of products as the generator actually emits.
-  await attachOptimizedTitles(db, feedId, rawProducts)
+  // A rule on ai_optimized_title must count the same products as the
+  // generator emits, so the accepted titles are attached for those.
+  if (needsAiTitles) await attachOptimizedTitles(db, feedId, rawProducts)
   const filtered = applyFeedFilters(rawProducts, filterRows, marketUrl)
 
   return { total: rawProducts.length, included: filtered.length }
+}
+
+// The product columns a set of rule fields reads (see resolveField). Any field
+// it doesn't recognise falls back to every column, so an unusual rule (one
+// written through the API, say) is still counted correctly, just slower.
+const PRODUCT_COLUMNS = new Set([
+  'title', 'vendor', 'product_type', 'status', 'handle', 'published_at', 'tags', 'images', 'variants',
+  'collections', 'synced_at', 'created_at', 'updated_at', 'body_html', 'options', 'link',
+])
+function countColumns(fields: string[]): string {
+  const cols = new Set(['id', 'shopify_id'])
+  for (const f of fields) {
+    if (!f || f.startsWith('metafield:')) continue
+    if (f === 'url') cols.add('link').add('handle')
+    else if (f === 'ai_optimized_title') cols.add('title')
+    else if (f === 'id' || f === 'item_group_id' || f === 'shopify_id') continue
+    else if (/^variants\[\d+\]\./.test(f)) cols.add('variants')
+    else if (/^images\[\d+\]\./.test(f)) cols.add('images')
+    else if (PRODUCT_COLUMNS.has(f)) cols.add(f)
+    else return '*'
+  }
+  return [...cols].join(', ')
 }
 
 // ── Extract coverage (used by the mapping editor) ──────────────────────────
@@ -374,15 +421,40 @@ const PAGE_SIZE_NO_METAFIELDS = 1000
 async function fetchAllActiveProducts(
   db: ReturnType<typeof adminClient>,
   feedId: string,
-  { withMetafields = true }: { withMetafields?: boolean } = {}
+  {
+    withMetafields = true,
+    columns = '*',
+    metafieldKeys,
+  }: {
+    withMetafields?: boolean
+    columns?: string
+    /** Only these metafields (namespace + key), e.g. the ones a rule reads. */
+    metafieldKeys?: { namespace: string; key: string }[]
+  } = {}
 ): Promise<SupabaseProduct[]> {
-  const pageSize = withMetafields ? PAGE_SIZE : PAGE_SIZE_NO_METAFIELDS
+  // A handful of named metafields is small, so those pages can be as big as
+  // pages without metafields.
+  const someMetafields = withMetafields && !!metafieldKeys?.length
+  const pageSize = withMetafields && !someMetafields ? PAGE_SIZE : PAGE_SIZE_NO_METAFIELDS
+  const quote = (v: string) => `"${v.replace(/\\/g, '\\\\').replace(/"/g, '\\"')}"`
+  const metafieldFilter = someMetafields
+    ? metafieldKeys!.map((m) => `and(namespace.eq.${quote(m.namespace)},key.eq.${quote(m.key)})`).join(',')
+    : null
   const out: SupabaseProduct[] = []
   let from = 0
   while (true) {
-    const { data, error } = await db
+    let query = db
       .from('products')
-      .select(withMetafields ? '*, metafields:product_metafields(*)' : '*')
+      .select(
+        someMetafields
+          ? `${columns}, metafields:product_metafields(namespace, key, value)`
+          : withMetafields
+            ? `${columns}, metafields:product_metafields(*)`
+            : columns
+      )
+    // Filters the embedded metafields only; products without them still come.
+    if (metafieldFilter) query = query.or(metafieldFilter, { referencedTable: 'metafields' })
+    const { data, error } = await query
       .eq('feed_id', feedId)
       .eq('status', 'active')
       // created_at alone is NOT stable across pages — bulk imports share a
