@@ -66,6 +66,48 @@ export async function feedLabel(db: SupabaseClient, feedId: string): Promise<{ l
   return { label, projectId: f.project_id }
 }
 
+// Where a feed's activity belongs (label, shop, account), resolved once. Pass it
+// along with each line when one save logs several, so logActivity doesn't look
+// the same feed up again for every line.
+export type ActivityTarget = { feedId: string; feedLabel: string | null; projectId: string | null; accountId: string | null }
+
+export async function activityTarget(db: SupabaseClient, feedId: string): Promise<ActivityTarget> {
+  const f = await feedLabel(db, feedId)
+  const projectId = f?.projectId ?? null
+  let accountId: string | null = null
+  if (projectId) {
+    const { data } = await db.from('projects').select('account_id').eq('id', projectId).maybeSingle()
+    accountId = (data as { account_id?: string } | null)?.account_id ?? null
+  }
+  return { feedId, feedLabel: f?.label ?? null, projectId, accountId }
+}
+
+// Several lines from one change, written together.
+export async function logActivities(
+  db: SupabaseClient,
+  feedId: string,
+  lines: Omit<ActivityInput, 'feedId' | 'feedLabel' | 'projectId' | 'accountId'>[]
+): Promise<void> {
+  if (lines.length === 0) return
+  try {
+    const target = await activityTarget(db, feedId)
+    if (!target.accountId) return
+    await Promise.all(
+      lines.map((l) =>
+        logActivity(db, {
+          ...l,
+          feedId,
+          feedLabel: target.feedLabel,
+          projectId: target.projectId ?? undefined,
+          accountId: target.accountId ?? undefined,
+        })
+      )
+    )
+  } catch (err) {
+    console.error('[activity] could not log:', err)
+  }
+}
+
 export async function logActivity(db: SupabaseClient, input: ActivityInput): Promise<void> {
   try {
     let projectId = input.projectId ?? null

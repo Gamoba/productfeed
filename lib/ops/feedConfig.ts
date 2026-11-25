@@ -8,7 +8,8 @@
 import type { SupabaseClient, User } from '@supabase/supabase-js'
 import { validateFeed } from '@/lib/feedValidator'
 import { generateFeed, loadFeedProducts } from '@/lib/feedGenerator'
-import { describeMapping, logActivity } from '@/lib/activity'
+import { after } from 'next/server'
+import { describeMapping, logActivities, logActivity, type ActivityInput } from '@/lib/activity'
 import { clientMessage } from '@/lib/errors'
 import { describeRule, isActiveRule, type FeedFilterRule } from '@/lib/feedFilters'
 import { AUTO_SYNC_LABELS, isAutoSyncFrequency, isAutoSyncTime, type AutoSyncFrequency } from '@/lib/syncSchedule'
@@ -99,15 +100,15 @@ export async function applyMappings(
       if (error) throw new Error(error.message)
     }
 
+    const lines: LogLine[] = []
     for (const e of entries) {
       const p = prev.get(e.google_field)
       const before = describeMapping(p?.mapping_type, p?.config)
       const after = describeMapping(e.mapping_type || null, e.config)
       if (before === after && JSON.stringify(p?.config ?? null) === JSON.stringify(e.mapping_type ? e.config : null)) continue
-      await logActivity(db, {
+      lines.push({
         user: ctx.user,
         via: ctx.via,
-        feedId,
         area: 'Mapping',
         action: !after ? `Field ${e.google_field} removed` : !before ? `Field ${e.google_field} mapped` : `Field ${e.google_field} changed`,
         before,
@@ -115,68 +116,91 @@ export async function applyMappings(
       })
     }
 
-    // Two branches depending on whether the feed has been generated before:
-    //   - feed_cache row exists  → just re-run validation and update the row
-    //     (re-generating could be disruptive on every mapping change).
-    //   - feed_cache row missing → first save for this feed; generate the
-    //     feed for the first time, mirroring POST /api/feed/generate/[feedId]
-    //     (generateFeed + validateFeed in parallel, then upsert).
-    // Failures are swallowed: the mapping save is the user-visible operation
-    // and must not be blocked by a generator/validator error.
-    try {
-      const { data: cacheRow } = await db
-        .from('feed_cache')
-        .select('feed_id')
-        .eq('feed_id', feedId)
-        .maybeSingle()
+    await logActivities(db, feedId, lines)
 
-      if (cacheRow) {
-        const result = await validateFeed(feedId)
-        const { error: updateErr } = await db
-          .from('feed_cache')
-          .update({
-            validation_status: result.status,
-            validation_errors: result.issues,
-          })
-          .eq('feed_id', feedId)
-        if (updateErr) {
-          console.error('Kunne ikke gemme auto-validation i feed_cache:', updateErr)
-        }
-      } else {
-        // One catalogue read shared by both.
-        const products = await loadFeedProducts(feedId)
-        const [{ xml, productCount }, validation] = await Promise.all([
-          generateFeed(feedId, { products }),
-          validateFeed(feedId, { products }).catch((err) => {
-            console.error('Validering fejlede ved første generering:', err)
-            return null as Awaited<ReturnType<typeof validateFeed>> | null
-          }),
-        ])
-
-        const { error: upsertErr } = await db.from('feed_cache').upsert(
-          {
-            feed_id: feedId,
-            xml_content: xml,
-            generated_at: new Date().toISOString(),
-            product_count: productCount,
-            validation_status: validation?.status ?? null,
-            validation_errors: validation?.issues ?? null,
-          },
-          { onConflict: 'feed_id' }
-        )
-        if (upsertErr) {
-          console.error('Første feed-generering: upsert i feed_cache fejlede:', upsertErr.message)
-        }
-      }
-    } catch (err) {
-      console.error('Auto-generering/validering efter mapping save fejlede:', err)
-    }
+    // Validating (and, the first time, building) the feed reads the whole
+    // catalogue: ~30 s for 11k products. It runs after the response is sent, so
+    // saving answers at once; the Overview shows the new validation when done.
+    await afterResponse(() => refreshFeedCache(db, feedId))
 
     const warnings = extractWarnings(toUpsert)
     return warnings.length > 0 ? { warnings } : {}
   } catch (err) {
     return { error: err instanceof Error ? err.message : 'Unknown error' }
   }
+}
+
+type LogLine = Omit<ActivityInput, 'feedId' | 'feedLabel' | 'projectId' | 'accountId'>
+
+// Runs `task` after the response has been sent (Next's after()). Outside a
+// request (scripts, tests) there is no response to wait for, so it runs at once.
+async function afterResponse(task: () => Promise<void>): Promise<void> {
+  try {
+    after(task)
+  } catch {
+    await task()
+  }
+}
+
+async function refreshFeedCache(db: SupabaseClient, feedId: string): Promise<void> {
+  const started = Date.now()
+  // Two branches depending on whether the feed has been generated before:
+  //   - feed_cache row exists  → just re-run validation and update the row
+  //     (re-generating could be disruptive on every mapping change).
+  //   - feed_cache row missing → first save for this feed; generate the
+  //     feed for the first time, mirroring POST /api/feed/generate/[feedId]
+  //     (generateFeed + validateFeed in parallel, then upsert).
+  // Failures are swallowed: the mapping save is the user-visible operation
+  // and must not be blocked by a generator/validator error.
+  try {
+    const { data: cacheRow } = await db
+      .from('feed_cache')
+      .select('feed_id')
+      .eq('feed_id', feedId)
+      .maybeSingle()
+
+    if (cacheRow) {
+      const result = await validateFeed(feedId)
+      const { error: updateErr } = await db
+        .from('feed_cache')
+        .update({
+          validation_status: result.status,
+          validation_errors: result.issues,
+        })
+        .eq('feed_id', feedId)
+      if (updateErr) {
+        console.error('Kunne ikke gemme auto-validation i feed_cache:', updateErr)
+      }
+    } else {
+      // One catalogue read shared by both.
+      const products = await loadFeedProducts(feedId)
+      const [{ xml, productCount }, validation] = await Promise.all([
+        generateFeed(feedId, { products }),
+        validateFeed(feedId, { products }).catch((err) => {
+          console.error('Validering fejlede ved første generering:', err)
+          return null as Awaited<ReturnType<typeof validateFeed>> | null
+        }),
+      ])
+
+      const { error: upsertErr } = await db.from('feed_cache').upsert(
+        {
+          feed_id: feedId,
+          xml_content: xml,
+          generated_at: new Date().toISOString(),
+          product_count: productCount,
+          validation_status: validation?.status ?? null,
+          validation_errors: validation?.issues ?? null,
+        },
+        { onConflict: 'feed_id' }
+      )
+      if (upsertErr) {
+        console.error('Første feed-generering: upsert i feed_cache fejlede:', upsertErr.message)
+      }
+    }
+  } catch (err) {
+    console.error('Auto-generering/validering efter mapping save fejlede:', err)
+  }
+  console.info(`[feed-cache] ${feedId} refreshed after save in ${Date.now() - started} ms`)
 }
 
 // ── Include / exclude ────────────────────────────────────────────────────────
@@ -202,6 +226,7 @@ export async function applyFilters(
   // One line per rule added or removed, and when AND/OR flipped.
   const text = (rules: FilterRule[] | null | undefined) =>
     (rules ?? []).map((r) => r as FeedFilterRule).filter(isActiveRule).map(describeRule)
+  const lines: LogLine[] = []
   for (const [type, cfg, word] of [
     ['include', include, 'Include'],
     ['exclude', exclude, 'Exclude'],
@@ -210,15 +235,16 @@ export async function applyFilters(
     const before = text(p?.rules)
     const after = text(cfg.rules)
     for (const r of after.filter((x) => !before.includes(x))) {
-      await logActivity(db, { user: ctx.user, via: ctx.via, feedId, area: 'Include / exclude', action: `${word} rule added`, after: r })
+      lines.push({ user: ctx.user, via: ctx.via, area: 'Include / exclude', action: `${word} rule added`, after: r })
     }
     for (const r of before.filter((x) => !after.includes(x))) {
-      await logActivity(db, { user: ctx.user, via: ctx.via, feedId, area: 'Include / exclude', action: `${word} rule removed`, before: r })
+      lines.push({ user: ctx.user, via: ctx.via, area: 'Include / exclude', action: `${word} rule removed`, before: r })
     }
     if (p && p.operator !== cfg.operator && after.length > 1) {
-      await logActivity(db, { user: ctx.user, via: ctx.via, feedId, area: 'Include / exclude', action: `${word}: rule logic changed`, before: p.operator === 'AND' ? 'All rules' : 'Any one rule', after: cfg.operator === 'AND' ? 'All rules' : 'Any one rule' })
+      lines.push({ user: ctx.user, via: ctx.via, area: 'Include / exclude', action: `${word}: rule logic changed`, before: p.operator === 'AND' ? 'All rules' : 'Any one rule', after: cfg.operator === 'AND' ? 'All rules' : 'Any one rule' })
     }
   }
+  await logActivities(db, feedId, lines)
   return {}
 }
 
