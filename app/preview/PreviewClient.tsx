@@ -48,7 +48,8 @@ export function PreviewClient({
   data: PreviewData
   pipeline: PipelineInfo
 }) {
-  // ~20 rows arrive from the server; upgrade to a 100-row sample after mount.
+  // The server sends no rows (the page renders at once); a 100-row sample is
+  // fetched after mount. Until then the counts come from the last generated feed.
   const [data, setData] = useState<PreviewData>(initialData)
   const [upgrading, setUpgrading] = useState(true)
   useEffect(() => {
@@ -328,6 +329,17 @@ function ItemPreview({ data, upgrading }: { data: PreviewData; upgrading: boolea
   const selected = rows.find((r) => r.productId === selectedId) ?? filtered[0] ?? null
   const unmappedRequired = [...REQUIRED].filter((f) => !fields.includes(f))
   const activeField = fields.includes(field) ? field : (fields[0] ?? '')
+
+  if (upgrading && rows.length === 0) {
+    return (
+      <section className="card">
+        <div className="pv-card-h">
+          <h3>Varerne i feedet</h3>
+          <small>Henter varer…</small>
+        </div>
+      </section>
+    )
+  }
 
   return (
     <section className={`card flush${upgrading ? ' pv-upgrading' : ''}`}>

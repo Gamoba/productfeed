@@ -1,7 +1,7 @@
 import { redirect, notFound } from 'next/navigation'
 import { createSupabaseServerClient } from '@/lib/supabase-server'
 import { adminDb, getOwnedFeed } from '@/lib/feeds'
-import { generatePreview } from '@/lib/feedGenerator'
+import type { PreviewData } from '@/lib/feedGenerator'
 import type { ValidationIssue } from '@/lib/feedValidator'
 import { PreviewClient, type PipelineInfo } from '@/app/preview/PreviewClient'
 
@@ -23,11 +23,13 @@ export default async function FeedPreviewPage({
 
   const db = adminDb()
 
-  // LAG 1 — the first 20 preview rows, so the user sees content fast.
-  // PreviewClient upgrades to a 100-row sample via /api/preview after mount.
-  // Alongside: the small facts the "Fra kilde til kanal" pipeline shows.
-  const [data, { data: cache }, { data: feedRow }, { data: project }, optimized, labels] = await Promise.all([
-    generatePreview(feedId, 20),
+  // Only small, indexed reads here, so the page renders at once. The product
+  // rows (the slow part: reading products with metafields and running every
+  // mapping) come from /api/preview after mount; until then the pipeline uses
+  // the last generated feed's count and the mapped fields.
+  const [{ data: mappedRows }, { data: settings }, { data: cache }, { data: feedRow }, { data: project }, optimized, labels] = await Promise.all([
+    db.from('feed_mappings').select('google_field').eq('feed_id', feedId).neq('mapping_type', ''),
+    db.from('feed_settings').select('feed_mode').eq('feed_id', feedId).maybeSingle(),
     db
       .from('feed_cache')
       .select('generated_at, product_count, validation_status, validation_errors')
@@ -46,6 +48,12 @@ export default async function FeedPreviewPage({
   ])
 
   const issues = (cache?.validation_errors as ValidationIssue[] | null) ?? []
+  const data: PreviewData = {
+    feedMode: (settings?.feed_mode as 'product' | 'variant' | null) === 'variant' ? 'variant' : 'product',
+    rows: [],
+    googleFields: ((mappedRows ?? []) as { google_field: string }[]).map((m) => m.google_field),
+    totalProducts: (cache?.product_count as number | null) ?? 0,
+  }
   const pipeline: PipelineInfo = {
     source: (project?.source_type as string | null) === 'feed_url' ? 'feed_url' : 'shopify',
     lastSynced: (feedRow?.last_synced_at as string | null) ?? null,

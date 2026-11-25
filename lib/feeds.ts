@@ -63,6 +63,23 @@ export async function getOwnedFeed(
   feedId: string
 ): Promise<OwnedFeed | null> {
   const db = adminDb()
+  // One round trip: the feed, its project's account and the user's membership
+  // (inner joins, so a non-member gets no row). The database is far enough
+  // away that each sequential query costs noticeably on every page.
+  const joined = await db
+    .from('feeds')
+    .select('*, projects!inner(account_id, accounts!inner(account_members!inner(role)))')
+    .eq('id', feedId)
+    .eq('projects.accounts.account_members.user_id', userId)
+    .maybeSingle()
+  if (!joined.error) {
+    if (!joined.data) return null
+    const { projects, ...row } = joined.data as FeedRow & { projects: { account_id: string } }
+    if (!row.project_id) return null
+    return { ...(row as FeedRow), account_id: projects.account_id }
+  }
+
+  // Fallback (the embed failed, e.g. a schema change): the step-by-step check.
   const { data } = await db.from('feeds').select('*').eq('id', feedId).maybeSingle()
   const feed = (data as FeedRow | null) ?? null
   // feeds.project_id is NOT NULL; a feed without one has no owner to check.
@@ -86,6 +103,20 @@ export async function getOwnedProject(
   projectId: string
 ): Promise<ProjectRow | null> {
   const db = adminDb()
+  // One round trip, as in getOwnedFeed.
+  const joined = await db
+    .from('projects')
+    .select(`${PROJECT_PUBLIC_COLUMNS}, accounts!inner(account_members!inner(role))`)
+    .eq('id', projectId)
+    .eq('accounts.account_members.user_id', userId)
+    .maybeSingle()
+  if (!joined.error) {
+    if (!joined.data) return null
+    const { accounts: _membership, ...row } = joined.data as unknown as ProjectRow & { accounts: unknown }
+    void _membership
+    return row as ProjectRow
+  }
+
   const { data } = await db
     .from('projects')
     .select(PROJECT_PUBLIC_COLUMNS)

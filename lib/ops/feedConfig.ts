@@ -117,7 +117,7 @@ export async function applyMappings(
       })
     }
 
-    await logActivities(db, feedId, lines)
+    await afterResponse(() => logActivities(db, feedId, lines))
 
     // Validating (and, the first time, building) the feed reads the whole
     // catalogue: ~30 s for 11k products. It runs after the response is sent, so
@@ -247,7 +247,7 @@ export async function applyFilters(
       lines.push({ user: ctx.user, via: ctx.via, area: 'Inkludér / ekskludér', action: `${word}: kobling ændret`, before: p.operator === 'AND' ? 'Alle regler' : 'Én af reglerne', after: cfg.operator === 'AND' ? 'Alle regler' : 'Én af reglerne' })
     }
   }
-  await logActivities(db, feedId, lines)
+  await afterResponse(() => logActivities(db, feedId, lines))
   return {}
 }
 

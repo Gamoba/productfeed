@@ -1,7 +1,6 @@
 'use client'
 
-import { useRouter } from 'next/navigation'
-import { useState, useTransition } from 'react'
+import { useState } from 'react'
 import { MasterFieldEditor, type MasterEditorFeed } from '@/app/mapping/MappingClient'
 import { Popover } from '@/app/components/shell/Popover'
 import { describeMapping } from '@/lib/activity'
@@ -22,11 +21,18 @@ type Draft = { key: string | null; name: string; description: string; state: { t
 const feedsText = (n: number) => (n === 1 ? '1 feed' : '{n} feeds'.replace('{n}', String(n)))
 
 export function MasterFieldsClient({ projectId, initial, feeds }: { projectId: string; initial: MasterRow[]; feeds: MasterEditorFeed[] }) {
-  const router = useRouter()
+  // The list is local state, changed at once on save and delete (optimistic);
+  // the server answer then confirms it, or the list goes back as it was.
+  const [rows, setRows] = useState<(MasterRow & { saving?: boolean })[]>(initial)
+  // Fresh server data (a later visit, another tab) replaces the local list.
+  const [seen, setSeen] = useState(initial)
+  if (seen !== initial) {
+    setSeen(initial)
+    setRows(initial)
+  }
   const [draft, setDraft] = useState<Draft | null>(null)
   const [error, setError] = useState<string | null>(null)
   const [notice, setNotice] = useState<string | null>(null)
-  const [pending, start] = useTransition()
   // Key of the row whose delete is waiting for a second click.
   const [confirming, setConfirming] = useState<string | null>(null)
   const feedLabel = new Map(feeds.map((f) => [f.id, f.label]))
@@ -43,29 +49,70 @@ export function MasterFieldsClient({ projectId, initial, feeds }: { projectId: s
 
   function save() {
     if (!draft) return
-    start(async () => {
-      const r = await saveMasterFieldAction(projectId, {
-        key: draft.key,
-        name: draft.name,
-        description: draft.description,
-        mapping_type: draft.state.type,
-        config: draft.state.config,
-      })
-      if (r.error) return setError(r.error)
-      setDraft(null)
-      setNotice(r.warnings?.length ? r.warnings.join(' ') : 'Gemt')
-      router.refresh()
+    const d = draft
+    const before = rows
+    const prev = d.key ? rows.find((r) => r.key === d.key) : undefined
+    const tmpKey = d.key ?? `__new_${Date.now()}`
+    const optimistic = {
+      key: tmpKey,
+      name: d.name.trim(),
+      description: d.description.trim() || null,
+      mapping_type: d.state.type,
+      config: d.state.config,
+      usedBy: prev?.usedBy ?? [],
+      saving: true,
+    }
+    setRows((cur) =>
+      d.key
+        ? cur.map((r) => (r.key === d.key ? optimistic : r))
+        : [...cur, optimistic].sort((a, b) => a.name.localeCompare(b.name))
+    )
+    setDraft(null)
+    setError(null)
+    setNotice(null)
+    const undo = (message: string) => {
+      setRows(before)
+      setDraft(d)
+      setError(message)
+    }
+    saveMasterFieldAction(projectId, {
+      key: d.key,
+      name: d.name,
+      description: d.description,
+      mapping_type: d.state.type,
+      config: d.state.config,
     })
+      .then((r) => {
+        if (r.error) return undo(r.error)
+        setRows((cur) => cur.map((x) => (x.key === tmpKey ? { ...x, key: r.key ?? x.key, saving: false } : x)))
+        if (r.warnings?.length) setNotice(r.warnings.join(' '))
+      })
+      .catch(() => undo('Kunne ikke nå serveren. Intet blev ændret.'))
   }
 
   function remove(m: MasterRow) {
-    start(async () => {
-      const r = await deleteMasterFieldAction(projectId, m.key)
-      setConfirming(null)
-      if (r.error) return setError(r.error)
-      setError(null)
-      router.refresh()
-    })
+    setConfirming(null)
+    setError(null)
+    // In use: the server refuses and says by how many feeds; nothing to hide.
+    if (m.usedBy.length > 0) {
+      deleteMasterFieldAction(projectId, m.key)
+        .then((r) => r.error && setError(r.error))
+        .catch(() => setError('Kunne ikke nå serveren. Intet blev ændret.'))
+      return
+    }
+    const before = rows
+    setRows((cur) => cur.filter((r) => r.key !== m.key))
+    deleteMasterFieldAction(projectId, m.key)
+      .then((r) => {
+        if (r.error) {
+          setRows(before)
+          setError(r.error)
+        }
+      })
+      .catch(() => {
+        setRows(before)
+        setError('Kunne ikke nå serveren. Intet blev ændret.')
+      })
   }
 
   return (
@@ -106,7 +153,7 @@ export function MasterFieldsClient({ projectId, initial, feeds }: { projectId: s
           </div>
           <MasterFieldEditor
             projectId={projectId}
-            masters={initial.map((m) => ({ key: m.key, name: m.name, mapping_type: m.mapping_type, config: m.config }))}
+            masters={rows.map((m) => ({ key: m.key, name: m.name, mapping_type: m.mapping_type, config: m.config }))}
             editKey={draft.key}
             name={draft.name}
             state={draft.state as never}
@@ -115,17 +162,17 @@ export function MasterFieldsClient({ projectId, initial, feeds }: { projectId: s
           />
           {feeds.length === 0 && <p className="mf-muted">Tilføj et feed for at se reglen på rigtige varer.</p>}
           <div className="mf-actions">
-            <button type="button" className="wl-btn-secondary" onClick={() => setDraft(null)} disabled={pending}>
+            <button type="button" className="wl-btn-secondary" onClick={() => setDraft(null)}>
               Annullér
             </button>
-            <button type="button" className="wl-btn-primary" onClick={save} disabled={pending}>
-              {pending ? 'Gemmer…' : 'Gem master field'}
+            <button type="button" className="wl-btn-primary" onClick={save}>
+              Gem master field
             </button>
           </div>
         </section>
       )}
 
-      {initial.length === 0 ? (
+      {rows.length === 0 ? (
         !draft && (
           <section className="card mf-empty">
             <h3>Ingen master fields endnu</h3>
@@ -147,11 +194,11 @@ export function MasterFieldsClient({ projectId, initial, feeds }: { projectId: s
               </tr>
             </thead>
             <tbody>
-              {initial.map((m) => (
+              {rows.map((m) => (
                 <tr key={m.key}>
                   <td>
                     <b>{m.name}</b>
-                    <small>{m.description || `master:${m.key}`}</small>
+                    <small>{m.saving ? 'Gemmer…' : m.description || `master:${m.key}`}</small>
                   </td>
                   <td>{describeMapping(m.mapping_type, m.config)}</td>
                   <td>
@@ -165,16 +212,16 @@ export function MasterFieldsClient({ projectId, initial, feeds }: { projectId: s
                     {confirming === m.key ? (
                       <span className="mf-confirm" role="group" aria-label={'Slet master fieldet "{name}"? Det kan ikke fortrydes.'.replace('{name}', m.name)}>
                         <span>Slet?</span>
-                        <button type="button" className="link" onClick={() => setConfirming(null)} disabled={pending}>
+                        <button type="button" className="link" onClick={() => setConfirming(null)} disabled={!!m.saving}>
                           Annullér
                         </button>
-                        <button type="button" className="link neg" onClick={() => remove(m)} disabled={pending}>
+                        <button type="button" className="link neg" onClick={() => remove(m)} disabled={!!m.saving}>
                           Slet
                         </button>
                       </span>
                     ) : (
                     <>
-                    <button type="button" className="link" onClick={() => edit(m)} disabled={pending}>
+                    <button type="button" className="link" onClick={() => edit(m)} disabled={!!m.saving}>
                       Redigér
                     </button>
                     <Popover label={`Flere handlinger for ${m.name}`} align="right" triggerClassName="mf-more" trigger={<span aria-hidden="true">⋯</span>}>

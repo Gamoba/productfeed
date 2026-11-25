@@ -2,8 +2,7 @@ import { createSupabaseServerClient } from '@/lib/supabase-server'
 import { adminDb, getOwnedFeed } from '@/lib/feeds'
 import { errorResponse } from '@/lib/errors'
 import { getMetafieldNameMap } from '@/lib/metafieldDefinitions'
-
-const PAGE_SIZE = 1000
+import { listFeedMetafieldKeys } from '@/lib/metafieldKeys'
 
 // Returns the unique (namespace, key) metafield pairs for a feed, each with its
 // readable definition name when one exists (e.g. "custom._rgang" → "Årgang") so
@@ -25,34 +24,14 @@ export async function GET(req: Request) {
   const owned = await getOwnedFeed(user.id, feedId)
   if (!owned) return Response.json({ error: 'Feed not found' }, { status: 404 })
 
+  // One grouped query (lib/metafieldKeys); this used to page through every
+  // metafield row of the feed.
   const db = adminDb()
-  const seen = new Set<string>()
-  const metafields: { namespace: string; key: string; name?: string }[] = []
-  let from = 0
-
-  while (true) {
-    const { data, error } = await db
-      .from('product_metafields')
-      .select('namespace, key')
-      .eq('feed_id', feedId)
-      .order('namespace')
-      .order('key')
-      .range(from, from + PAGE_SIZE - 1)
-
-    if (error) {
-      return errorResponse(error, 'GET /api/mapping/metafields')
-    }
-    if (!data || data.length === 0) break
-
-    for (const mf of data as { namespace: string; key: string }[]) {
-      const k = `${mf.namespace}.${mf.key}`
-      if (!seen.has(k)) {
-        seen.add(k)
-        metafields.push(mf)
-      }
-    }
-    if (data.length < PAGE_SIZE) break
-    from += PAGE_SIZE
+  let metafields: { namespace: string; key: string; name?: string }[]
+  try {
+    metafields = (await listFeedMetafieldKeys(db, feedId)).map(({ namespace, key }) => ({ namespace, key }))
+  } catch (error) {
+    return errorResponse(error, 'GET /api/mapping/metafields')
   }
 
   // Resolve readable definition names (best-effort — empty map on any failure,

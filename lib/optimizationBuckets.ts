@@ -12,6 +12,7 @@
 import { adminDb } from '@/lib/feeds'
 import type { SupabaseProduct } from '@/lib/sync'
 import { applyFeedFilters, type FeedFilter } from '@/lib/feedFilters'
+import { listFeedMetafieldKeys } from '@/lib/metafieldKeys'
 import { dbError } from '@/lib/errors'
 import { getMetafieldNameMap } from '@/lib/metafieldDefinitions'
 import {
@@ -402,22 +403,8 @@ export async function getBucketCandidates(
 // what exists). One row per (product, namespace, key) — see the unique
 // constraint — so a row count per namespace.key is a product count.
 export async function getFeedMetafields(feedId: string): Promise<FeedMetafield[]> {
-  const counts = new Map<string, number>()
-  const PAGE = 1000
-  for (let from = 0; ; from += PAGE) {
-    const { data, error } = await db()
-      .from('product_metafields')
-      .select('namespace, key')
-      .eq('feed_id', feedId)
-      .range(from, from + PAGE - 1)
-    if (error) dbError('optimizationBuckets metafields', error)
-    const rows = (data ?? []) as { namespace: string; key: string }[]
-    for (const r of rows) {
-      const k = `${r.namespace}.${r.key}`
-      counts.set(k, (counts.get(k) ?? 0) + 1)
-    }
-    if (rows.length < PAGE) break
-  }
+  // One grouped query (lib/metafieldKeys) instead of paging through every row.
+  const counts = new Map((await listFeedMetafieldKeys(db(), feedId)).map((m) => [`${m.namespace}.${m.key}`, m.rows]))
   // Definition names (e.g. "custom._rgang" → "Årgang") so the pickers show the
   // human name, not the mangled key. Best-effort — empty map on any failure.
   const nameMap = await getMetafieldNameMap(feedId)

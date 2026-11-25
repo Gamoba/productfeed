@@ -76,18 +76,26 @@ export async function GET() {
     const projectIds = projects.map((p) => p.id)
 
     let feeds: ShellData['feeds'] = []
+    // Independent of each other, so they run together (each round trip to the
+    // database counts on every page load).
+    const [feedsRes, attention] = await Promise.all([
+      projectIds.length
+        ? db.from('feeds').select('*').in('project_id', projectIds).order('created_at', { ascending: true })
+        : Promise.resolve({ data: [], error: null }),
+      loadAttention(db, accountIds, projectIds),
+    ])
     if (projectIds.length) {
-      const { data: feedRows, error: feedErr } = await db
-        .from('feeds')
-        .select('*')
-        .in('project_id', projectIds)
-        .order('created_at', { ascending: true })
+      const { data: feedRows, error: feedErr } = feedsRes
       if (feedErr) throw feedErr
       const rows = (feedRows ?? []) as { id: string; name: string; project_id: string; channel: string; last_synced_at?: string | null; last_auto_sync_status?: string | null }[]
-      // Small columns only: never xml_content.
-      const { data: caches } = rows.length
-        ? await db.from('feed_cache').select('feed_id, generated_at, validation_errors').in('feed_id', rows.map((r) => r.id))
-        : { data: [] }
+      // Small columns only: never xml_content. Cache and markets together.
+      const ids = rows.map((r) => r.id)
+      const [{ data: caches }, settingsRes] = rows.length
+        ? await Promise.all([
+            db.from('feed_cache').select('feed_id, generated_at, validation_errors').in('feed_id', ids),
+            db.from('shop_settings').select('feed_id, selected_country').in('feed_id', ids),
+          ])
+        : [{ data: [] }, { data: [], error: null }]
       const cache = new Map(
         ((caches ?? []) as { feed_id: string; generated_at: string | null; validation_errors: { type?: string }[] | null }[]).map((c) => [c.feed_id, c])
       )
@@ -95,10 +103,7 @@ export async function GET() {
       // The feed's market (country) for the flag. Lives in shop_settings today.
       const country = new Map<string, string | null>()
       if (rows.length) {
-        const { data: settings, error: setErr } = await db
-          .from('shop_settings')
-          .select('feed_id, selected_country')
-          .in('feed_id', rows.map((r) => r.id))
+        const { data: settings, error: setErr } = settingsRes
         if (setErr) throw setErr
         for (const s of (settings ?? []) as { feed_id: string; selected_country: string | null }[]) {
           country.set(s.feed_id, s.selected_country)
@@ -115,7 +120,6 @@ export async function GET() {
       }))
     }
 
-    const attention = await loadAttention(db, accountIds, projectIds)
 
     const meta = (user.user_metadata ?? {}) as { full_name?: string; name?: string }
     const body: ShellData = {
