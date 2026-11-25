@@ -3,9 +3,11 @@
 import { createSupabaseServerClient } from '@/lib/supabase-server'
 import { redirect } from 'next/navigation'
 import { adminDb, getOwnedFeed } from '@/lib/feeds'
-import { applyMappings, type MappingEntry } from '@/lib/ops/feedConfig'
+import { applyMappings, type MappingEntry as OpsMappingEntry } from '@/lib/ops/feedConfig'
 
-export type { MappingEntry }
+// Plain type alias, not `export type { … }`: a re-export in a 'use server'
+// file is compiled as a value export and fails at runtime.
+export type MappingEntry = OpsMappingEntry
 
 // Checks the session and access; the change itself is shared with the MCP
 // tools (lib/ops/feedConfig).

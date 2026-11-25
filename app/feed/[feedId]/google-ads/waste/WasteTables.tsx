@@ -3,6 +3,7 @@
 import { useMemo, useState } from 'react'
 import { formatInt, formatMoney, formatPercent } from '@/lib/googleAdsAnalytics'
 import { Icon } from '@/app/components/shell/icons'
+import { DISPLAY_TIME_ZONE } from '@/lib/formatDa'
 
 export type WasteRow = {
   productRef: string | null
@@ -103,7 +104,7 @@ export function WasteTables({
           // it pairs a window of spend with stock as of one moment.
           footnote={
             stockSyncedAt
-              ? `Stock is from ${new Date(stockSyncedAt).toLocaleString('en-GB')}` +
+              ? `Stock is from ${new Date(stockSyncedAt).toLocaleString('en-GB', { timeZone: DISPLAY_TIME_ZONE })}` +
                 (stockAgeDays !== null && stockAgeDays > 0
                   ? `, ${stockAgeDays} ${stockAgeDays === 1 ? 'day' : 'days'} ago`
                   : '') +

@@ -21,6 +21,7 @@ import {
 import { STALE_STOCK_DAYS } from '@/lib/inventoryAnalytics'
 import { GoogleAdsSetup } from './GoogleAdsSetup'
 import './performance.css'
+import { DISPLAY_TIME_ZONE } from '@/lib/formatDa'
 
 /**
  * Days of stock below which the note is worth drawing attention to.
@@ -1126,7 +1127,7 @@ export function GoogleAdsClient({
               </p>
             )}
             {settings?.lastSyncedAt && (
-              <p>Last fetched {new Date(settings.lastSyncedAt).toLocaleString('en-GB')}</p>
+              <p>Last fetched {new Date(settings.lastSyncedAt).toLocaleString('en-GB', { timeZone: DISPLAY_TIME_ZONE })}</p>
             )}
           </div>
         )}
@@ -1914,7 +1915,7 @@ function StockBasisNote({ ctx, stale }: { ctx: StockContext; stale: boolean }) {
 
   return (
     <p style={stale ? { color: 'var(--accent-amber)' } : undefined}>
-      Stock figures are from {new Date(ctx.syncedAt).toLocaleString('en-GB')}
+      Stock figures are from {new Date(ctx.syncedAt).toLocaleString('en-GB', { timeZone: DISPLAY_TIME_ZONE })}
       {ctx.ageDays !== null && ctx.ageDays > 0
         ? ` — ${formatInt(ctx.ageDays)} ${ctx.ageDays === 1 ? 'day' : 'days'} ago`
         : ''}

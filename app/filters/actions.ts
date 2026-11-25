@@ -2,10 +2,13 @@
 
 import { createSupabaseServerClient } from '@/lib/supabase-server'
 import { adminDb, getOwnedFeed } from '@/lib/feeds'
-import { applyFilters, type FilterConfig, type FilterRule } from '@/lib/ops/feedConfig'
+import { applyFilters, type FilterConfig as OpsFilterConfig, type FilterRule as OpsFilterRule } from '@/lib/ops/feedConfig'
 import { getFeedMetafields as getFeedMetafieldsLib, type FeedMetafield } from '@/lib/optimizationBuckets'
 
-export type { FilterConfig, FilterRule }
+// Plain type aliases, not `export type { … }`: a re-export in a 'use server'
+// file is compiled as a value export and fails at runtime.
+export type FilterRule = OpsFilterRule
+export type FilterConfig = OpsFilterConfig
 
 // The feed's metafields (namespace.key + product count + resolved definition
 // name) so the Filters rule editor can offer a pick-list with readable names
