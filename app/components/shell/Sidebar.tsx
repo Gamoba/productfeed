@@ -44,17 +44,32 @@ function monitoringCount(shell: Shell): number {
   return n
 }
 
+// Billing is the one page an account without a usable plan can open
+// (lib/entitlements.ts); everything else in the menu shows as locked.
+export const UNLOCKED_WHEN_BLOCKED = '/billing'
+export const isLockedLink = (shell: Shell, href: string) => shell.data?.blocked === true && href !== UNLOCKED_WHEN_BLOCKED
+
 export function Sidebar({ shell, pathname }: { shell: Shell; pathname: string }) {
   const { level, project, feed, account } = shell
+  const blocked = shell.data?.blocked === true
+  const brand = (
+    <>
+      <span className="shell-brand-mark">
+        <Icon name="bolt" size={15} />
+      </span>
+      FeedFlow
+    </>
+  )
 
   return (
     <aside className="shell-side" aria-label="Main menu">
-      <Link href="/" className="shell-brand">
-        <span className="shell-brand-mark">
-          <Icon name="bolt" size={15} />
-        </span>
-        FeedFlow
-      </Link>
+      {blocked ? (
+        <span className="shell-brand">{brand}</span>
+      ) : (
+        <Link href="/" className="shell-brand">
+          {brand}
+        </Link>
+      )}
 
       {level.kind === 'account' ? (
         account && (
@@ -95,12 +110,22 @@ export function Sidebar({ shell, pathname }: { shell: Shell; pathname: string })
         </>
       )}
 
+      {blocked && (
+        <Link href={UNLOCKED_WHEN_BLOCKED} className="shell-locknote">
+          <Icon name="lock" size={14} />
+          <span>
+            <b>Choose a plan to continue</b>
+            <small>The rest of the app unlocks once a plan is active.</small>
+          </span>
+        </Link>
+      )}
+
       <nav className="shell-nav">
         {navFor(shell).map((entry) =>
           entry.kind === 'group' ? (
-            <NavGroupItem key={entry.label} group={entry} pathname={pathname} />
+            <NavGroupItem key={entry.label} group={entry} pathname={pathname} shell={shell} />
           ) : (
-            <NavLinkItem key={entry.href} link={entry} pathname={pathname} />
+            <NavLinkItem key={entry.href} link={entry} pathname={pathname} locked={isLockedLink(shell, entry.href)} />
           )
         )}
       </nav>
@@ -112,8 +137,17 @@ export function Sidebar({ shell, pathname }: { shell: Shell; pathname: string })
   )
 }
 
-function NavLinkItem({ link, pathname }: { link: NavLink; pathname: string }) {
+function NavLinkItem({ link, pathname, locked }: { link: NavLink; pathname: string; locked?: boolean }) {
   const active = isActive(pathname, link)
+  if (locked) {
+    return (
+      <span className="shell-navlink shell-navlink-locked" aria-disabled="true" title="Choose a plan to unlock">
+        <Icon name={link.icon} size={15} />
+        <span>{link.label}</span>
+        <Icon name="lock" size={12} className="shell-lock" />
+      </span>
+    )
+  }
   return (
     <Link
       href={link.href}
@@ -127,7 +161,7 @@ function NavLinkItem({ link, pathname }: { link: NavLink; pathname: string }) {
   )
 }
 
-function NavGroupItem({ group, pathname }: { group: NavGroup; pathname: string }) {
+function NavGroupItem({ group, pathname, shell }: { group: NavGroup; pathname: string; shell: Shell }) {
   const active = groupIsActive(pathname, group)
   // null = follow the route (open while one of its pages is active); a click
   // pins it open or shut.
@@ -151,7 +185,7 @@ function NavGroupItem({ group, pathname }: { group: NavGroup; pathname: string }
       {open && (
         <div className="shell-navsub">
           {group.items.map((i) => (
-            <NavLinkItem key={i.href} link={i} pathname={pathname} />
+            <NavLinkItem key={i.href} link={i} pathname={pathname} locked={isLockedLink(shell, i.href)} />
           ))}
         </div>
       )}

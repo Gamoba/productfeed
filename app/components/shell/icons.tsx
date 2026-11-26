@@ -5,7 +5,7 @@ export type IconName =
   | 'eye' | 'chart' | 'megaphone' | 'drop' | 'settings' | 'feeds' | 'shops'
   | 'chevron' | 'chevron-down' | 'back' | 'logout' | 'check' | 'menu' | 'search'
   | 'hash' | 'link' | 'image' | 'price' | 'truck' | 'text' | 'users' | 'plus'
-  | 'key' | 'building' | 'card' | 'bell' | 'award' | 'pulse' | 'tools' | 'account'
+  | 'key' | 'building' | 'card' | 'lock' | 'bell' | 'award' | 'pulse' | 'tools' | 'account'
 
 const PATHS: Record<IconName, React.ReactNode> = {
   bolt: <path d="M13 2 4 14h7l-1 8 9-12h-7l1-8z" />,
@@ -112,6 +112,12 @@ const PATHS: Record<IconName, React.ReactNode> = {
     </>
   ),
   building: <path d="M4 21V5a1 1 0 0 1 1-1h9a1 1 0 0 1 1 1v16M15 9h4a1 1 0 0 1 1 1v11M3 21h18M8 8h3M8 12h3M8 16h3" />,
+  lock: (
+    <>
+      <rect x="5" y="11" width="14" height="9" rx="2" />
+      <path d="M8 11V8a4 4 0 0 1 8 0v3" />
+    </>
+  ),
   card: (
     <>
       <rect x="3" y="5.5" width="18" height="13" rx="2" />

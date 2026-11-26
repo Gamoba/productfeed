@@ -6,7 +6,7 @@ import { useEffect, useRef } from 'react'
 import { Icon } from './icons'
 import { Popover } from './Popover'
 import { accountNav, shopNav, feedPageLabel, flagEmoji, isActive, samePageOnFeed, type NavLink } from './nav'
-import { navFor } from './Sidebar'
+import { isLockedLink, navFor } from './Sidebar'
 import { UserMenu } from './UserMenu'
 import { AttentionButton, FeedStatusPill, SearchButton } from './TopTools'
 import { ChannelIcon } from '../ChannelIcon'
@@ -27,8 +27,13 @@ export function TopBar({ shell, pathname }: { shell: Shell; pathname: string }) 
 
       <div className="shell-top-tools">
         <FeedStatusPill shell={shell} />
-        <SearchButton shell={shell} />
-        <AttentionButton shell={shell} />
+        {/* Search and alerts lead into shops and feeds: hidden while locked. */}
+        {!shell.data?.blocked && (
+          <>
+            <SearchButton shell={shell} />
+            <AttentionButton shell={shell} />
+          </>
+        )}
         <span className="shell-mobile-only">
           <UserMenu shell={shell} variant="avatar" />
         </span>
@@ -166,11 +171,17 @@ function MobileNav({ shell, pathname }: { shell: Shell; pathname: string }) {
           All shops
         </Link>
       )}
-      {links.map((l) => (
-        <Link key={l.href} href={l.href} aria-current={isActive(pathname, l) ? 'page' : undefined}>
-          {l.label}
-        </Link>
-      ))}
+      {links.map((l) =>
+        isLockedLink(shell, l.href) ? (
+          <span key={l.href} className="shell-mobnav-locked" aria-disabled="true" title="Choose a plan to unlock">
+            {l.label}
+          </span>
+        ) : (
+          <Link key={l.href} href={l.href} aria-current={isActive(pathname, l) ? 'page' : undefined}>
+            {l.label}
+          </Link>
+        )
+      )}
     </nav>
   )
 }
