@@ -144,16 +144,36 @@ export function shopNav(projectId: string): NavEntry[] {
   ]
 }
 
-/** `monitoring`: critical problems across customers, shown as a badge. */
-export function accountNav(monitoring?: number): NavEntry[] {
-  return [
+export type AccountNavOptions = {
+  /** Critical problems across customers, shown as a badge. */
+  monitoring?: number
+  /** Member of an agency (MCC): Connected companies, Partner levels. */
+  isMcc?: boolean
+  /** Member of a customer (User) account: Agency access. */
+  hasUserAccount?: boolean
+  /** Agency access requests waiting for approval, shown as a badge. */
+  pendingAccess?: number
+  /** Gamoba staff: Admin. */
+  isPlatformAdmin?: boolean
+}
+
+// Without options every entry is listed (used to look up page labels).
+export function accountNav(opts?: AccountNavOptions): NavEntry[] {
+  const all = !opts
+  const o = opts ?? {}
+  const entries: (NavLink | false)[] = [
     { kind: 'link', label: 'Agency dashboard', href: '/', icon: 'overview', exact: true },
-    { kind: 'link', label: 'Monitoring', href: '/agency/monitoring', icon: 'pulse', badge: monitoring || undefined },
+    { kind: 'link', label: 'Monitoring', href: '/agency/monitoring', icon: 'pulse', badge: o.monitoring || undefined },
     { kind: 'link', label: 'Agency users', href: '/agency/users', icon: 'users' },
     { kind: 'link', label: 'Billing', href: '/billing', icon: 'card' },
-    { kind: 'link', label: 'Connected companies', href: '/agency/companies', icon: 'building' },
-    { kind: 'link', label: 'Partner levels', href: '/agency/partner-levels', icon: 'award' },
+    (all || !!o.hasUserAccount) && {
+      kind: 'link', label: 'Agency access', href: '/agency/access', icon: 'key', badge: o.pendingAccess || undefined,
+    },
+    (all || !!o.isMcc) && { kind: 'link', label: 'Connected companies', href: '/agency/companies', icon: 'building' },
+    (all || !!o.isMcc) && { kind: 'link', label: 'Partner levels', href: '/agency/partner-levels', icon: 'award' },
+    (all || !!o.isPlatformAdmin) && { kind: 'link', label: 'Admin', href: '/admin', icon: 'settings' },
   ]
+  return entries.filter((e): e is NavLink => !!e)
 }
 
 // Breadcrumb label for the current feed page. Longest matching path wins, so

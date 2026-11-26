@@ -197,8 +197,9 @@ export function BillingClient({ billing, plans, canManage, configured, accounts,
           </div>
 
           <div className="bl-plans">
-            {plans.map((plan) => {
+            {plans.filter((p) => p.active).map((plan) => {
               const price = plan.prices.find((p) => p.interval === interval)
+              const other = plan.prices.find((p) => p.interval !== interval)
               if (!plan.selfServe) {
                 return (
                   <section key={plan.id} className="card bl-plan">
@@ -223,10 +224,16 @@ export function BillingClient({ billing, plans, canManage, configured, accounts,
                     {plan.name}
                     {plan.isCustom && <span className="pill ai">Made for you</span>}
                   </h3>
-                  <p className="bl-price">
-                    {price ? money(price.amountCents, price.currency) : '—'}
-                    <small> / {interval === 'month' ? 'month' : 'year'}</small>
-                  </p>
+                  {price ? (
+                    <p className="bl-price">
+                      {money(price.amountCents, price.currency)}
+                      <small> / {interval === 'month' ? 'month' : 'year'}</small>
+                    </p>
+                  ) : (
+                    <p className="bl-sub">
+                      {other ? `Billed ${other.interval === 'year' ? 'yearly' : 'monthly'} only. Switch above to choose it.` : 'Not available yet.'}
+                    </p>
+                  )}
                   <PlanLimits plan={plan} />
                   {canManage ? (
                     <button

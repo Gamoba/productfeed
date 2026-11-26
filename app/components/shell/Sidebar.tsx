@@ -27,7 +27,14 @@ export function navFor(shell: Shell): NavEntry[] {
   const { level } = shell
   if (level.kind === 'feed') return feedNav(level.feedId)
   if (level.kind === 'shop') return shopNav(level.projectId)
-  return accountNav(monitoringCount(shell))
+  const d = shell.data
+  return accountNav({
+    monitoring: monitoringCount(shell),
+    isMcc: d?.isMcc,
+    hasUserAccount: d?.hasUserAccount ?? true,
+    pendingAccess: d?.pendingAccess,
+    isPlatformAdmin: d?.isPlatformAdmin,
+  })
 }
 
 // The same rules as Agency › Monitoring's critical list (lib/agencyMonitoring):

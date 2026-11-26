@@ -25,6 +25,7 @@ export async function signUp(_prev: SignupState, formData: FormData): Promise<Si
         company: formData.get('company'),
         email,
         ref: formData.get('ref'),
+        plan: formData.get('plan'),
       },
       `${origin}/auth/invite`
     )

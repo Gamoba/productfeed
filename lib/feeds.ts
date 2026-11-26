@@ -1,6 +1,7 @@
 import { createClient, type SupabaseClient } from '@supabase/supabase-js'
 import { getAccountRole } from '@/lib/accounts'
 import { lockedAccountIds } from '@/lib/entitlements'
+import { mccReachesAccount, mccReachesFeed } from '@/lib/mccAccess'
 
 // A shop's account must be in good standing for its shops and feeds to be
 // reached at all (lib/entitlements.ts): an account with no plan, or whose plan
@@ -83,7 +84,7 @@ export async function getOwnedFeed(
     .eq('projects.accounts.account_members.user_id', userId)
     .maybeSingle()
   if (!joined.error) {
-    if (!joined.data) return null
+    if (!joined.data) return viaAgencyFeed(db, userId, feedId)
     const { projects, ...row } = joined.data as FeedRow & {
       projects: { account_id: string; accounts: { billing_exempt: boolean } }
     }
@@ -105,9 +106,43 @@ export async function getOwnedFeed(
     .maybeSingle<{ account_id: string }>()
   if (!project) return null
 
-  if (!(await getAccountRole(db, userId, project.account_id))) return null
+  if (!(await getAccountRole(db, userId, project.account_id))) return viaAgencyFeed(db, userId, feedId)
   if (!(await accountUsable(db, project.account_id))) return null
   return { ...feed, account_id: project.account_id }
+}
+
+// A non-member may still reach a feed through an agency (MCC) the client has
+// granted access: the whole account, or this one feed (lib/mccAccess.ts).
+async function viaAgencyFeed(db: SupabaseClient, userId: string, feedId: string): Promise<OwnedFeed | null> {
+  const { data } = await db
+    .from('feeds')
+    .select('*, projects!inner(account_id, accounts!inner(billing_exempt, type))')
+    .eq('id', feedId)
+    .maybeSingle()
+  if (!data) return null
+  const { projects, ...row } = data as FeedRow & {
+    projects: { account_id: string; accounts: { billing_exempt: boolean; type: string } }
+  }
+  if (!row.project_id || projects.accounts?.type !== 'user') return null
+  if (!(await mccReachesFeed(db, userId, projects.account_id, feedId))) return null
+  if (!(await accountUsable(db, projects.account_id, projects.accounts.billing_exempt))) return null
+  return { ...(row as FeedRow), account_id: projects.account_id }
+}
+
+// The project-level equivalent: only a grant for the whole account reaches a
+// shop (a feed-only grant shows just that feed).
+async function viaAgencyProject(db: SupabaseClient, userId: string, projectId: string): Promise<ProjectRow | null> {
+  const { data } = await db
+    .from('projects')
+    .select(`${PROJECT_PUBLIC_COLUMNS}, accounts!inner(billing_exempt, type)`)
+    .eq('id', projectId)
+    .maybeSingle()
+  if (!data) return null
+  const { accounts, ...row } = data as unknown as ProjectRow & { accounts: { billing_exempt: boolean; type: string } }
+  if (accounts?.type !== 'user') return null
+  if (!(await mccReachesAccount(db, userId, row.account_id))) return null
+  if (!(await accountUsable(db, row.account_id, accounts.billing_exempt))) return null
+  return row as ProjectRow
 }
 
 // Returns the project if the user is a member of its account, otherwise null.
@@ -125,7 +160,7 @@ export async function getOwnedProject(
     .eq('accounts.account_members.user_id', userId)
     .maybeSingle()
   if (!joined.error) {
-    if (!joined.data) return null
+    if (!joined.data) return viaAgencyProject(db, userId, projectId)
     const { accounts, ...row } = joined.data as unknown as ProjectRow & { accounts: { billing_exempt: boolean } }
     if (!(await accountUsable(db, row.account_id, accounts?.billing_exempt))) return null
     return row as ProjectRow
@@ -138,7 +173,7 @@ export async function getOwnedProject(
     .maybeSingle()
   const project = (data as ProjectRow | null) ?? null
   if (!project) return null
-  if (!(await getAccountRole(db, userId, project.account_id))) return null
+  if (!(await getAccountRole(db, userId, project.account_id))) return viaAgencyProject(db, userId, projectId)
   if (!(await accountUsable(db, project.account_id))) return null
   return project
 }

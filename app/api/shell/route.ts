@@ -3,6 +3,7 @@ import { createSupabaseServerClient, getSessionUser } from '@/lib/supabase-serve
 import { adminDb } from '@/lib/feeds'
 import { getMemberships } from '@/lib/accounts'
 import { blocksApp, getEntitlementsMany, shopsLocked } from '@/lib/entitlements'
+import { getMccReach } from '@/lib/mccAccess'
 import { errorResponse } from '@/lib/errors'
 import { channelOf, type ChannelId } from '@/lib/channels'
 import { staleSyncDays } from '@/lib/syncSchedule'
@@ -35,6 +36,36 @@ export type ShellData = {
   }
   /** No usable account: every page but Billing redirects there (lib/entitlements). */
   blocked: boolean
+  /** Gamoba staff: shows the Admin page. */
+  isPlatformAdmin: boolean
+  /** Member of an agency (MCC) account: shows the agency pages. */
+  isMcc: boolean
+  /** Member of a customer (User) account: shows Agency access. */
+  hasUserAccount: boolean
+  /** Agency access requests waiting for this user to approve (owner/admin of a User account). */
+  pendingAccess: number
+}
+
+async function loadFlags(
+  db: ReturnType<typeof adminDb>,
+  userId: string,
+  memberships: { account_id: string; role: string }[]
+): Promise<Pick<ShellData, 'isPlatformAdmin' | 'isMcc' | 'hasUserAccount' | 'pendingAccess'>> {
+  const ids = memberships.map((m) => m.account_id)
+  const managed = memberships.filter((m) => m.role === 'owner' || m.role === 'admin').map((m) => m.account_id)
+  const [admin, types, pending] = await Promise.all([
+    db.from('platform_admins').select('user_id').eq('user_id', userId).maybeSingle(),
+    ids.length ? db.from('accounts').select('type').in('id', ids) : Promise.resolve({ data: [] }),
+    managed.length
+      ? db.from('access_grants').select('id', { count: 'exact', head: true }).in('user_account_id', managed).eq('status', 'pending')
+      : Promise.resolve({ count: 0 }),
+  ])
+  return {
+    isPlatformAdmin: !!admin.data,
+    isMcc: ((types.data ?? []) as { type: string }[]).some((t) => t.type === 'mcc'),
+    hasUserAccount: ((types.data ?? []) as { type: string }[]).some((t) => t.type === 'user'),
+    pendingAccess: (pending as { count: number | null }).count ?? 0,
+  }
 }
 
 export type FeedStatus = 'running' | 'errors' | 'not_generated' | 'stale'
@@ -63,14 +94,38 @@ export async function GET() {
       return !!e && blocksApp(e)
     })
 
-    const [accountsRes, projectsRes] = allAccountIds.length
+    // Clients reached through an agency (lib/mccAccess.ts): whole accounts,
+    // and single feeds. Locked client accounts are left out, as above.
+    const reach = await getMccReach(db, user.id)
+    const clientEnts = await getEntitlementsMany(db, [...reach.accountIds, ...reach.feeds.map((f) => f.accountId)])
+    const usable = (id: string) => {
+      const e = clientEnts.get(id)
+      return !!e && !shopsLocked(e)
+    }
+    const clientAccountIds = reach.accountIds.filter((id) => usable(id) && !accountIds.includes(id))
+    const clientFeedIds = reach.feeds.filter((f) => usable(f.accountId)).map((f) => f.feedId)
+    const shopAccountIds = [...accountIds, ...clientAccountIds]
+    let feedOnlyProjectIds: string[] = []
+    if (clientFeedIds.length) {
+      const { data: fp } = await db.from('feeds').select('project_id').in('id', clientFeedIds)
+      feedOnlyProjectIds = [...new Set(((fp ?? []) as { project_id: string }[]).map((r) => r.project_id))]
+    }
+
+    const [accountsRes, projectsRes] = allAccountIds.length || shopAccountIds.length || feedOnlyProjectIds.length
       ? await Promise.all([
-          db.from('accounts').select('id, name').in('id', allAccountIds),
-          accountIds.length
+          db.from('accounts').select('id, name').in('id', [...allAccountIds, ...clientAccountIds]),
+          shopAccountIds.length || feedOnlyProjectIds.length
             ? db
                 .from('projects')
                 .select('id, account_id, name, shop_url, primary_domain, source_type, connection_status')
-                .in('account_id', accountIds)
+                .or(
+                  [
+                    shopAccountIds.length ? `account_id.in.(${shopAccountIds.join(',')})` : '',
+                    feedOnlyProjectIds.length ? `id.in.(${feedOnlyProjectIds.join(',')})` : '',
+                  ]
+                    .filter(Boolean)
+                    .join(',')
+                )
                 .order('created_at', { ascending: true })
             : Promise.resolve({ data: [], error: null }),
         ])
@@ -104,7 +159,10 @@ export async function GET() {
     if (projectIds.length) {
       const { data: feedRows, error: feedErr } = feedsRes
       if (feedErr) throw feedErr
-      const rows = (feedRows ?? []) as { id: string; name: string; project_id: string; channel: string; last_synced_at?: string | null; last_auto_sync_status?: string | null }[]
+      // A shop reached through a single-feed grant shows only that feed.
+      const wholeShop = new Set(projects.filter((p) => shopAccountIds.includes(p.account_id)).map((p) => p.id))
+      const rows = ((feedRows ?? []) as { id: string; name: string; project_id: string; channel: string; last_synced_at?: string | null; last_auto_sync_status?: string | null }[])
+        .filter((r) => wholeShop.has(r.project_id) || clientFeedIds.includes(r.id))
       // Small columns only: never xml_content. Cache and markets together.
       const ids = rows.map((r) => r.id)
       const [{ data: caches }, settingsRes] = rows.length
@@ -159,6 +217,7 @@ export async function GET() {
       feeds,
       attention,
       blocked,
+      ...(await loadFlags(db, user.id, memberships)),
     }
     return NextResponse.json(body)
   } catch (err) {

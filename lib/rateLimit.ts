@@ -17,6 +17,8 @@ export const RATE_LIMITS = {
   account_invite:    { limit: 30, windowMs: HOUR }, // invites + new invite links (Agency users)
   signup:            { limit: 5, windowMs: HOUR },  // per IP (see ipRateKey), not per user
   billing_session:   { limit: 20, windowMs: HOUR }, // Stripe Checkout / portal sessions
+  access_request:    { limit: 10, windowMs: HOUR }, // agency enters a client's access code (anti-guessing)
+  admin_action:      { limit: 120, windowMs: HOUR }, // platform admin changes
   // Daily volume budget (per day): max products sent to the AI optimiser. The
   // catalogue is ~2263 products, so 20000/day allows running the whole catalogue
   // several times while iterating on instructions, while still capping a runaway.

@@ -10,6 +10,7 @@
 import type { SupabaseClient } from '@supabase/supabase-js'
 import { dbError } from '@/lib/errors'
 import { lockedAccountIds } from '@/lib/entitlements'
+import { getMccReach, mccReachesAccount } from '@/lib/mccAccess'
 
 export type AccountRole = 'owner' | 'admin' | 'member'
 
@@ -17,6 +18,8 @@ export type AccountMembership = {
   account_id: string
   role: AccountRole
   created_at: string
+  /** Set when the account is a client reached through an agency (MCC) grant, not a real membership. */
+  via?: 'mcc'
 }
 
 // Every account the user is a member of, oldest membership first.
@@ -33,17 +36,26 @@ export async function getMemberships(
   return (data as AccountMembership[] | null) ?? []
 }
 
-// Memberships whose shops and feeds can be used: not locked for want of a
-// plan (lib/entitlements.ts). Lists of shops and feeds use this; Billing uses
-// getMemberships, so a locked account can still be paid for.
+// The accounts whose shops and feeds the user can use, for lists of shops and
+// feeds:
+//   - their own memberships, and
+//   - client accounts their agency (MCC) has whole-account access to
+//     (lib/mccAccess.ts), as role 'member' with via: 'mcc';
+// minus accounts locked for want of a plan (lib/entitlements.ts). Billing and
+// member management use getMemberships: real memberships only.
 export async function getUsableMemberships(
   db: SupabaseClient,
   userId: string
 ): Promise<AccountMembership[]> {
-  const memberships = await getMemberships(db, userId)
-  if (memberships.length === 0) return memberships
-  const locked = await lockedAccountIds(db, memberships.map((m) => m.account_id))
-  return locked.size ? memberships.filter((m) => !locked.has(m.account_id)) : memberships
+  const [own, reach] = await Promise.all([getMemberships(db, userId), getMccReach(db, userId)])
+  const ownIds = new Set(own.map((m) => m.account_id))
+  const granted: AccountMembership[] = reach.accountIds
+    .filter((id) => !ownIds.has(id))
+    .map((id) => ({ account_id: id, role: 'member', created_at: '', via: 'mcc' }))
+  const all = [...own, ...granted]
+  if (all.length === 0) return all
+  const locked = await lockedAccountIds(db, all.map((m) => m.account_id))
+  return locked.size ? all.filter((m) => !locked.has(m.account_id)) : all
 }
 
 export async function getAccessibleAccountIds(
@@ -115,7 +127,10 @@ export async function resolveAccountForNewProject(
   requested?: string | null
 ): Promise<string | null> {
   if (requested) {
-    return (await getAccountRole(db, user.id, requested)) ? requested : null
+    if (await getAccountRole(db, user.id, requested)) return requested
+    // An agency with whole-account access may create shops for its client
+    // (decision 2); they count against the client's plan.
+    return (await mccReachesAccount(db, user.id, requested)) ? requested : null
   }
   const memberships = await getMemberships(db, user.id)
   if (memberships.length > 0) return memberships[0].account_id

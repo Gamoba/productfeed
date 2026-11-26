@@ -17,6 +17,7 @@ import type { SupabaseClient } from '@supabase/supabase-js'
 import { AppError, dbError } from '@/lib/errors'
 import { getAccountRole } from '@/lib/accounts'
 import { stripe, stripeLivemode } from '@/lib/stripe'
+import { dropFutureParts, recordCreditNote, recordPaidInvoice } from '@/lib/commissions'
 
 export type Interval = 'month' | 'year'
 export const isInterval = (v: unknown): v is Interval => v === 'month' || v === 'year'
@@ -27,6 +28,8 @@ export type Plan = {
   id: string
   name: string
   isCustom: boolean
+  /** Retired custom plans are listed only so an account on one sees its name. */
+  active: boolean
   selfServe: boolean
   includedSkus: number | null
   extraPer1000Cents: number | null
@@ -65,6 +68,7 @@ type PlanRow = {
   id: string
   name: string
   is_custom: boolean
+  active: boolean
   self_serve: boolean
   included_skus: number | null
   extra_per_1000_cents: number | null
@@ -76,13 +80,14 @@ type PlanRow = {
 }
 
 const PLAN_SELECT =
-  'id, name, is_custom, self_serve, included_skus, extra_per_1000_cents, feed_limit, shop_limit, user_limit, syncs_per_day, plan_prices(interval, livemode, amount_cents, currency, stripe_price_id)'
+  'id, name, is_custom, active, self_serve, included_skus, extra_per_1000_cents, feed_limit, shop_limit, user_limit, syncs_per_day, plan_prices(interval, livemode, amount_cents, currency, stripe_price_id)'
 
 function toPlan(r: PlanRow, livemode: boolean): Plan {
   return {
     id: r.id,
     name: r.name,
     isCustom: r.is_custom,
+    active: r.active,
     selfServe: r.self_serve,
     includedSkus: r.included_skus,
     extraPer1000Cents: r.extra_per_1000_cents,
@@ -97,14 +102,14 @@ function toPlan(r: PlanRow, livemode: boolean): Plan {
   }
 }
 
-// The plans an account can see: active public plans, plus active custom
-// plans made for this account.
+// The plans an account can see: active public plans, plus the custom plans
+// made for this account (retired ones too, flagged, so a subscription on one
+// still shows its name; they can't be bought).
 export async function listPlansForAccount(db: SupabaseClient, accountId: string): Promise<Plan[]> {
   const { data, error } = await db
     .from('plans')
     .select(PLAN_SELECT)
-    .eq('active', true)
-    .or(`is_custom.eq.false,account_id.eq.${accountId}`)
+    .or(`and(is_custom.eq.false,active.eq.true),account_id.eq.${accountId}`)
     .order('sort_order', { ascending: true })
   if (error) dbError('listPlansForAccount', error)
   const livemode = stripeLivemode()
@@ -226,7 +231,7 @@ export async function createCheckout(
   if (billing.subscription) throw new AppError('The account already has a plan. Change it under Manage billing.')
 
   const plan = (await listPlansForAccount(db, accountId)).find((p) => p.id === planId)
-  if (!plan || !plan.selfServe) throw new AppError('That plan is not available')
+  if (!plan || !plan.selfServe || !plan.active) throw new AppError('That plan is not available')
   const price = plan.prices.find((p) => p.interval === interval)
   if (!price?.stripePriceId) throw new AppError('That plan is not available yet. Try again later.', 503)
 
@@ -378,29 +383,6 @@ export async function syncCheckoutSession(db: SupabaseClient, accountId: string,
   }
 }
 
-// First paid invoice: a referral starts earning (commissions come with the
-// kickback work; this only records that the User has paid).
-async function markReferralPaid(db: SupabaseClient, invoice: Stripe.Invoice): Promise<void> {
-  if (invoice.amount_paid <= 0) return
-  const subRef = invoice.parent?.subscription_details?.subscription
-  const subId = typeof subRef === 'string' ? subRef : subRef?.id
-  if (!subId) return
-  const { data: sub, error } = await db
-    .from('subscriptions')
-    .select('account_id')
-    .eq('stripe_subscription_id', subId)
-    .eq('kind', 'plan')
-    .maybeSingle<{ account_id: string }>()
-  if (error) dbError('markReferralPaid subscription', error)
-  if (!sub) return
-  const { error: upErr } = await db
-    .from('referrals')
-    .update({ status: 'active', first_paid_at: new Date((invoice.status_transitions?.paid_at ?? Date.now() / 1000) * 1000).toISOString() })
-    .eq('user_account_id', sub.account_id)
-    .eq('status', 'pending')
-  if (upErr) dbError('markReferralPaid update', upErr)
-}
-
 // Handles one verified webhook event. An event already recorded in
 // stripe_events is skipped; the handlers are idempotent anyway, so an event
 // that fails half-way is safe for Stripe to resend.
@@ -422,13 +404,43 @@ export async function handleStripeEvent(db: SupabaseClient, event: Stripe.Event)
     }
     case 'customer.subscription.created':
     case 'customer.subscription.updated':
-    case 'customer.subscription.deleted':
+    case 'customer.subscription.deleted': {
       // Re-read it: events can arrive out of order, Stripe's current state can't.
-      await syncSubscription(db, await stripe().subscriptions.retrieve(event.data.object.id))
+      const sub = await stripe().subscriptions.retrieve(event.data.object.id)
+      await syncSubscription(db, sub)
+      // Ended: agency kickback parts not due yet are dropped (decision 26).
+      if (sub.status === 'canceled') {
+        const { data: row } = await db
+          .from('subscriptions')
+          .select('id')
+          .eq('stripe_subscription_id', sub.id)
+          .eq('kind', 'plan')
+          .maybeSingle<{ id: string }>()
+        if (row) await dropFutureParts(db, { subscriptionId: row.id })
+      }
       break
-    case 'invoice.paid':
-      await markReferralPaid(db, event.data.object)
+    }
+    case 'invoice.paid': {
+      // Starts a referral on the first payment and writes the agency's kickback.
+      // A new subscription's first invoice.paid can arrive before the events
+      // that record the subscription, so record it from Stripe first.
+      const invoice = event.data.object
+      const ref = invoice.parent?.subscription_details?.subscription
+      const subId = typeof ref === 'string' ? ref : ref?.id
+      if (subId) await syncSubscription(db, await stripe().subscriptions.retrieve(subId))
+      await recordPaidInvoice(db, invoice)
       break
+    }
+    case 'credit_note.created': {
+      // A refund: scales the agency's kickback on that invoice down.
+      const note = event.data.object
+      const invoiceId = typeof note.invoice === 'string' ? note.invoice : note.invoice?.id
+      if (invoiceId) {
+        const invoice = await stripe().invoices.retrieve(invoiceId)
+        await recordCreditNote(db, note, invoice.total)
+      }
+      break
+    }
     default:
       break
   }

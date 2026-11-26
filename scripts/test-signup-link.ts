@@ -3,7 +3,7 @@
 // Does what /signup does (lib/signup.ts startSignup), but prints the link
 // instead of emailing it:
 //
-//   npx tsx scripts/test-signup-link.ts <email> "<company>" ["<name>"] [--ref <code>] [--origin http://localhost:3000]
+//   npx tsx scripts/test-signup-link.ts <email> "<company>" ["<name>"] [--ref <code>] [--plan <token>] [--origin http://localhost:3000]
 //
 // Open the printed link in the browser, choose a password, and the signup
 // finishes as for a real customer (User account → Billing).
@@ -47,6 +47,7 @@ async function findUser(email: string) {
 
 async function create() {
   const ref = flag('--ref')
+  const plan = flag('--plan')
   const origin = flag('--origin') ?? 'http://localhost:3000'
   const [rawEmail, company, name = 'Test User'] = args
   const email = rawEmail?.trim().toLowerCase()
@@ -67,11 +68,11 @@ async function create() {
   if (error || !data.user || !data.properties?.action_link) throw error ?? new Error('No link')
 
   const { error: metaErr } = await db.auth.admin.updateUserById(data.user.id, {
-    app_metadata: { ...(data.user.app_metadata ?? {}), pending_signup: { company, ref }, signup_test: true },
+    app_metadata: { ...(data.user.app_metadata ?? {}), pending_signup: { company, ref, plan }, signup_test: true },
   })
   if (metaErr) throw metaErr
 
-  console.log(`\nSignup link for ${email} (${company}${ref ? `, ref ${ref}` : ''}):\n\n${data.properties.action_link}\n`)
+  console.log(`\nSignup link for ${email} (${company}${ref ? `, ref ${ref}` : ''}${plan ? ', custom plan link' : ''}):\n\n${data.properties.action_link}\n`)
   console.log('It works once and expires in 24 hours.')
 }
 

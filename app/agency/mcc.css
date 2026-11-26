@@ -1,0 +1,42 @@
+/* Agency (MCC) and Agency access pages. Design B + Kobolt; builds on agency.css. */
+.mc-row { display: flex; align-items: center; gap: 8px; flex-wrap: wrap; }
+.mc-right { justify-content: flex-end; }
+.mc-select, .mc-input {
+  font: inherit; font-size: 12.5px; color: var(--card-fg); background: var(--card);
+  border: 1px solid var(--line); border-radius: 10px; padding: 7px 10px;
+}
+.mc-input:focus-visible, .mc-select:focus-visible { outline: 2px solid var(--accent-ink); outline-offset: 1px; }
+.mc-eyebrow { display: block; font-size: 11px; text-transform: uppercase; letter-spacing: .08em; color: var(--muted); margin-bottom: 4px; }
+.mc-code { flex-direction: row; align-items: center; justify-content: space-between; gap: 16px; flex-wrap: wrap; }
+.mc-code > div:first-child { display: flex; flex-direction: column; gap: 4px; }
+.mc-codeval { font-size: 26px; font-weight: 500; letter-spacing: .12em; font-variant-numeric: tabular-nums; }
+.mc-cardhead { display: flex; flex-direction: column; gap: 2px; padding: 16px 16px 10px; }
+.mc-cardhead h3 { margin: 0; font-size: 14px; font-weight: 500; }
+.mc-cardhead small { font-size: 12px; color: var(--muted); }
+.mc-form { display: flex; gap: 8px; flex-wrap: wrap; align-items: center; }
+.mc-form .mc-input { min-width: 220px; }
+.mc-link { font-size: 15px; font-weight: 500; word-break: break-all; }
+.mc-stats { display: flex; padding: 16px; }
+.mc-stats > div { flex: 1; display: flex; flex-direction: column; gap: 2px; padding: 2px 16px; min-width: 0; }
+.mc-stats > div:first-child { padding-left: 0; }
+.mc-stats > div + div { border-left: 1px solid var(--line); }
+.mc-stats span { font-size: 12px; color: var(--muted); }
+.mc-stats strong { font-size: 30px; font-weight: 400; letter-spacing: -0.02em; font-variant-numeric: tabular-nums; }
+.mc-good { color: var(--good); }
+.mc-bad { color: var(--bad); font-weight: 500; }
+@media (max-width: 820px) {
+  .mc-stats { flex-wrap: wrap; }
+  .mc-stats > div { flex: 1 1 45%; padding: 8px 0; }
+  .mc-stats > div + div { border-left: 0; }
+}
+.mc-h3 { margin: 0; font-size: 14px; font-weight: 500; }
+/* The page's one Kobolt card (the referral link). */
+.hi-lite { background: var(--hi); color: var(--hi-fg); gap: 10px; }
+.hi-lite .mc-eyebrow, .hi-lite .ag-muted { color: var(--hi-muted); }
+.hi-lite .wl-btn-primary { background: var(--hi-accent); color: var(--hi); }
+/* Admin › Custom plans form: two columns, wide rows span both. */
+.cp-form { display: grid; grid-template-columns: repeat(auto-fill, minmax(190px, 1fr)); gap: 10px 12px; }
+.cp-form label { display: flex; flex-direction: column; gap: 5px; font-size: 12px; color: var(--muted); }
+.cp-form .cp-wide { grid-column: 1 / -1; }
+.cp-form .mc-input, .cp-form .mc-select { min-width: 0; width: 100%; }
+.cp-retired td { opacity: .55; }

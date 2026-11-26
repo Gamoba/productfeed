@@ -34,6 +34,11 @@ left as it is.
     (test and live endpoints have different secrets).
   - `NEXT_PUBLIC_SALES_EMAIL` (public, optional): where the Enterprise
     "Contact us" button mails. Hidden when unset.
+  - `SMTP_HOST`, `SMTP_PORT`, `SMTP_USER`, `SMTP_PASSWORD`, `SMTP_FROM`: the
+    app's own emails (agency access requests, agency invites for existing
+    logins), lib/email.ts. Today Google: `smtp.gmail.com`, `587`,
+    `contact@kompara.io`, a Google app password, `Kompara <contact@kompara.io>`.
+    Unset: no app email; everything also shows in the app.
   Everything else is the same as `master`.
 - **Billing setup (per Stripe mode):**
   1. Apply migration `061_billing_accounts.sql` (ask first; dry run:
@@ -42,9 +47,10 @@ left as it is.
      their ids in `plan_prices`.
   3. Stripe → Webhooks: endpoint `https://<app>/api/stripe/webhook` with
      `checkout.session.completed`, `customer.subscription.created`,
-     `customer.subscription.updated`, `customer.subscription.deleted` and
-     `invoice.paid`. Locally (the CLI requires the events listed):
-     `stripe listen --events "checkout.session.completed,customer.subscription.created,customer.subscription.updated,customer.subscription.deleted,invoice.paid" --forward-to localhost:3000/api/stripe/webhook`.
+     `customer.subscription.updated`, `customer.subscription.deleted`,
+     `invoice.paid` and `credit_note.created` (refunds, for agency
+     kickbacks). Locally (the CLI requires the events listed):
+     `stripe listen --events "checkout.session.completed,customer.subscription.created,customer.subscription.updated,customer.subscription.deleted,invoice.paid,credit_note.created" --forward-to localhost:3000/api/stripe/webhook`.
      Keep the quotes: in PowerShell, an unquoted comma list becomes an array
      and reaches the CLI as one space-separated (invalid) event name.
      `stripe listen` prints its own signing secret (`whsec_…`); that one goes
@@ -57,8 +63,10 @@ left as it is.
      email template worded for signup ("Confirm your email and choose a
      password"). "Allow new users to sign up" stays **off**: signup goes
      through `/signup`, which creates logins server-side.
-  7. `platform_settings.default_commission_rate` set (e.g. `0.2` for 20 %).
-     Until then referrals record a 0 % rate.
+  7. Default commission set on the Admin page (`/admin`). Until then
+     referrals record a 0 % rate.
+  8. Platform admins: rows in `platform_admins` (today kontakt@gamoba.dk).
+     They see Admin in the agency menu.
 - **Routes:** no page or API route is removed. Feed links in Merchant Center
   (`/api/feed/generate/<feedId>`) keep working.
 - **Scheduled jobs:** `.github/workflows/cron-sync.yml` gets a third step,

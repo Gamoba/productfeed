@@ -7,7 +7,8 @@ import { handleStripeEvent } from '@/lib/billing'
 // 400 and touches nothing.
 //
 // Events used: checkout.session.completed, customer.subscription.created /
-// updated / deleted, invoice.paid. Configure exactly these in Stripe.
+// updated / deleted, invoice.paid, credit_note.created. Configure exactly
+// these in Stripe.
 export async function POST(req: Request) {
   const secret = process.env.STRIPE_WEBHOOK_SECRET
   const signature = req.headers.get('stripe-signature')
