@@ -1,5 +1,6 @@
 import { adminDb, getFirstFeed } from '@/lib/feeds'
 import { generateFeed } from '@/lib/feedGenerator'
+import { feedServingBlocked } from '@/lib/entitlements'
 
 const CACHE_TTL_MS = 6 * 60 * 60 * 1000 // 6 hours
 
@@ -28,6 +29,11 @@ export async function GET(
   }
 
   const db = adminDb()
+
+  // As /api/feed/generate: no usable plan, no feed (lib/entitlements).
+  if (await feedServingBlocked(db, feed.id)) {
+    return xmlResponse('<?xml version="1.0" encoding="UTF-8"?><error>This feed is paused: the account has no active plan</error>', 402)
+  }
 
   const { data: cached } = await db
     .from('feed_cache')

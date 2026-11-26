@@ -21,6 +21,7 @@
 import type { SupabaseClient } from '@supabase/supabase-js'
 import { AppError, dbError } from '@/lib/errors'
 import { getAccountRole, type AccountRole } from '@/lib/accounts'
+import { assertCanAddMember } from '@/lib/ops/limits'
 
 export type MemberRow = {
   userId: string
@@ -95,18 +96,18 @@ export async function inviteUser(
   if (input.role === 'owner' && actorRole !== 'owner') throw new AppError('Only an owner can make others owner', 403)
   const name = typeof input.name === 'string' ? input.name.trim().slice(0, 120) : ''
 
-  const { data: acc, error: accErr } = await db.from('accounts').select('seat_limit').eq('id', accountId).single()
+  const [{ data: acc, error: accErr }, { count, error: countErr }] = await Promise.all([
+    db.from('accounts').select('seat_limit').eq('id', accountId).single(),
+    db.from('account_members').select('user_id', { count: 'exact', head: true }).eq('account_id', accountId),
+  ])
   if (accErr) dbError('inviteUser account', accErr)
+  if (countErr) dbError('inviteUser count', countErr)
+  const members = count ?? 0
+  // The plan's user limit (lib/ops/limits.ts), then any manual seat_limit.
+  await assertCanAddMember(db, accountId, members)
   const seatLimit = (acc as { seat_limit: number | null }).seat_limit
-  if (seatLimit !== null) {
-    const { count, error } = await db
-      .from('account_members')
-      .select('user_id', { count: 'exact', head: true })
-      .eq('account_id', accountId)
-    if (error) dbError('inviteUser count', error)
-    if ((count ?? 0) >= seatLimit) {
-      throw new AppError(`All ${seatLimit} seats are used. Remove a user or upgrade the plan.`)
-    }
+  if (seatLimit !== null && members >= seatLimit) {
+    throw new AppError(`All ${seatLimit} seats are used. Remove a user or upgrade the plan.`)
   }
 
   const { data: existingId, error: lookupErr } = await db.rpc('auth_user_id_by_email', { p_email: email })

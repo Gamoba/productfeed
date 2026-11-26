@@ -54,6 +54,8 @@ export function FeedWizardModal({
 
   const [submitting, setSubmitting] = useState(false)
   const [error, setError] = useState<string | null>(null)
+  // Set when the plan's feed limit refused the feed (lib/ops/limits.ts).
+  const [upgrade, setUpgrade] = useState<string | null>(null)
 
   function selectMarket(m: ShopifyMarket) {
     setMarketId(m.id)
@@ -122,6 +124,7 @@ export function FeedWizardModal({
   async function submit() {
     setSubmitting(true)
     setError(null)
+    setUpgrade(null)
     try {
       // 1. The feed, with its channel. The server checks the channel may be
       //    used in the market's country.
@@ -136,8 +139,9 @@ export function FeedWizardModal({
           country: country || null,
         }),
       })
-      const feedData = (await feedRes.json()) as { feed?: { id: string }; error?: string }
+      const feedData = (await feedRes.json()) as { feed?: { id: string }; error?: string; upgrade?: string }
       if (!feedRes.ok || feedData.error || !feedData.feed?.id) {
+        if (feedData.upgrade) setUpgrade(feedData.upgrade)
         throw new Error(feedData.error ?? `HTTP ${feedRes.status}`)
       }
       const feedId = feedData.feed.id
@@ -240,7 +244,19 @@ export function FeedWizardModal({
               onMode={setFeedMode}
             />
           )}
-          {error && <p className="fw-error">{error}</p>}
+          {error && (
+            <p className="fw-error">
+              {error}
+              {upgrade && (
+                <>
+                  {' '}
+                  <a href={upgrade} className="link">
+                    See plans
+                  </a>
+                </>
+              )}
+            </p>
+          )}
         </div>
 
         <div className="fw-foot">

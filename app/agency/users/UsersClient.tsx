@@ -6,6 +6,7 @@ import type { AccountUsers, InviteResult, MemberRow } from '@/lib/accountMembers
 import type { AccountRole } from '@/lib/accounts'
 import { Icon } from '@/app/components/shell/icons'
 import { ROLE_LABEL } from '@/app/components/shell/nav'
+import { LimitNote } from '@/app/components/LimitNote'
 import { formatNumber, formatWhen } from '@/lib/formatDa'
 import './users.css'
 
@@ -282,12 +283,14 @@ function InviteDialog({
   const [role, setRole] = useState<AccountRole>('member')
   const [busy, setBusy] = useState(false)
   const [error, setError] = useState<string | null>(null)
+  const [upgrade, setUpgrade] = useState<string | null>(null)
   const [added, setAdded] = useState<string | null>(null)
 
   async function submit(e: React.FormEvent) {
     e.preventDefault()
     setBusy(true)
     setError(null)
+    setUpgrade(null)
     try {
       const res = await fetch(base, {
         method: 'POST',
@@ -297,6 +300,7 @@ function InviteDialog({
       const json = await res.json()
       if (!res.ok) {
         setError(json.error ?? 'The invitation could not be created')
+        setUpgrade(typeof json.upgrade === 'string' ? json.upgrade : null)
         return
       }
       const r = json as InviteResult
@@ -355,7 +359,7 @@ function InviteDialog({
           You get a link to send yourself. With it, the user chooses a password. If the email already has a login,
           the user is added straight away.
         </p>
-        {error && <p className="note warn">{error}</p>}
+        <LimitNote error={error} upgrade={upgrade} />
         <div className="au-dlg-foot">
           <button type="button" className="wl-btn-secondary" onClick={onClose}>
             Cancel

@@ -10,6 +10,7 @@ import { Popover } from '@/app/components/shell/Popover'
 import { flagEmoji, initials } from '@/app/components/shell/nav'
 import { countryName, formatNumber } from '@/lib/formatDa'
 import { refreshShell } from '@/app/components/shell/useShell'
+import { LimitNote, readLimitError } from '@/app/components/LimitNote'
 import './agency.css'
 
 export function AgencyDashboardClient({ initial }: { initial: AgencyOverview }) {
@@ -271,18 +272,22 @@ function CreateDialog({ onClose }: { onClose: () => void }) {
   const [description, setDescription] = useState('')
   const [busy, setBusy] = useState(false)
   const [error, setError] = useState<string | null>(null)
+  const [upgrade, setUpgrade] = useState<string | null>(null)
 
   async function submit(e: React.FormEvent) {
     e.preventDefault()
     setBusy(true)
     setError(null)
+    setUpgrade(null)
     const res = await fetch('/api/projects', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ name: name.trim(), description: description.trim() }),
     })
     if (!res.ok) {
-      setError(await readError(res))
+      const r = await readLimitError(res)
+      setError(r.error)
+      setUpgrade(r.upgrade)
       setBusy(false)
       return
     }
@@ -303,7 +308,7 @@ function CreateDialog({ onClose }: { onClose: () => void }) {
           <textarea className="ag-inp" rows={3} value={description} onChange={(e) => setDescription(e.target.value)} />
         </label>
         <p className="ag-muted">Next, you connect the shop&apos;s Shopify or a feed URL and create feeds per country.</p>
-        {error && <p className="note warn">{error}</p>}
+        <LimitNote error={error} upgrade={upgrade} />
         <div className="ag-dlg-foot">
           <button type="button" className="wl-btn-secondary" onClick={onClose} disabled={busy}>
             Cancel

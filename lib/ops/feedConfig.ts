@@ -15,9 +15,11 @@ import { describeRule, isActiveRule, type FeedFilterRule, rulesReadMasters } fro
 import { masterNamesForFeed } from '@/lib/masterFields'
 import { AUTO_SYNC_LABELS, isAutoSyncFrequency, isAutoSyncTime, type AutoSyncFrequency } from '@/lib/syncSchedule'
 import { patternProblems, type ExtractConfig } from '@/lib/mappingExtract'
+import { assertFrequencyAllowed, LimitError } from '@/lib/ops/limits'
 
 export type OpContext = { user: User; via?: string }
-export type OpResult = { error?: string; warnings?: string[] }
+/** `upgrade`: set when a plan limit refused the change; where to upgrade. */
+export type OpResult = { error?: string; warnings?: string[]; upgrade?: string }
 
 export type MappingEntry = {
   google_field: string
@@ -275,7 +277,20 @@ export async function applyFeedSchedule(
 ): Promise<OpResult> {
   if (!isAutoSyncFrequency(frequency)) return { error: 'Invalid frequency' }
   if (!isAutoSyncTime(time)) return { error: 'Invalid time (HH:MM)' }
-  const { data: prev } = await db.from('feeds').select('*').eq('id', feedId).maybeSingle()
+  const { data: prev } = await db.from('feeds').select('*, projects(account_id)').eq('id', feedId).maybeSingle()
+  // The plan decides how often a feed may sync (lib/entitlements.ts).
+  // Only a change of frequency is checked: a schedule kept from before a
+  // downgrade can still have its time changed (the cron caps how often it runs).
+  const accountId = (prev as { projects?: { account_id?: string } } | null)?.projects?.account_id
+  const unchanged = (prev as { auto_sync_frequency?: string } | null)?.auto_sync_frequency === frequency
+  if (accountId && !unchanged) {
+    try {
+      await assertFrequencyAllowed(db, accountId, frequency)
+    } catch (err) {
+      if (err instanceof LimitError) return { error: err.message, upgrade: err.upgrade }
+      return { error: clientMessage(err, 'applyFeedSchedule limit') }
+    }
+  }
   const { error } = await db.from('feeds').update({ auto_sync_frequency: frequency, auto_sync_time: time }).eq('id', feedId)
   if (error) return { error: clientMessage(error, 'applyFeedSchedule') }
   const o = (prev ?? {}) as { auto_sync_frequency?: string; auto_sync_time?: string }

@@ -27,8 +27,38 @@ left as it is.
     is always running (no cold start on the first click after a quiet
     spell). Needs the Pro plan (the project is on Pro). The product, order
     and Google Ads syncs are still ticked by `.github/workflows/cron-sync.yml`.
-- **Environment variables:** none new. The branch reads the same variables as
-  `master`.
+- **Environment variables (billing):** new, server-only unless noted:
+  - `STRIPE_SECRET_KEY`: `sk_test_…` until go-live, then `sk_live_…`. The key's
+    prefix decides which billing rows (`livemode`) the app reads and writes.
+  - `STRIPE_WEBHOOK_SECRET`: the signing secret of the webhook endpoint below
+    (test and live endpoints have different secrets).
+  - `NEXT_PUBLIC_SALES_EMAIL` (public, optional): where the Enterprise
+    "Contact us" button mails. Hidden when unset.
+  Everything else is the same as `master`.
+- **Billing setup (per Stripe mode):**
+  1. Apply migration `061_billing_accounts.sql` (ask first; dry run:
+     `npx tsx scripts/dryrun-061.mts`).
+  2. `npm run stripe:setup` creates the plans' products and prices and stores
+     their ids in `plan_prices`.
+  3. Stripe → Webhooks: endpoint `https://<app>/api/stripe/webhook` with
+     `checkout.session.completed`, `customer.subscription.created`,
+     `customer.subscription.updated`, `customer.subscription.deleted` and
+     `invoice.paid`. Locally (the CLI requires the events listed):
+     `stripe listen --events "checkout.session.completed,customer.subscription.created,customer.subscription.updated,customer.subscription.deleted,invoice.paid" --forward-to localhost:3000/api/stripe/webhook`.
+     Keep the quotes: in PowerShell, an unquoted comma list becomes an array
+     and reaches the CLI as one space-separated (invalid) event name.
+     `stripe listen` prints its own signing secret (`whsec_…`); that one goes
+     in `.env.local` as `STRIPE_WEBHOOK_SECRET` for local testing, not the
+     Dashboard endpoint's.
+  4. Stripe → Tax: switch on Stripe Tax and set the origin address.
+  5. Stripe → Customer portal: allow card updates, invoices, cancelling and
+     switching between the FeedFlow plans.
+  6. Supabase → Authentication: custom SMTP set up, and the "Invite user"
+     email template worded for signup ("Confirm your email and choose a
+     password"). "Allow new users to sign up" stays **off**: signup goes
+     through `/signup`, which creates logins server-side.
+  7. `platform_settings.default_commission_rate` set (e.g. `0.2` for 20 %).
+     Until then referrals record a 0 % rate.
 - **Routes:** no page or API route is removed. Feed links in Merchant Center
   (`/api/feed/generate/<feedId>`) keep working.
 - **Scheduled jobs:** `.github/workflows/cron-sync.yml` gets a third step,

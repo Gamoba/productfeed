@@ -2,6 +2,7 @@ import { NextResponse } from 'next/server'
 import { createSupabaseServerClient, getSessionUser } from '@/lib/supabase-server'
 import { adminDb } from '@/lib/feeds'
 import { getMemberships } from '@/lib/accounts'
+import { blocksApp, getEntitlementsMany, shopsLocked } from '@/lib/entitlements'
 import { errorResponse } from '@/lib/errors'
 import { channelOf, type ChannelId } from '@/lib/channels'
 import { staleSyncDays } from '@/lib/syncSchedule'
@@ -32,6 +33,8 @@ export type ShellData = {
     /** Automatic runs that failed in the last 7 days (newest first). */
     failures: { feedId: string | null; projectId: string | null; feedLabel: string | null; action: string; message: string | null; at: string }[]
   }
+  /** No usable account: every page but Billing redirects there (lib/entitlements). */
+  blocked: boolean
 }
 
 export type FeedStatus = 'running' | 'errors' | 'not_generated' | 'stale'
@@ -46,16 +49,30 @@ export async function GET() {
   try {
     const db = adminDb()
     const memberships = await getMemberships(db, user.id)
-    const accountIds = memberships.map((m) => m.account_id)
+    const allAccountIds = memberships.map((m) => m.account_id)
+    // Accounts without a usable plan show no shops or feeds (lib/entitlements).
+    // When none of the user's User accounts can be used, the shell sends them
+    // to Billing (`blocked`).
+    const ents = await getEntitlementsMany(db, allAccountIds)
+    const accountIds = allAccountIds.filter((id) => {
+      const e = ents.get(id)
+      return !e || !shopsLocked(e)
+    })
+    const blocked = allAccountIds.length > 0 && allAccountIds.every((id) => {
+      const e = ents.get(id)
+      return !!e && blocksApp(e)
+    })
 
-    const [accountsRes, projectsRes] = accountIds.length
+    const [accountsRes, projectsRes] = allAccountIds.length
       ? await Promise.all([
-          db.from('accounts').select('id, name').in('id', accountIds),
-          db
-            .from('projects')
-            .select('id, account_id, name, shop_url, primary_domain, source_type, connection_status')
-            .in('account_id', accountIds)
-            .order('created_at', { ascending: true }),
+          db.from('accounts').select('id, name').in('id', allAccountIds),
+          accountIds.length
+            ? db
+                .from('projects')
+                .select('id, account_id, name, shop_url, primary_domain, source_type, connection_status')
+                .in('account_id', accountIds)
+                .order('created_at', { ascending: true })
+            : Promise.resolve({ data: [], error: null }),
         ])
       : [{ data: [], error: null }, { data: [], error: null }]
     if (accountsRes.error) throw accountsRes.error
@@ -141,6 +158,7 @@ export async function GET() {
       })),
       feeds,
       attention,
+      blocked,
     }
     return NextResponse.json(body)
   } catch (err) {

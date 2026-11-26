@@ -9,6 +9,7 @@
 
 import type { SupabaseClient } from '@supabase/supabase-js'
 import { dbError } from '@/lib/errors'
+import { lockedAccountIds } from '@/lib/entitlements'
 
 export type AccountRole = 'owner' | 'admin' | 'member'
 
@@ -32,11 +33,24 @@ export async function getMemberships(
   return (data as AccountMembership[] | null) ?? []
 }
 
+// Memberships whose shops and feeds can be used: not locked for want of a
+// plan (lib/entitlements.ts). Lists of shops and feeds use this; Billing uses
+// getMemberships, so a locked account can still be paid for.
+export async function getUsableMemberships(
+  db: SupabaseClient,
+  userId: string
+): Promise<AccountMembership[]> {
+  const memberships = await getMemberships(db, userId)
+  if (memberships.length === 0) return memberships
+  const locked = await lockedAccountIds(db, memberships.map((m) => m.account_id))
+  return locked.size ? memberships.filter((m) => !locked.has(m.account_id)) : memberships
+}
+
 export async function getAccessibleAccountIds(
   db: SupabaseClient,
   userId: string
 ): Promise<string[]> {
-  return (await getMemberships(db, userId)).map((m) => m.account_id)
+  return (await getUsableMemberships(db, userId)).map((m) => m.account_id)
 }
 
 // The user's role in one account, or null when they are not a member.

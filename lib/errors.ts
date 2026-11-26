@@ -37,7 +37,12 @@ export function clientMessage(err: unknown, context: string): string {
 // keeps its message + status; everything else logs and returns the generic 500.
 export function errorResponse(err: unknown, context: string): Response {
   if (err instanceof AppError) {
-    return Response.json({ error: err.message }, { status: err.status })
+    // A plan limit (lib/ops/limits.ts LimitError) also says where to upgrade.
+    const upgrade = (err as AppError & { upgrade?: unknown }).upgrade
+    return Response.json(
+      typeof upgrade === 'string' ? { error: err.message, upgrade } : { error: err.message },
+      { status: err.status }
+    )
   }
   console.error(`[error] ${context}:`, err)
   return Response.json({ error: GENERIC_MESSAGE }, { status: 500 })

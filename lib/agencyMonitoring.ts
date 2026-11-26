@@ -19,7 +19,7 @@
 
 import type { SupabaseClient } from '@supabase/supabase-js'
 import { dbError } from '@/lib/errors'
-import { getMemberships } from '@/lib/accounts'
+import { getUsableMemberships } from '@/lib/accounts'
 import { staleSyncDays } from '@/lib/syncSchedule'
 import type { ChannelId } from '@/lib/channels'
 import type { ValidationIssue } from '@/lib/feedValidator'
@@ -95,7 +95,7 @@ function feedSample(cache: CacheRow | undefined): { checked: number; affected: n
 }
 
 export async function getAgencyMonitoring(db: SupabaseClient, userId: string): Promise<AgencyMonitoring> {
-  const memberships = await getMemberships(db, userId)
+  const memberships = await getUsableMemberships(db, userId)
   const accountIds = memberships.map((m) => m.account_id)
   const empty: AgencyMonitoring = {
     multipleAccounts: false,

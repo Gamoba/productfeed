@@ -45,7 +45,7 @@ export default function InvitePage() {
       setBusy(false)
       return
     }
-    window.location.assign('/')
+    window.location.assign(r.next ?? '/')
   }
 
   return (
@@ -58,9 +58,12 @@ export default function InvitePage() {
           <>
             <h1>The link does not work</h1>
             <p className="iv-muted">
-              {linkError ?? 'The invitation has expired or has already been used.'} Ask the person who invited you for a new link
-              under Agency users.
+              {linkError ?? 'The invitation has expired or has already been used.'} If you were invited, ask the person who
+              invited you for a new link. If you signed up yourself, sign up again to get a new one.
             </p>
+            <a href="/signup" className="link">
+              Sign up again
+            </a>
             <a href="/login" className="link">
               Go to sign in
             </a>

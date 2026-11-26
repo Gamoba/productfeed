@@ -42,14 +42,11 @@ function safeNext(v: FormDataEntryValue | null): string {
   return v
 }
 
-// Self-service signup is CLOSED (security hardening M1). Accounts are created
-// manually by the administrator in the Supabase dashboard. This action no longer
-// registers anyone — it just refuses, so even if the UI path were re-exposed (or
-// the action were called directly) nobody can register through the app.
-//
-// NOTE: this is the APP-level half. The authoritative switch is in the Supabase
-// dashboard (Authentication → "Allow new users to sign up" = OFF); the public
-// anon key can otherwise hit Supabase's /auth/v1/signup directly, bypassing this.
+// Supabase's own signup stays CLOSED (security hardening M1): the dashboard
+// switch "Allow new users to sign up" must stay OFF, or the public anon key
+// can hit /auth/v1/signup directly. Open signup for User accounts goes through
+// app/signup (lib/signup.ts), which creates the login with the admin API, rate
+// limited and with email confirmation. This old action still only refuses.
 export async function signUp(prevState: AuthState): Promise<AuthState> {
   return {
     ...prevState,

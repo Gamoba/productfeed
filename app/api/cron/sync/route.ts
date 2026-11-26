@@ -5,6 +5,7 @@ import { SyncAlreadyRunningError } from '@/lib/syncProgress'
 import { regenerateFeedCache } from '@/lib/feedCache'
 import { clientMessage } from '@/lib/errors'
 import { logActivity } from '@/lib/activity'
+import { capFrequency, getEntitlementsMany, shopsLocked } from '@/lib/entitlements'
 import {
   isAutoSyncDue,
   isAutoSyncFrequency,
@@ -47,15 +48,36 @@ export async function GET(req: Request) {
 
   const { data, error } = await db
     .from('feeds')
-    .select('id, auto_sync_frequency, auto_sync_time, last_auto_sync_at, last_auto_sync_status, last_auto_sync_error')
+    .select('id, auto_sync_frequency, auto_sync_time, last_auto_sync_at, last_auto_sync_status, last_auto_sync_error, projects(account_id)')
     .neq('auto_sync_frequency', 'off')
   if (error) {
     console.error('[cron/sync] could not load feed schedules:', error)
     return Response.json({ error: 'Internal Server Error' }, { status: 500 })
   }
 
+  // The plan decides (lib/entitlements.ts): feeds of an account without a
+  // usable plan don't sync, and a schedule more frequent than the plan allows
+  // (e.g. set before a downgrade) runs at the plan's most frequent instead.
+  type Row = FeedScheduleRow & { projects: { account_id: string } | null }
+  const rows = (data ?? []) as unknown as Row[]
+  let ents: Awaited<ReturnType<typeof getEntitlementsMany>>
+  try {
+    ents = await getEntitlementsMany(db, rows.map((r) => r.projects?.account_id).filter((x): x is string => !!x))
+  } catch (err) {
+    console.error('[cron/sync] could not load plans:', err)
+    return Response.json({ error: 'Internal Server Error' }, { status: 500 })
+  }
+  const scheduled: FeedScheduleRow[] = []
+  for (const r of rows) {
+    const e = r.projects ? ents.get(r.projects.account_id) : undefined
+    if (!e || shopsLocked(e)) continue
+    const { projects: _p, ...feed } = r
+    void _p
+    scheduled.push({ ...feed, auto_sync_frequency: capFrequency(e, feed.auto_sync_frequency) })
+  }
+
   // Longest-waiting first, so a backlog can't starve the same feed every tick.
-  const due = ((data ?? []) as FeedScheduleRow[])
+  const due = scheduled
     .filter(
       (f) =>
         isAutoSyncFrequency(f.auto_sync_frequency) &&

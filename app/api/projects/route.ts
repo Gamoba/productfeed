@@ -3,6 +3,7 @@ import { createSupabaseServerClient, getSessionUser } from '@/lib/supabase-serve
 import { adminDb, type ProjectRow } from '@/lib/feeds'
 import { errorResponse } from '@/lib/errors'
 import { getAccessibleAccountIds, resolveAccountForNewProject } from '@/lib/accounts'
+import { assertCanCreateShop } from '@/lib/ops/limits'
 
 function hostOf(url: string | null): string | null {
   if (!url) return null
@@ -117,6 +118,11 @@ export async function POST(req: Request) {
     return errorResponse(err, 'POST /api/projects account')
   }
   if (!accountId) return NextResponse.json({ error: 'Account not found' }, { status: 404 })
+  try {
+    await assertCanCreateShop(db, accountId)
+  } catch (err) {
+    return errorResponse(err, 'POST /api/projects limit')
+  }
 
   const { data, error } = await db
     .from('projects')

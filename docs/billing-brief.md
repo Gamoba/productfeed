@@ -290,7 +290,27 @@ The webhook on preview deployments: is Vercel's deployment protection on for pre
 
 | # | Decision | Date |
 |---|---|---|
-| | | |
+| A1 | Danish branch: port billing to `feed-tool-gennemgang` afterwards, as with earlier work. | 2026-11-26 |
+| A2 | Existing accounts (the production customer and Gamoba's own shops) stay free, with no subscription needed. | 2026-11-26 |
+| A3 | Open signup: anyone can create an account and subscribe. This reopens signup that was closed for security, so the signup path needs a security pass (abuse, email verification, rate limits). | 2026-11-26 |
+| A4 | No free trial. | 2026-11-26 |
+| — | Account model changed: MCC (agency) and User (paid) accounts, with access grants and referral kickbacks. See `docs/billing-data-model.md` for the model and its decisions. That covers B1–B3 and the old seat/role questions. | 2026-11-26 |
+| C1 | A SKU is a variant. | 2026-11-26 |
+| C2 | Only variants included in a feed count. | 2026-11-26 |
+| C3 | Counted per feed, with no de-duplication across feeds, and summed over the account. | 2026-11-26 |
+| C4 | Billed on the highest daily total in the billing period. | 2026-11-26 |
+| C5 | Feed-URL shops follow the same rule. | 2026-11-26 |
+| C1–C5 | **Under review:** Gamoba is reconsidering the SKU counting rules above. | 2026-11-26 |
+| — | Custom plans per account (made by platform admins), access by the User's code, and the kickback payout schedule: see `docs/billing-data-model.md`, decisions 23–26. | 2026-11-26 |
+| — | Email: custom SMTP in Supabase. Signup creates logins server-side through the admin API (invite email), so Supabase's public signup stays off. | 2026-11-26 |
+| — | First version: the User picks Standard, Advanced or Pro, monthly or yearly, and pays the base price. Extra SKUs come when the counting rule is settled. | 2026-11-26 |
+| F2 | VAT: Stripe Tax, with VAT ID collection at Checkout. | 2026-11-26 |
+| F5 | Stripe's hosted Customer portal for card, invoices, plan changes and cancelling (chosen while building; revisit if needed). | 2026-11-26 |
+| B3 | Owners and admins manage billing; members see it (chosen while building, as for member management; revisit if needed). | 2026-11-26 |
+| E1 | At a plan limit (feeds, shops, users): the action is refused with the reason and a "See plans" link, in the app and through Claude. | 2026-11-26 |
+| E2 | Syncs: Standard daily; Advanced also every 12 h; Pro and Enterprise also every 6 h; hourly only for free accounts or custom plans with 24+ a day. Only scheduled syncs count; "Sync now" doesn't. A schedule kept from before a downgrade runs at the plan's most frequent. | 2026-11-26 |
+| E6 / gate | No plan yet: only Billing. Plan ended or unpaid: only Billing, showing the previous plan, Manage billing and Reactivate; feeds stop being served (HTTP 402) and syncs stop. Payment failed while Stripe still retries (past_due): full access with a notice (grace, chosen while building). Order syncs keep running for every account, since a gap in the 60-day order window can't be filled later. | 2026-11-26 |
+| D4 | Annual plans: the base is paid yearly up front, and extra SKUs are billed monthly on each month's peak, at the annual rate (× 10 / 12). | 2026-11-26 |
 
 ## 6. Suggested build order (after the decisions)
 

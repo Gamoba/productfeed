@@ -5,6 +5,7 @@ import { adminDb, getOwnedFeed } from '@/lib/feeds'
 import { enforceRateLimit, RateLimitError } from '@/lib/rateLimit'
 import { errorResponse } from '@/lib/errors'
 import { regenerateFeedCache } from '@/lib/feedCache'
+import { feedServingBlocked } from '@/lib/entitlements'
 
 // Generating a ~28k-item feed takes ~45 s on a cache miss; give it the
 // Hobby-plan ceiling (as cron/sync does) rather than the platform default.
@@ -31,6 +32,10 @@ export async function GET(
   const { data: feedRow } = await db.from('feeds').select('id').eq('id', feedId).maybeSingle()
   if (!feedRow) {
     return xmlResponse('<?xml version="1.0" encoding="UTF-8"?><error>Feed not found</error>', 404)
+  }
+  // A feed whose account has no usable plan isn't served (lib/entitlements).
+  if (await feedServingBlocked(db, feedId)) {
+    return xmlResponse('<?xml version="1.0" encoding="UTF-8"?><error>This feed is paused: the account has no active plan</error>', 402)
   }
 
   const { data: cached } = await db

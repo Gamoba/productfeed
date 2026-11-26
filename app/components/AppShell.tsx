@@ -9,7 +9,7 @@ import { useShell } from './shell/useShell'
 import './shell/shell.css'
 
 // Pages that render without the shell.
-const NO_SHELL = ['/login', '/auth/invite', '/oauth/consent']
+const NO_SHELL = ['/login', '/signup', '/auth/invite', '/oauth/consent']
 
 export function AppShell({ children }: { children: React.ReactNode }) {
   const pathname = usePathname()
@@ -25,6 +25,12 @@ export function AppShell({ children }: { children: React.ReactNode }) {
 
 function Shell({ pathname, children }: { pathname: string; children: React.ReactNode }) {
   const shell = useShell(pathname)
+  // No usable account (no plan, or it ended): Billing is the only page.
+  const blocked = shell.data?.blocked === true && pathname !== '/billing'
+  useEffect(() => {
+    if (blocked) window.location.replace('/billing')
+  }, [blocked])
+  if (blocked) return null
   return (
     <div className="shell">
       <Sidebar shell={shell} pathname={pathname} />

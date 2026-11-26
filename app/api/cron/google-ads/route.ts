@@ -1,5 +1,6 @@
 import { isCronAuthorized } from '@/lib/cronAuth'
 import { adminDb } from '@/lib/feeds'
+import { lockedAccountIds } from '@/lib/entitlements'
 import { syncGoogleAdsMetrics } from '@/lib/googleAdsSync'
 import { clientMessage } from '@/lib/errors'
 import { logActivity } from '@/lib/activity'
@@ -51,13 +52,36 @@ export async function GET(req: Request) {
     return Response.json({ error: 'Internal Server Error' }, { status: 500 })
   }
 
-  const due = ((data ?? []) as ScheduleRow[])
+  const dueAll = ((data ?? []) as ScheduleRow[])
     .filter(
       (f) =>
         isAutoSyncFrequency(f.auto_sync_frequency) &&
         isAutoSyncDue(now, f.auto_sync_frequency, f.auto_sync_time, f.last_auto_sync_at)
     )
     .sort((a, b) => (a.last_auto_sync_at ?? '').localeCompare(b.last_auto_sync_at ?? ''))
+
+  // Feeds of an account without a usable plan aren't fetched (lib/entitlements).
+  let due = dueAll
+  if (dueAll.length) {
+    try {
+      const { data: owners, error: oErr } = await db
+        .from('feeds')
+        .select('id, projects(account_id)')
+        .in('id', dueAll.map((d) => d.feed_id))
+      if (oErr) throw oErr
+      const accountOf = new Map(
+        ((owners ?? []) as unknown as { id: string; projects: { account_id: string } | null }[]).map((o) => [o.id, o.projects?.account_id])
+      )
+      const locked = await lockedAccountIds(db, [...accountOf.values()].filter((x): x is string => !!x))
+      due = dueAll.filter((d) => {
+        const acc = accountOf.get(d.feed_id)
+        return !!acc && !locked.has(acc)
+      })
+    } catch (err) {
+      console.error('[cron/google-ads] could not check plans:', err)
+      return Response.json({ error: 'Internal Server Error' }, { status: 500 })
+    }
+  }
 
   const results: { feedId: string; status: 'ok' | 'error' | 'skipped' }[] = []
 

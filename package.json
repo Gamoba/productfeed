@@ -9,6 +9,7 @@
     "start": "next start",
     "lint": "eslint",
     "migrate": "tsx scripts/migrate.ts",
+    "stripe:setup": "tsx scripts/stripe-setup.ts",
     "shopify:scopes": "tsx scripts/shopify-scopes.ts",
     "check:shopify-readonly": "tsx scripts/check-shopify-readonly.ts"
   },
@@ -22,6 +23,7 @@
     "postgres": "^3.4.9",
     "react": "19.2.4",
     "react-dom": "19.2.4",
+    "stripe": "^23.2.0",
     "zod": "^4.6.7"
   },
   "devDependencies": {

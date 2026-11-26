@@ -1,6 +1,8 @@
 import { redirect, notFound } from 'next/navigation'
 import { createSupabaseServerClient, getSessionUser } from '@/lib/supabase-server'
 import { adminDb, getOwnedFeed } from '@/lib/feeds'
+import { frequencyAllowed, getEntitlements } from '@/lib/entitlements'
+import { AUTO_SYNC_FREQUENCIES } from '@/lib/syncSchedule'
 import { getConnection, getFeedSettings } from '@/lib/feedGoogleAds'
 import { getAvailableActions } from '@/lib/googleAdsAnalytics'
 import {
@@ -58,6 +60,10 @@ export default async function FeedSettingsPage({
   // offers, so a choice made here means the same thing there.
   const actions = ads?.customer_id ? await getAvailableActions(db, feedId, 90).catch(() => []) : []
 
+  // Which product-sync schedules the plan includes (lib/entitlements.ts).
+  const ent = await getEntitlements(db, feed.account_id)
+  const allowedFrequencies = AUTO_SYNC_FREQUENCIES.filter((f) => !ent || frequencyAllowed(ent, f))
+
   // getOwnedFeed selects *, so the schedule columns are already on the row.
   const row = feed as typeof feed & {
     auto_sync_frequency?: string
@@ -88,6 +94,7 @@ export default async function FeedSettingsPage({
   return (
     <SettingsClient
       feedId={feedId}
+      allowedFrequencies={allowedFrequencies}
       projectId={feed.project_id}
       source={{
         type: project?.source_type === 'feed_url' ? 'feed_url' : 'shopify',

@@ -1,3 +1,4 @@
+import { createHash } from 'crypto'
 import { adminDb } from '@/lib/feeds'
 import { AppError } from '@/lib/errors'
 
@@ -14,6 +15,8 @@ export const RATE_LIMITS = {
   shopify_scope_check: { limit: 60, windowMs: HOUR }, // read granted scopes (project page)
   google_ads_sync:   { limit: 12, windowMs: HOUR },
   account_invite:    { limit: 30, windowMs: HOUR }, // invites + new invite links (Agency users)
+  signup:            { limit: 5, windowMs: HOUR },  // per IP (see ipRateKey), not per user
+  billing_session:   { limit: 20, windowMs: HOUR }, // Stripe Checkout / portal sessions
   // Daily volume budget (per day): max products sent to the AI optimiser. The
   // catalogue is ~2263 products, so 20000/day allows running the whole catalogue
   // several times while iterating on instructions, while still capping a runaway.
@@ -64,4 +67,12 @@ export async function enforceRateLimit(
   if (row && row.allowed === false) {
     throw new RateLimitError(kind)
   }
+}
+
+// A stable uuid-shaped key for an IP address, so limits on signed-out actions
+// (signup) can use the same per-"user" counter table. The IP itself is not
+// stored, only a hash of it.
+export function ipRateKey(ip: string): string {
+  const h = createHash('sha256').update(`ip:${ip}`).digest('hex')
+  return `${h.slice(0, 8)}-${h.slice(8, 12)}-${h.slice(12, 16)}-${h.slice(16, 20)}-${h.slice(20, 32)}`
 }

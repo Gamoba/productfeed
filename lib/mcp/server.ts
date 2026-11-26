@@ -18,7 +18,7 @@ import { rulesReadMasters } from '@/lib/feedFilters'
 import { masterFieldUsage } from '@/lib/ops/masterFields'
 import { adminDb, getOwnedFeed, getOwnedProject, type OwnedFeed } from '@/lib/feeds'
 import { getAgencyOverview } from '@/lib/agencyOverview'
-import { getMemberships } from '@/lib/accounts'
+import { getUsableMemberships } from '@/lib/accounts'
 import { channelOf } from '@/lib/channels'
 import { countryName } from '@/lib/formatDa'
 import { feedView, countFilteredProducts } from '@/lib/feedGenerator'
@@ -378,7 +378,7 @@ export function createFeedFlowServer(caller: McpCaller): McpServer {
       let projectIds: string[]
       if (shop_id) projectIds = [(await shop(shop_id)).id]
       else {
-        const accountIds = (await getMemberships(db, userId)).map((m) => m.account_id)
+        const accountIds = (await getUsableMemberships(db, userId)).map((m) => m.account_id)
         const { data } = accountIds.length ? await db.from('projects').select('id').in('account_id', accountIds) : { data: [] }
         projectIds = ((data ?? []) as { id: string }[]).map((r) => r.id)
       }

@@ -1,5 +1,15 @@
 import { createClient, type SupabaseClient } from '@supabase/supabase-js'
 import { getAccountRole } from '@/lib/accounts'
+import { lockedAccountIds } from '@/lib/entitlements'
+
+// A shop's account must be in good standing for its shops and feeds to be
+// reached at all (lib/entitlements.ts): an account with no plan, or whose plan
+// ended, is locked out of everything except Billing. Free accounts skip the
+// subscription lookup.
+async function accountUsable(db: SupabaseClient, accountId: string, billingExempt?: boolean): Promise<boolean> {
+  if (billingExempt === true) return true
+  return !(await lockedAccountIds(db, [accountId])).has(accountId)
+}
 
 export function adminDb(): SupabaseClient {
   return createClient(
@@ -68,14 +78,17 @@ export async function getOwnedFeed(
   // away that each sequential query costs noticeably on every page.
   const joined = await db
     .from('feeds')
-    .select('*, projects!inner(account_id, accounts!inner(account_members!inner(role)))')
+    .select('*, projects!inner(account_id, accounts!inner(billing_exempt, account_members!inner(role)))')
     .eq('id', feedId)
     .eq('projects.accounts.account_members.user_id', userId)
     .maybeSingle()
   if (!joined.error) {
     if (!joined.data) return null
-    const { projects, ...row } = joined.data as FeedRow & { projects: { account_id: string } }
+    const { projects, ...row } = joined.data as FeedRow & {
+      projects: { account_id: string; accounts: { billing_exempt: boolean } }
+    }
     if (!row.project_id) return null
+    if (!(await accountUsable(db, projects.account_id, projects.accounts?.billing_exempt))) return null
     return { ...(row as FeedRow), account_id: projects.account_id }
   }
 
@@ -93,6 +106,7 @@ export async function getOwnedFeed(
   if (!project) return null
 
   if (!(await getAccountRole(db, userId, project.account_id))) return null
+  if (!(await accountUsable(db, project.account_id))) return null
   return { ...feed, account_id: project.account_id }
 }
 
@@ -106,14 +120,14 @@ export async function getOwnedProject(
   // One round trip, as in getOwnedFeed.
   const joined = await db
     .from('projects')
-    .select(`${PROJECT_PUBLIC_COLUMNS}, accounts!inner(account_members!inner(role))`)
+    .select(`${PROJECT_PUBLIC_COLUMNS}, accounts!inner(billing_exempt, account_members!inner(role))`)
     .eq('id', projectId)
     .eq('accounts.account_members.user_id', userId)
     .maybeSingle()
   if (!joined.error) {
     if (!joined.data) return null
-    const { accounts: _membership, ...row } = joined.data as unknown as ProjectRow & { accounts: unknown }
-    void _membership
+    const { accounts, ...row } = joined.data as unknown as ProjectRow & { accounts: { billing_exempt: boolean } }
+    if (!(await accountUsable(db, row.account_id, accounts?.billing_exempt))) return null
     return row as ProjectRow
   }
 
@@ -125,6 +139,7 @@ export async function getOwnedProject(
   const project = (data as ProjectRow | null) ?? null
   if (!project) return null
   if (!(await getAccountRole(db, userId, project.account_id))) return null
+  if (!(await accountUsable(db, project.account_id))) return null
   return project
 }
 

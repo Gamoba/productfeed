@@ -150,6 +150,7 @@ export function accountNav(monitoring?: number): NavEntry[] {
     { kind: 'link', label: 'Agency dashboard', href: '/', icon: 'overview', exact: true },
     { kind: 'link', label: 'Monitoring', href: '/agency/monitoring', icon: 'pulse', badge: monitoring || undefined },
     { kind: 'link', label: 'Agency users', href: '/agency/users', icon: 'users' },
+    { kind: 'link', label: 'Billing', href: '/billing', icon: 'card' },
     { kind: 'link', label: 'Connected companies', href: '/agency/companies', icon: 'building' },
     { kind: 'link', label: 'Partner levels', href: '/agency/partner-levels', icon: 'award' },
   ]

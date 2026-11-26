@@ -5,9 +5,8 @@ import { signIn, type AuthState } from './actions'
 
 const initialState: AuthState = { error: null, mode: 'login' }
 
-// Login only. Self-service signup is closed (security hardening M1) — new
-// accounts are created manually in the Supabase dashboard, so there is no
-// "create account" path here.
+// Login. New User accounts sign up on /signup (lib/signup.ts), which creates
+// the login server-side; Supabase's own public signup stays switched off.
 //
 // `next` is where to go after signing in (e.g. back to the consent page when
 // Claude asks for access). signIn only follows it when it is a path on this site.
@@ -78,6 +77,12 @@ export function LoginForm({ next }: { next: string | null }) {
               {isPending ? 'Please wait…' : 'Sign in'}
             </button>
           </form>
+          <p className="text-sm text-gray-500 mt-6">
+            New to FeedFlow?{' '}
+            <a href="/signup" className="text-indigo-600 hover:underline">
+              Create an account
+            </a>
+          </p>
         </div>
       </div>
     </main>

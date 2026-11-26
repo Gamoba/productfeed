@@ -53,6 +53,8 @@ type Action = { name: string; value: number; inWindow: boolean }
 
 type Props = {
   feedId: string
+  /** Product-sync schedules the account's plan includes; others show as "upgrade". */
+  allowedFrequencies: readonly AutoSyncFrequency[]
   projectId: string | null
   source: { type: 'shopify' | 'feed_url'; address: string | null; lastSyncedAt: string | null }
   initialShop: ShopSettings | null
@@ -70,6 +72,7 @@ const SEP = '\u0001'
 
 export function SettingsClient({
   feedId,
+  allowedFrequencies,
   projectId,
   source,
   initialShop,
@@ -463,6 +466,7 @@ export function SettingsClient({
               onFreq={setFeedFreq}
               onTime={setFeedTime}
               last={feedSchedule}
+              allowed={allowedFrequencies}
             />
             <ScheduleRow
               label="Fetch performance"
@@ -621,9 +625,12 @@ function ScheduleRow({
   onTime,
   last,
   disabled,
+  allowed,
 }: {
   label: string
   hint: string
+  /** When given, frequencies outside it are greyed out as plan upgrades. */
+  allowed?: readonly AutoSyncFrequency[]
   freq: AutoSyncFrequency
   time: string
   onFreq: (f: AutoSyncFrequency) => void
@@ -659,11 +666,18 @@ function ScheduleRow({
           onChange={(e) => onFreq(e.target.value as AutoSyncFrequency)}
           aria-label={`${label}: how often`}
         >
-          {AUTO_SYNC_FREQUENCIES.map((f) => (
-            <option key={f} value={f}>
-              {AUTO_SYNC_LABELS[f]}
-            </option>
-          ))}
+          {AUTO_SYNC_FREQUENCIES.map((f) => {
+            // The current value stays selectable even if the plan no longer
+            // includes it (set before a downgrade); the cron runs it at the
+            // plan's most frequent.
+            const off = !!allowed && !allowed.includes(f) && f !== freq
+            return (
+              <option key={f} value={f} disabled={off}>
+                {AUTO_SYNC_LABELS[f]}
+                {off ? ' (upgrade)' : ''}
+              </option>
+            )
+          })}
         </select>
         {freq !== 'off' && (
           <input

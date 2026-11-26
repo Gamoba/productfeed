@@ -7,7 +7,7 @@
 
 import type { SupabaseClient } from '@supabase/supabase-js'
 import { dbError } from '@/lib/errors'
-import { getMemberships } from '@/lib/accounts'
+import { getUsableMemberships } from '@/lib/accounts'
 import { staleSyncDays } from '@/lib/syncSchedule'
 import type { ValidationIssue } from '@/lib/feedValidator'
 
@@ -42,7 +42,7 @@ const hostOf = (url: string | null): string | null => {
 }
 
 export async function getAgencyOverview(db: SupabaseClient, userId: string): Promise<AgencyOverview> {
-  const memberships = await getMemberships(db, userId)
+  const memberships = await getUsableMemberships(db, userId)
   const accountIds = memberships.map((m) => m.account_id)
   if (!accountIds.length) return { multipleAccounts: false, shops: [] }
 

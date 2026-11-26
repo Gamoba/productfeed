@@ -3,6 +3,7 @@ import { createSupabaseServerClient, getSessionUser } from '@/lib/supabase-serve
 import { adminDb, getOwnedProject } from '@/lib/feeds'
 import { getAccessibleProjectIds } from '@/lib/accounts'
 import { errorResponse } from '@/lib/errors'
+import { assertCanCreateFeed } from '@/lib/ops/limits'
 import { loadFeedList } from '@/lib/feedList'
 import { logActivity } from '@/lib/activity'
 import { channelOf } from '@/lib/channels'
@@ -75,6 +76,11 @@ export async function POST(req: Request) {
   const projectId = owned.id
 
   const db = adminDb()
+  try {
+    await assertCanCreateFeed(db, owned.account_id)
+  } catch (err) {
+    return errorResponse(err, 'POST /api/feeds limit')
+  }
   const { data, error } = await db
     .from('feeds')
     .insert({
