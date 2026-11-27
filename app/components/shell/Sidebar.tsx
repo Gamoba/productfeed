@@ -34,6 +34,7 @@ export function navFor(shell: Shell): NavEntry[] {
     hasUserAccount: d?.hasUserAccount ?? true,
     pendingAccess: d?.pendingAccess,
     isPlatformAdmin: d?.isPlatformAdmin,
+    customer: shell.account?.type === 'user',
   })
 }
 

@@ -19,5 +19,5 @@ export default async function AgencyUsersPage() {
   if (!current) redirect('/')
 
   const data = await listAccountUsers(db, user.id, current.id)
-  return <UsersClient initial={data} />
+  return <UsersClient initial={data} customer={current.type === 'user'} />
 }

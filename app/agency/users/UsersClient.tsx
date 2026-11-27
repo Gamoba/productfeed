@@ -16,7 +16,7 @@ const ROLE_HINT: Record<AccountRole, string> = {
   member: 'Work in shops and feeds',
 }
 
-export function UsersClient({ initial }: { initial: AccountUsers }) {
+export function UsersClient({ initial, customer = false }: { initial: AccountUsers; customer?: boolean }) {
   const [data, setData] = useState(initial)
   const [inviting, setInviting] = useState(false)
   const [busy, setBusy] = useState<string | null>(null)
@@ -83,9 +83,11 @@ export function UsersClient({ initial }: { initial: AccountUsers }) {
     <div className="au">
       <header className="au-head">
         <div>
-          <h1>Agency users</h1>
+          <h1>{customer ? 'Users' : 'Agency users'}</h1>
           <p className="au-lede">
-            Who at the agency has access to the customers. Everyone here sees the same shops and feeds in {account.name}.
+            {customer
+              ? `Who at ${account.name} can work in its shops and feeds. Everyone here sees the same shops.`
+              : `Who at the agency has access to the customers. Everyone here sees the same shops and feeds in ${account.name}.`}
           </p>
         </div>
         {manage && (

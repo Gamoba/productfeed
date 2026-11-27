@@ -19,6 +19,9 @@ export async function GET(
   { params }: { params: Promise<{ userId: string }> }
 ) {
   const { userId } = await params
+  // Counted so the route can be retired once nothing calls it: search the
+  // Vercel logs for "[legacy-feed-url]" (docs/billing-status.md).
+  console.warn('[legacy-feed-url] hit for user', userId.slice(0, 8))
 
   const feed = await getFirstFeed(userId)
   if (!feed) {

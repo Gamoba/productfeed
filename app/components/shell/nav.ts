@@ -155,6 +155,8 @@ export type AccountNavOptions = {
   pendingAccess?: number
   /** Gamoba staff: Admin. */
   isPlatformAdmin?: boolean
+  /** The account the user is working in is a customer: its own words ("Dashboard", "Users"). */
+  customer?: boolean
 }
 
 // Without options every entry is listed (used to look up page labels).
@@ -162,9 +164,9 @@ export function accountNav(opts?: AccountNavOptions): NavEntry[] {
   const all = !opts
   const o = opts ?? {}
   const entries: (NavLink | false)[] = [
-    { kind: 'link', label: 'Agency dashboard', href: '/', icon: 'overview', exact: true },
+    { kind: 'link', label: o.customer ? 'Dashboard' : 'Agency dashboard', href: '/', icon: 'overview', exact: true },
     { kind: 'link', label: 'Monitoring', href: '/agency/monitoring', icon: 'pulse', badge: o.monitoring || undefined },
-    { kind: 'link', label: 'Agency users', href: '/agency/users', icon: 'users' },
+    { kind: 'link', label: o.customer ? 'Users' : 'Agency users', href: '/agency/users', icon: 'users' },
     { kind: 'link', label: 'Billing', href: '/billing', icon: 'card' },
     (all || !!o.hasUserAccount) && {
       kind: 'link', label: 'Agency access', href: '/agency/access', icon: 'key', badge: o.pendingAccess || undefined,

@@ -31,6 +31,8 @@
 .ag-table tbody tr:last-child td { border-bottom: 0; }
 .ag-table .r { text-align: right; }
 .ag-row { cursor: pointer; transition: background-color 120ms ease; }
+.ag-row-off .ag-av { opacity: .45; }
+.ag-row-off b { color: var(--muted); font-weight: 500; }
 .ag-row:hover, .ag-row:focus-visible { background: var(--card-2); }
 .ag-row:focus-visible { outline: 2px solid var(--accent-ink); outline-offset: -2px; }
 

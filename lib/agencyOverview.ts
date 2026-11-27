@@ -33,6 +33,12 @@ export type AgencyShop = {
    * opened — the row stands for these feeds, and the figures count only them.
    */
   grantedFeedIds?: string[]
+  /**
+   * A client of the agency without an active plan (none yet, or it ended): its
+   * shops can't be opened or served (lib/entitlements.ts), but the agency
+   * still sees who it is.
+   */
+  planEnded?: boolean
 }
 
 export type AgencyOverview = {
@@ -141,12 +147,52 @@ export async function getAgencyOverview(db: SupabaseClient, userId: string, scop
     }
   })
 
-  const granted = await grantedFeedShops(db, userId, new Set(projectRows.map((p) => p.id)), scope)
-  const all = [...shops, ...granted]
+  const [granted, ended] = await Promise.all([
+    grantedFeedShops(db, userId, new Set(projectRows.map((p) => p.id)), scope),
+    scope ? planEndedShops(db, userId, scope) : Promise.resolve([]),
+  ])
+  const all = [...shops, ...granted, ...ended]
   return {
     multipleAccounts: new Set(all.map((s) => s.accountName)).size > 1 || accountIds.length > 1,
     shops: all,
   }
+}
+
+// An agency's clients without an active plan (getUsableMemberships leaves them
+// out): listed so they don't simply vanish from the dashboard, without figures.
+async function planEndedShops(db: SupabaseClient, userId: string, mccId: string): Promise<AgencyShop[]> {
+  const { accountIds } = await getMccReach(db, userId, mccId)
+  if (!accountIds.length) return []
+  const locked = [...(await lockedAccountIds(db, accountIds))]
+  if (!locked.length) return []
+  const [{ data: projects, error: pErr }, { data: accounts }] = await Promise.all([
+    db
+      .from('projects')
+      .select('id, account_id, name, description, shop_url, source_type, feed_url, primary_domain')
+      .in('account_id', locked)
+      .order('created_at', { ascending: true }),
+    db.from('accounts').select('id, name').in('id', locked),
+  ])
+  if (pErr) dbError('planEndedShops', pErr)
+  const accountName = new Map(((accounts ?? []) as { id: string; name: string }[]).map((a) => [a.id, a.name]))
+  type Row = { id: string; account_id: string; name: string; description: string | null; shop_url: string | null; source_type: string | null; feed_url: string | null; primary_domain: string | null }
+  return ((projects ?? []) as Row[]).map((p) => {
+    const feedUrl = p.source_type === 'feed_url'
+    return {
+      id: p.id,
+      name: p.name,
+      description: p.description,
+      accountName: accountName.get(p.account_id) ?? '',
+      address: feedUrl ? hostOf(p.primary_domain ?? p.feed_url) : p.shop_url,
+      source: feedUrl ? 'feed_url' : 'shopify',
+      connection: null,
+      countries: [],
+      feeds: 0,
+      liveFeeds: 0,
+      errors: 0,
+      planEnded: true,
+    }
+  })
 }
 
 // Shops the user reaches through a grant on one feed, not on the account

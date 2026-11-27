@@ -41,9 +41,9 @@ export async function GET(req: Request) {
 
   const feedIds = (feeds ?? []).map((f) => f.id)
 
-  const results = await Promise.allSettled(
-    feedIds.map(async (id) => [id, await countAndStore(id)] as const)
-  )
+  // A few at a time: each count pages through the feed's products, and a
+  // shop with many feeds used to start them all at once against the database.
+  const results = await settleInBatches(feedIds, COUNT_CONCURRENCY, async (id) => [id, await countAndStore(id)] as const)
 
   const counts = results
     .map((r) => {
@@ -61,4 +61,24 @@ export async function GET(req: Request) {
     .filter((x): x is { feedId: string; included: number; excluded: number } => x !== null)
 
   return NextResponse.json({ counts })
+}
+
+const COUNT_CONCURRENCY = 3
+
+// Promise.allSettled with at most `limit` running at once, results in order.
+async function settleInBatches<T, R>(items: T[], limit: number, run: (item: T) => Promise<R>): Promise<PromiseSettledResult<R>[]> {
+  const out: PromiseSettledResult<R>[] = new Array(items.length)
+  let next = 0
+  async function worker() {
+    while (next < items.length) {
+      const i = next++
+      try {
+        out[i] = { status: 'fulfilled', value: await run(items[i]) }
+      } catch (reason) {
+        out[i] = { status: 'rejected', reason }
+      }
+    }
+  }
+  await Promise.all(Array.from({ length: Math.min(limit, items.length) }, worker))
+  return out
 }

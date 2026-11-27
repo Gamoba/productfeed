@@ -103,9 +103,9 @@ read; it is a preference, not access.
   menu; Test Agency shows Gambora Shop and the agency menu; Billing and Users
   follow; opening BWH from Test Agency switched to Gamoba, opening Gambora
   Shop from Gamoba switched to Test Agency.
-- Worth knowing: the menu still says "Agency dashboard" and "Agency users"
-  for a customer account (names from before the switcher). The Danish branch
-  has none of the billing work yet, so the switcher isn't there either.
+- A customer account has its own words: "Dashboard", "Users", "Shops",
+  "Create shop" (an agency keeps "Agency dashboard", "Customers"). The Danish
+  branch has none of the billing work yet, so the switcher isn't there either.
 
 ## Extra-SKU billing: built and tested end to end (2026-11-27)
 
@@ -207,13 +207,17 @@ and both are fixed:
   own instead. It now says whose plan it is and whose page you're looking at,
   naming the client only when you reach it through a grant.
 
-Left as notes, not fixed:
+Followed up (27 Nov):
 
-- A client whose plan lapses disappears from its agency's dashboard with no
-  explanation (`getUsableMemberships` filters locked accounts).
+- A client without an active plan (none yet, or it ended) now stays on its
+  agency's dashboard as "No active plan", greyed, with nothing to open
+  ("Opens when <client> has a plan"). Checked by taking Gambora's free flag
+  off for a moment.
 - `/api/feed/[userId]` still serves the user's oldest feed publicly — the
-  pre-multi-feed compatibility route. Retire it once the Merchant Center URLs
-  are on `/api/feed/generate/<feedId>`.
+  pre-multi-feed compatibility route. Whether Merchant Center still calls it
+  can't be told from the code, so it now logs every call: after go-live,
+  search the Vercel logs for `[legacy-feed-url]`; when nothing shows for a
+  few weeks, delete the route and `getFirstFeed`.
 
 ## Next
 
@@ -249,8 +253,9 @@ The database stopped answering for part of the day with its CPU pinned near
 - Still open: query execution was only about an hour over 58 hours, which does
   not explain a pegged CPU on its own. If it stays high, look at the compute
   size — PostgREST, Auth, Storage and the log agent share that instance — and
-  at `/api/feeds/counts`, which fans out an unbounded parallel recount of
-  every feed on each dashboard load (751 ms per count).
+  at `/api/feeds/counts` (751 ms per count). Its only caller is the shop
+  page, one shop at a time, and since 27 Nov it counts three feeds at a time
+  instead of all at once.
 
 ## A new machine needs
 

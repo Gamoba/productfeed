@@ -75,7 +75,7 @@ function Crumbs({ shell, pathname }: { shell: Shell; pathname: string }) {
     <nav className="shell-crumbs" aria-label="Breadcrumbs">
       {account && <span>{account.name}</span>}
       {account && <Sep />}
-      <b>{accountPageLabel(pathname)}</b>
+      <b>{accountPageLabel(pathname, account?.type === 'user')}</b>
     </nav>
   )
 }
@@ -89,9 +89,11 @@ function shopPageLabel(pathname: string, projectId: string): string {
 }
 
 // The account-level page's menu label ("Agency dashboard", "Agency users").
-function accountPageLabel(pathname: string): string {
-  const link = accountNav().find((e): e is NavLink => e.kind === 'link' && isActive(pathname, e))
-  return link?.label ?? 'Agency dashboard'
+function accountPageLabel(pathname: string, customer: boolean): string {
+  const link = accountNav({ customer, isMcc: true, hasUserAccount: true, isPlatformAdmin: true }).find(
+    (e): e is NavLink => e.kind === 'link' && isActive(pathname, e)
+  )
+  return link?.label ?? (customer ? 'Dashboard' : 'Agency dashboard')
 }
 
 function Sep() {

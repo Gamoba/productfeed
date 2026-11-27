@@ -33,5 +33,5 @@ export default async function HomePage() {
   }
 
   const overview = current ? await getAgencyOverview(adminDb(), user.id, current.id) : { multipleAccounts: false, shops: [] }
-  return <AgencyDashboardClient initial={overview} />
+  return <AgencyDashboardClient initial={overview} account={current ? { name: current.name, type: current.type } : null} />
 }

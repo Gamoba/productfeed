@@ -96,7 +96,14 @@ function SearchDialog({ shell, onClose }: { shell: Shell; onClose: () => void })
     const hits: Hit[] = []
     const level = shell.level
     const pages =
-      level.kind === 'feed' ? flat(feedNav(level.feedId)) : level.kind === 'shop' ? flat(shopNav(level.projectId)) : flat(accountNav())
+      level.kind === 'feed' ? flat(feedNav(level.feedId)) : level.kind === 'shop' ? flat(shopNav(level.projectId)) : flat(
+              accountNav({
+                customer: shell.account?.type === 'user',
+                isMcc: shell.data?.isMcc,
+                hasUserAccount: shell.data?.hasUserAccount ?? true,
+                isPlatformAdmin: shell.data?.isPlatformAdmin,
+              })
+            )
     for (const p of pages) hits.push({ key: `p:${p.href}`, group: TEXT.groupPages, label: p.label, href: p.href, icon: p.icon as IconName })
     const shopName = new Map((data?.projects ?? []).map((p) => [p.id, p.name]))
     for (const f of data?.feeds ?? []) {
@@ -113,7 +120,7 @@ function SearchDialog({ shell, onClose }: { shell: Shell; onClose: () => void })
       hits.push({ key: `s:${p.id}`, group: TEXT.groupShops, label: p.name, sub: p.shopUrl ?? undefined, href: `/project/${p.id}`, icon: 'building' })
     }
     return hits
-  }, [shell.data, shell.level])
+  }, [shell.data, shell.level, shell.account?.type])
 
   const results = useMemo(() => {
     const words = q.toLowerCase().split(/\s+/).filter(Boolean)

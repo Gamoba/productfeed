@@ -2,7 +2,7 @@
 
 import Link from 'next/link'
 import { useRouter } from 'next/navigation'
-import { useState } from 'react'
+import { createContext, useContext, useState } from 'react'
 import { createPortal } from 'react-dom'
 import type { AgencyOverview, AgencyShop } from '@/lib/agencyOverview'
 import { Icon } from '@/app/components/shell/icons'
@@ -13,7 +13,36 @@ import { refreshShell } from '@/app/components/shell/useShell'
 import { LimitNote, readLimitError } from '@/app/components/LimitNote'
 import './agency.css'
 
-export function AgencyDashboardClient({ initial }: { initial: AgencyOverview }) {
+// What a row is called: an agency's rows are its customers, a customer
+// account's rows are its own shops (lib/currentAccount.ts).
+const NOUNS = {
+  agency: { one: 'customer', many: 'customers', One: 'Customer', Many: 'Customers' },
+  customer: { one: 'shop', many: 'shops', One: 'Shop', Many: 'Shops' },
+} as const
+const Noun = createContext<(typeof NOUNS)[keyof typeof NOUNS]>(NOUNS.agency)
+
+export function AgencyDashboardClient({
+  initial,
+  account,
+}: {
+  initial: AgencyOverview
+  /** The account the user is working in; a customer account gets its own words. */
+  account: { name: string; type: 'mcc' | 'user' } | null
+}) {
+  const customer = account?.type === 'user'
+  return (
+    <Noun.Provider value={customer ? NOUNS.customer : NOUNS.agency}>
+      <Dashboard initial={initial} title={customer ? 'Dashboard' : 'Agency dashboard'} lede={
+        customer
+          ? `All of ${account?.name ?? 'the account'}’s shops. Click a shop to open it and its feeds.`
+          : 'All the customers the agency has access to. Click a customer to open the shop and its feeds.'
+      } />
+    </Noun.Provider>
+  )
+}
+
+function Dashboard({ initial, title, lede }: { initial: AgencyOverview; title: string; lede: string }) {
+  const n = useContext(Noun)
   const router = useRouter()
   const [shops, setShops] = useState(initial.shops)
   const [creating, setCreating] = useState(false)
@@ -27,18 +56,18 @@ export function AgencyDashboardClient({ initial }: { initial: AgencyOverview }) 
     <div className="ag">
       <header className="ag-head">
         <div>
-          <h1>Agency dashboard</h1>
-          <p className="ag-lede">All the customers the agency has access to. Click a customer to open the shop and its feeds.</p>
+          <h1>{title}</h1>
+          <p className="ag-lede">{lede}</p>
         </div>
         <button type="button" className="wl-btn-primary" onClick={() => setCreating(true)}>
-          <Icon name="plus" size={14} /> Create customer
+          <Icon name="plus" size={14} /> Create {n.one}
         </button>
       </header>
 
       <section className="card flush">
         <div className="ag-stats">
           <div>
-            <span>Customers</span>
+            <span>{n.Many}</span>
             <strong className="num">{formatNumber(shops.length)}</strong>
             <small>
               {formatNumber(withFeeds)} with live feeds
@@ -47,7 +76,7 @@ export function AgencyDashboardClient({ initial }: { initial: AgencyOverview }) 
           <div>
             <span>Total feeds</span>
             <strong className="num">{formatNumber(feedTotal)}</strong>
-            <small>across customers</small>
+            <small>across {n.many}</small>
           </div>
           <div>
             <span>Errors needing action</span>
@@ -55,16 +84,18 @@ export function AgencyDashboardClient({ initial }: { initial: AgencyOverview }) 
             <small>
               {errorTotal === 0
                 ? 'All feeds are ready'
-                : `for ${formatNumber(shopsWithErrors)} ${shopsWithErrors === 1 ? 'customer' : 'customers'}`}
+                : `for ${formatNumber(shopsWithErrors)} ${shopsWithErrors === 1 ? n.one : n.many}`}
             </small>
           </div>
         </div>
 
         {shops.length === 0 ? (
           <div className="ag-empty">
-            <p>No customers yet. Create the first one and connect its Shopify shop or feed URL.</p>
+            <p>
+              No {n.many} yet. Create the first one and connect its Shopify shop or feed URL.
+            </p>
             <button type="button" className="wl-btn-primary" onClick={() => setCreating(true)}>
-              Create first customer
+              Create first {n.one}
             </button>
           </div>
         ) : (
@@ -72,7 +103,7 @@ export function AgencyDashboardClient({ initial }: { initial: AgencyOverview }) 
             <table className="ag-table">
               <thead>
                 <tr>
-                  <th>Customer</th>
+                  <th>{n.One}</th>
                   <th>Access</th>
                   <th>Country</th>
                   <th className="r">Feeds</th>
@@ -120,6 +151,7 @@ function Access({ shop }: { shop: AgencyShop }) {
       </span>
     )
   }
+  if (shop.planEnded) return <span className="neg">No active plan</span>
   if (shop.source === 'feed_url') return <span className="st">Feed URL</span>
   if (shop.connection === 'connected') return <span className="st">Shopify connected</span>
   if (shop.connection === 'error') return <span className="neg">Shopify failing</span>
@@ -139,12 +171,46 @@ function ShopRow({
   onRenamed: (name: string) => void
   onDeleted: () => void
 }) {
+  const n = useContext(Noun)
   const [dialog, setDialog] = useState<'rename' | 'delete' | null>(null)
   const stop = (e: React.SyntheticEvent) => e.stopPropagation()
   const granted = shop.grantedFeedIds?.length ? shop.grantedFeedIds : null
   const sub = [granted ? 'Access to the feed only' : shop.address, showAccount ? shop.accountName : null]
     .filter(Boolean)
     .join(' · ')
+
+  // A client without an active plan (none yet, or it ended): shown, but
+  // there is nothing to open until they have one.
+  if (shop.planEnded) {
+    return (
+      <tr className="ag-row-off">
+        <td>
+          <span className="ag-shop">
+            <span className="ag-av" aria-hidden="true">
+              {initials(shop.name)}
+            </span>
+            <span>
+              <b>{shop.name}</b>
+              <small>{sub || 'No source yet'}</small>
+            </span>
+          </span>
+        </td>
+        <td>
+          <Access shop={shop} />
+        </td>
+        <td>
+          <span className="ag-muted">—</span>
+        </td>
+        <td className="r num">
+          <span className="ag-muted">—</span>
+        </td>
+        <td className="r num">
+          <span className="ag-muted">—</span>
+        </td>
+        <td className="r ag-muted">Opens when {shop.accountName || 'the client'} has a plan</td>
+      </tr>
+    )
+  }
 
   return (
     <tr
@@ -191,7 +257,7 @@ function ShopRow({
       </td>
       <td className="r ag-act" onClick={stop} onKeyDown={stop}>
         <Link href={openHref(shop)} className="link">
-          {granted ? 'Open feed' : 'Open customer'}
+          {granted ? 'Open feed' : `Open ${n.one}`}
         </Link>
         {granted ? null : (
         <Popover
@@ -222,7 +288,7 @@ function ShopRow({
                   setDialog('delete')
                 }}
               >
-                Delete customer
+                Delete {n.one}
               </button>
             </>
           )}
@@ -283,6 +349,7 @@ async function readError(res: Response): Promise<string> {
 }
 
 function CreateDialog({ onClose }: { onClose: () => void }) {
+  const n = useContext(Noun)
   const router = useRouter()
   const [name, setName] = useState('')
   const [description, setDescription] = useState('')
@@ -313,7 +380,7 @@ function CreateDialog({ onClose }: { onClose: () => void }) {
   }
 
   return (
-    <Dialog title="Create customer" onClose={onClose}>
+    <Dialog title={`Create ${n.one}`} onClose={onClose}>
       <form className="ag-dlg-body" onSubmit={submit}>
         <label className="ag-field">
           <span>Name</span>
@@ -330,7 +397,7 @@ function CreateDialog({ onClose }: { onClose: () => void }) {
             Cancel
           </button>
           <button type="submit" className="wl-btn-primary" disabled={busy || !name.trim()}>
-            {busy ? 'Creating…' : 'Create customer'}
+            {busy ? 'Creating…' : `Create ${n.one}`}
           </button>
         </div>
       </form>
@@ -339,6 +406,7 @@ function CreateDialog({ onClose }: { onClose: () => void }) {
 }
 
 function RenameDialog({ shop, onClose, onSaved }: { shop: AgencyShop; onClose: () => void; onSaved: (name: string) => void }) {
+  const n = useContext(Noun)
   const [name, setName] = useState(shop.name)
   const [busy, setBusy] = useState(false)
   const [error, setError] = useState<string | null>(null)
@@ -361,7 +429,7 @@ function RenameDialog({ shop, onClose, onSaved }: { shop: AgencyShop; onClose: (
   }
 
   return (
-    <Dialog title="Rename customer" onClose={onClose}>
+    <Dialog title={`Rename ${n.one}`} onClose={onClose}>
       <form className="ag-dlg-body" onSubmit={submit}>
         <label className="ag-field">
           <span>Name</span>
@@ -382,6 +450,7 @@ function RenameDialog({ shop, onClose, onSaved }: { shop: AgencyShop; onClose: (
 }
 
 function DeleteDialog({ shop, onClose, onDeleted }: { shop: AgencyShop; onClose: () => void; onDeleted: () => void }) {
+  const n = useContext(Noun)
   const [busy, setBusy] = useState(false)
   const [error, setError] = useState<string | null>(null)
 
@@ -398,7 +467,7 @@ function DeleteDialog({ shop, onClose, onDeleted }: { shop: AgencyShop; onClose:
   }
 
   return (
-    <Dialog title="Delete customer" onClose={onClose}>
+    <Dialog title={`Delete ${n.one}`} onClose={onClose}>
       <div className="ag-dlg-body">
         <p>
           Delete <b>{shop.name}</b>?
@@ -417,7 +486,7 @@ function DeleteDialog({ shop, onClose, onDeleted }: { shop: AgencyShop; onClose:
             Cancel
           </button>
           <button type="button" className="wl-btn-primary ag-danger" onClick={submit} disabled={busy}>
-            {busy ? 'Deleting…' : 'Delete customer'}
+            {busy ? 'Deleting…' : `Delete ${n.one}`}
           </button>
         </div>
       </div>
