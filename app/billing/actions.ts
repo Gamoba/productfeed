@@ -4,7 +4,7 @@ import { headers } from 'next/headers'
 import { revalidatePath } from 'next/cache'
 import { createSupabaseServerClient } from '@/lib/supabase-server'
 import { adminDb } from '@/lib/feeds'
-import { createCheckout, createPortal } from '@/lib/billing'
+import { createCheckout, createPortal, switchToCustomPlan } from '@/lib/billing'
 import { buyAddon, removeAddon } from '@/lib/addons'
 import { enforceRateLimit } from '@/lib/rateLimit'
 import { clientMessage } from '@/lib/errors'
@@ -45,6 +45,19 @@ export async function openPortal(accountId: string): Promise<BillingActionResult
     return { url: await createPortal(adminDb(), user, accountId, await origin()) }
   } catch (err) {
     return { error: clientMessage(err, 'openPortal') }
+  }
+}
+
+export async function switchPlanAction(accountId: string, planId: string, interval: string): Promise<AddonActionResult> {
+  try {
+    const user = await currentUser()
+    if (!user) return { error: 'Sign in again.' }
+    await enforceRateLimit(user.id, 'billing_session')
+    await switchToCustomPlan(adminDb(), user, accountId, planId, interval)
+    revalidatePath('/billing')
+    return { ok: true }
+  } catch (err) {
+    return { error: clientMessage(err, 'switchPlanAction') }
   }
 }
 

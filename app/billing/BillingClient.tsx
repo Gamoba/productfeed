@@ -3,7 +3,7 @@
 import { useState, useTransition } from 'react'
 import { useRouter } from 'next/navigation'
 import type { AccountBilling, BillingDetail, BillingUsage, Interval, Plan } from '@/lib/billing'
-import { addAddonAction, openPortal, removeAddonAction, startCheckout } from './actions'
+import { addAddonAction, openPortal, removeAddonAction, startCheckout, switchPlanAction } from './actions'
 import '../agency/agency.css'
 import './billing.css'
 
@@ -160,6 +160,17 @@ export function BillingClient({ billing, plans, canManage, configured, accounts,
           {current && <PlanLimits plan={current} addons={detail.addons} />}
           {!canManage && <p className="bl-sub">Owners and admins can change the plan.</p>}
         </section>
+        {plans
+          .filter((p) => p.isCustom && p.active && p.id !== subscription.planId)
+          .map((p) => (
+            <CustomOffer
+              key={p.id}
+              accountId={account.id}
+              plan={p}
+              current={subscription.interval}
+              canSwitch={canManage && configured && subscription.status !== 'past_due' && !subscription.cancelAt}
+            />
+          ))}
         <Usage usage={detail.usage} />
         <AddonList accountId={account.id} detail={detail} canManage={canManage && configured} hasPlan />
         </>
@@ -278,6 +289,73 @@ export function BillingClient({ billing, plans, canManage, configured, accounts,
         </>
       )}
     </div>
+  )
+}
+
+// A custom plan made for an account that already pays for a plan: switching
+// swaps the price on its subscription (lib/billing.ts switchToCustomPlan),
+// since neither Checkout nor the Stripe portal can.
+function CustomOffer({ accountId, plan, current, canSwitch }: { accountId: string; plan: Plan; current: Interval; canSwitch: boolean }) {
+  const router = useRouter()
+  const [, start] = useTransition()
+  const [confirm, setConfirm] = useState<Interval | null>(null)
+  const [busy, setBusy] = useState(false)
+  const [error, setError] = useState<string | null>(null)
+  // The current interval first: it keeps the renewal date and any add-ons.
+  const prices = [...plan.prices].filter((p) => p.stripePriceId).sort((a, b) => Number(b.interval === current) - Number(a.interval === current))
+
+  function doSwitch(interval: Interval) {
+    setBusy(true)
+    setError(null)
+    start(async () => {
+      const r = await switchPlanAction(accountId, plan.id, interval)
+      setBusy(false)
+      setConfirm(null)
+      if (r.error) setError(r.error)
+      else router.refresh()
+    })
+  }
+
+  return (
+    <section className="card bl-plan">
+      <h3>
+        {plan.name}
+        <span className="pill ai">Made for you</span>
+      </h3>
+      <p className="bl-sub">A plan we set up for you. Switch to it here; it replaces your current plan.</p>
+      <PlanLimits plan={plan} />
+      {error && <p className="note warn">{error}</p>}
+      {!canSwitch ? (
+        <p className="bl-sub">Owners and admins can switch once the plan is active and not set to end.</p>
+      ) : confirm ? (
+        <div className="bl-row">
+          <p className="bl-sub" style={{ flexBasis: '100%' }}>
+            {confirm === current
+              ? 'Stripe charges or credits the difference for the rest of this period now, to the card on file.'
+              : `This starts a new ${confirm === 'year' ? 'yearly' : 'monthly'} period today. Stripe credits what’s left of the current one and charges the card on file now.`}
+          </p>
+          <button type="button" className="wl-btn-primary" disabled={busy} onClick={() => doSwitch(confirm)}>
+            {busy ? 'Switching…' : 'Confirm switch'}
+          </button>
+          <button type="button" className="wl-btn-secondary" disabled={busy} onClick={() => setConfirm(null)}>
+            Cancel
+          </button>
+        </div>
+      ) : (
+        <div className="bl-row">
+          {prices.map((p, i) => (
+            <button
+              key={p.interval}
+              type="button"
+              className={i === 0 ? 'wl-btn-primary bl-cta' : 'wl-btn-secondary bl-cta'}
+              onClick={() => setConfirm(p.interval)}
+            >
+              Switch · {money(p.amountCents, p.currency)} / {p.interval}
+            </button>
+          ))}
+        </div>
+      )}
+    </section>
   )
 }
 

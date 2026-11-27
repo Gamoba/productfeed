@@ -37,6 +37,18 @@ setup steps in `docs/go-live.md`.
   yearly pays 10/12; empty = extras free) — before that, a custom plan's SKU
   allowance was never charged above. Test company: Custom Plan Test ApS
   (custom-plan-test-1@example.com), monthly Stripe *test* subscription.
+- **Switching a paying account to its custom plan** (27 Nov, tested):
+  Checkout refuses a second subscription and the Stripe portal only offers
+  the public plans, so Billing shows each custom plan made for the account
+  under its current plan, with a "Switch" button per price and a confirm step
+  (`switchToCustomPlan` in `lib/billing.ts`). It swaps the price on the
+  existing subscription, prorates and invoices the difference at once
+  (`always_invoice`; a declined card leaves the plan unchanged), and keeps
+  add-ons — changing the interval is refused while there are add-ons. Checked:
+  €450 → €600/month on 27 Nov gave invoice N44TXD2O-0006, €149.95 net
+  (−€449.87 unused, +€599.82 remaining) + VAT, paid; the subscription row,
+  limits and Admin followed. Such an invoice earns a kickback like any other
+  (open decision: kickback on prorated invoices).
 
 ## Built, not yet tested in the browser
 
@@ -96,6 +108,11 @@ Stripe → Tax needs the Danish registration and any other country Gamoba is
 registered in. The code is right (`automatic_tax` on, VAT ID collected at
 Checkout); the account configuration is what's missing.
 
+Update 27 Nov: the custom plan test invoices (Danish address) carry 25 %
+Danish VAT, `standard_rated`, although `tax.registrations.list()` in test mode
+is still empty. Check under Stripe → Tax which registration produces it, and
+that the live account has the same, before go-live.
+
 ## Test data kept on purpose (shared DB = production too)
 
 - **Gambora** (User account): temporarily `billing_exempt = true`; has the
@@ -105,7 +122,8 @@ Checkout); the account configuration is what's missing.
 - **Referral Client ApS** (login referral-test-1@example.com): active Standard
   yearly Stripe *test* subscription, referral + commission rows.
 - **Custom Plan Test ApS** (login custom-plan-test-1@example.com): custom plan
-  "Enterprise – Custom Plan Test" with a monthly Stripe *test* subscription.
+  "Enterprise – Custom Plan Test" and, switched to on 27 Nov, "Enterprise –
+  Switch Test", with a monthly Stripe *test* subscription.
   Cancel it in Stripe, then `--cleanup` the login as below (the plan goes with
   the account).
 

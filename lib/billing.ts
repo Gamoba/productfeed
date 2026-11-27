@@ -266,6 +266,71 @@ export async function createCheckout(
   return session.url
 }
 
+// Moves a paying account onto its custom plan (lib/customPlans.ts). Checkout
+// can't (one plan subscription per account) and the Stripe portal only offers
+// the public plans, so the app swaps the price on the existing subscription.
+// Stripe prorates and invoices the difference at once; if the card is
+// declined, nothing changes. Add-on items stay; changing the interval is only
+// possible without them, since every item on a subscription shares it.
+export async function switchToCustomPlan(
+  db: SupabaseClient,
+  user: { id: string },
+  accountId: string,
+  planId: unknown,
+  interval: unknown
+): Promise<void> {
+  await requireBillingManager(db, user.id, accountId)
+  if (typeof planId !== 'string' || !isInterval(interval)) throw new AppError('Choose a plan')
+
+  const billing = await getAccountBilling(db, accountId)
+  const current = billing.subscription
+  if (!current) throw new AppError('The account has no plan to switch from. Choose the plan below instead.')
+  if (current.planId === planId && current.interval === interval) throw new AppError('The account is already on that plan')
+  if (current.status === 'past_due') throw new AppError('The last payment failed. Update your card under Manage billing first.')
+  if (current.cancelAt) throw new AppError('Your plan is set to end. Renew it under Manage billing first, then switch.')
+
+  const plan = (await listPlansForAccount(db, accountId)).find((p) => p.id === planId)
+  if (!plan?.isCustom || !plan.active) throw new AppError('That plan is not available')
+  const price = plan.prices.find((p) => p.interval === interval)
+  if (!price?.stripePriceId) throw new AppError('That plan is not available yet. Try again later.', 503)
+
+  const { data: row, error } = await db
+    .from('subscriptions')
+    .select('stripe_subscription_id')
+    .eq('id', current.id)
+    .single<{ stripe_subscription_id: string }>()
+  if (error) dbError('switchToCustomPlan', error)
+  const sub = await stripe().subscriptions.retrieve(row.stripe_subscription_id)
+  const byPrice = await plansByPrice(db, sub.items.data.map((i) => i.price.id))
+  const item = sub.items.data.find((i) => byPrice.has(i.price.id))
+  if (!item) throw new AppError('The plan could not be found on your subscription. Contact us.')
+  if (interval !== current.interval && sub.items.data.length > 1) {
+    throw new AppError(
+      `Add-ons are billed ${current.interval === 'year' ? 'yearly' : 'monthly'} with your plan, so switch to the ${
+        current.interval === 'year' ? 'yearly' : 'monthly'
+      } price, or contact us to change both.`
+    )
+  }
+
+  let updated: Stripe.Subscription
+  try {
+    updated = await stripe().subscriptions.update(sub.id, {
+      items: [{ id: item.id, price: price.stripePriceId }],
+      proration_behavior: 'always_invoice',
+      // Declined card: Stripe rejects the change instead of leaving it unpaid.
+      payment_behavior: 'error_if_incomplete',
+      metadata: { ...sub.metadata, account_id: accountId, plan_id: plan.id },
+    })
+  } catch (err) {
+    if ((err as { type?: string }).type === 'StripeCardError') {
+      throw new AppError('Your card was declined, so the plan was not changed. Update it under Manage billing and try again.', 402)
+    }
+    throw err
+  }
+  // Show the new plan at once; the webhook writes the same thing again.
+  await syncSubscription(db, updated)
+}
+
 // Stripe's hosted portal: change card, switch plan, cancel, download invoices.
 export async function createPortal(
   db: SupabaseClient,
