@@ -9,6 +9,7 @@ import { CustomPlans } from './CustomPlans'
 import { Addons } from './Addons'
 import type { AdminAddons } from '@/lib/addons'
 import {
+  approveReferralAction,
   inviteMccAction,
   markPaidAction,
   setAgencyRateAction,
@@ -256,8 +257,29 @@ export function AdminClient({
                   <td>
                     <b>{r.agency}</b> → {r.client}
                   </td>
-                  <td className={r.status === 'stopped' ? 'mc-bad' : undefined}>
-                    {r.status === 'stopped' ? 'Stopped (access removed)' : r.status === 'active' ? 'Earning' : 'Not paid yet'}
+                  <td className={r.status === 'stopped' || r.review ? 'mc-bad' : undefined}>
+                    {r.review ? (
+                      <>
+                        <div>Possible self-referral: kickback held</div>
+                        <small className="ag-muted">{r.review}</small>
+                        <div>
+                          <button
+                            type="button"
+                            className="wl-btn-secondary"
+                            disabled={busy !== null}
+                            onClick={() => run(`approve-${r.id}`, () => approveReferralAction(r.id))}
+                          >
+                            Approve kickback
+                          </button>
+                        </div>
+                      </>
+                    ) : r.status === 'stopped' ? (
+                      'Stopped (access removed)'
+                    ) : r.status === 'active' ? (
+                      'Earning'
+                    ) : (
+                      'Not paid yet'
+                    )}
                   </td>
                   <td className="r">{pct(r.rate)} %</td>
                   <td>

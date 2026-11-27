@@ -7,7 +7,7 @@ import { adminDb } from '@/lib/feeds'
 import { clientMessage } from '@/lib/errors'
 import { enforceRateLimit } from '@/lib/rateLimit'
 import { requirePlatformAdmin, setDefaultCommissionRate } from '@/lib/platformAdmin'
-import { inviteMcc, setAgencyRate, setKickbackOverride } from '@/lib/mcc'
+import { approveReferral, inviteMcc, setAgencyRate, setKickbackOverride } from '@/lib/mcc'
 import { markPayoutPaid } from '@/lib/commissions'
 import { createCustomPlan, newPlanLink, setCustomPlanActive, type CustomPlanInput } from '@/lib/customPlans'
 import { createAddon, grantAddon, revokeFreeAddon, setAddonActive, type AddonInput } from '@/lib/addons'
@@ -77,6 +77,14 @@ export async function setOverrideAction(referralId: string, on: boolean, note: s
     await setKickbackOverride(db, user.id, referralId, on, note.trim() || null)
     return { ok: true as const }
   }, 'setOverrideAction')
+}
+
+export async function approveReferralAction(referralId: string): Promise<AdminResult> {
+  return done(async () => {
+    const { user, db } = await admin()
+    await approveReferral(db, user.id, referralId)
+    return { ok: true as const }
+  }, 'approveReferralAction')
 }
 
 export async function markPaidAction(mccId: string, currency: string, reference: string): Promise<AdminResult> {

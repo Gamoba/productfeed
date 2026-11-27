@@ -236,13 +236,15 @@ export async function dropFutureParts(db: SupabaseClient, by: { subscriptionId?:
 export type PayoutDue = { mccAccountId: string; mccName: string; currency: string; dueCents: number; parts: number }
 
 // What each agency is owed today: scheduled and reversed parts due by now and
-// not yet paid out, summed per agency and currency.
+// not yet paid out, summed per agency and currency. Parts of a referral held
+// for review (possible self-referral, migration 068) wait until it's approved.
 export async function payoutsDue(db: SupabaseClient): Promise<PayoutDue[]> {
   const { data, error } = await db
     .from('commissions')
     .select('commission_cents, currency, status, referrals!inner(mcc_account_id, accounts!referrals_mcc_account_id_fkey(name))')
     .is('payout_id', null)
     .in('status', ['scheduled', 'reversed'])
+    .eq('referrals.needs_review', false)
     .lte('payable_on', today())
   if (error) dbError('payoutsDue', error)
   const sums = new Map<string, PayoutDue>()
@@ -284,6 +286,7 @@ export async function markPayoutPaid(
     .in('status', ['scheduled', 'reversed'])
     .eq('currency', currency)
     .eq('referrals.mcc_account_id', mccAccountId)
+    .eq('referrals.needs_review', false)
     .lte('payable_on', today())
   if (error) dbError('markPayoutPaid parts', error)
   const parts = (data ?? []) as { id: string; commission_cents: number }[]

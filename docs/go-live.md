@@ -12,12 +12,12 @@ reference section after it has the details the steps point to.
 
 ### 1. Finish the branch (code)
 
-- [ ] Commit what's open, and push the branch (5 commits weren't pushed on
-      27 Nov).
-- [ ] Security review of the open signup (decision A3): `/signup`, the
-      invite link, rate limits, abuse. Run `/security-review` on the branch.
-- [ ] Test the two untested agency paths: an agency invite to someone with no
-      login yet, and an agency with its own shops on a paid plan.
+- [x] Commit what's open, and push the branch (27 Nov).
+- [x] Security review of the open signup (decision A3), and its fixes
+      (27 Nov; `docs/billing-status.md`, "Signup security"). Migration 068
+      applied.
+- [x] Test the two untested agency paths: an agency invite to someone with no
+      login yet, and an agency with its own shops on a paid plan (27 Nov).
 - [ ] Test a downgrade through the customer portal (test mode): it should
       wait until the period ends, then the app should show the new plan.
 - [ ] Rename FeedFlow → Kompara in the UI and emails (43 places in 21 files
@@ -90,6 +90,11 @@ the Stripe **test** subscriptions first, then:
 - [ ] Gambora: `billing_exempt` back to `false`, and its shop "Gambora Shop
       (agency test)".
 - [ ] The retired test add-on "Feed pack (test)".
+- [ ] From the 27 Nov security tests: `--cleanup referral-consent-test@example.com`
+      (Consent Test ApS) and `--cleanup agency-test-new@example.com`, then the
+      agency account "New Login Agency (test)" and its referral link; Test
+      Agency's test subscription (Standard monthly) and its shop "Agency Own
+      Shop (test)".
 - [ ] Not test data, keep: kontakt@gamoba.dk as platform admin, the default
       commission (20 %).
 

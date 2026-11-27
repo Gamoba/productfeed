@@ -1,7 +1,7 @@
 'use client'
 
 import { useEffect, useState } from 'react'
-import { acceptInvite } from './actions'
+import { acceptInvite, inviteReferral } from './actions'
 import './invite.css'
 
 type Tokens = { accessToken: string; refreshToken: string }
@@ -17,6 +17,10 @@ export default function InvitePage() {
   const [repeat, setRepeat] = useState('')
   const [busy, setBusy] = useState(false)
   const [error, setError] = useState<string | null>(null)
+  // The agency whose referral link this signup came through, if any. It only
+  // gets access to the account when the person agrees here (lib/signup.ts).
+  const [agency, setAgency] = useState<string | null>(null)
+  const [consent, setConsent] = useState(true)
 
   useEffect(() => {
     const p = new URLSearchParams(window.location.hash.slice(1))
@@ -28,6 +32,7 @@ export default function InvitePage() {
     if (p.get('error')) setLinkError(p.get('error_description') ?? 'The link does not work.')
     setTokens(accessToken && refreshToken ? { accessToken, refreshToken } : 'none')
     /* eslint-enable react-hooks/set-state-in-effect */
+    if (accessToken) void inviteReferral(accessToken).then((r) => setAgency(r.agency))
   }, [])
 
   async function submit(e: React.FormEvent) {
@@ -39,7 +44,7 @@ export default function InvitePage() {
     }
     setBusy(true)
     setError(null)
-    const r = await acceptInvite({ ...tokens, password })
+    const r = await acceptInvite({ ...tokens, password, referralConsent: agency !== null && consent })
     if (r.error) {
       setError(r.error)
       setBusy(false)
@@ -94,6 +99,15 @@ export default function InvitePage() {
                 required
               />
             </label>
+            {agency && (
+              <label className="iv-consent">
+                <input type="checkbox" checked={consent} onChange={(e) => setConsent(e.target.checked)} />
+                <span>
+                  You signed up through <b>{agency}</b>&rsquo;s link. Give {agency} access to your account&rsquo;s shops and
+                  feeds, so they can work on them for you. You can remove it any time under Agency access.
+                </span>
+              </label>
+            )}
             {error && <p className="note warn">{error}</p>}
             <button type="submit" className="wl-btn-primary" disabled={busy}>
               {busy ? 'Saving…' : 'Save and continue'}

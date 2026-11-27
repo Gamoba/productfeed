@@ -186,6 +186,34 @@ then Test Agency, then Gambora back to `billing_exempt = false`).
 
 Not test data: default commission 20 %, kontakt@gamoba.dk as platform admin.
 
+## Signup security: reviewed and fixed (27 Nov)
+
+A review of the open signup (decision A3) found no way for one customer to
+reach another's data and no account takeover, but four things, all fixed:
+
+- **Someone else's referral on your signup.** Anyone could submit `/signup`
+  with another person's email and their own agency's `?ref=`; clicking the
+  email gave that agency full access and a kickback. Now a re-submit for a
+  waiting signup only re-sends the email and keeps the first submission's
+  company, referral and plan link, and the password page asks: "You signed
+  up through <Agency>'s link. Give <Agency> access…" (ticked by default). The
+  referral and the agency's access are recorded only on a yes
+  (`pending_signup.refConsent`, `lib/signup.ts`).
+- **Email flooding.** Signup now allows 3 emails per address per day
+  (`signup_email`), counts IPv6 per /64, and both signup limits refuse when
+  the limiter is down (`lib/rateLimit.ts`).
+- **Agencies referring themselves.** A referral whose new user has the same
+  company email domain as a member of the agency (public mail domains don't
+  count) is flagged (migration 068, `referrals.needs_review`). Its kickback
+  is recorded but not paid out until "Approve kickback" in Admin › Referrals.
+- **A half-finished signup could be deleted by anyone.** A login that has
+  ever signed in is no longer replaced by a new signup.
+
+Checked: a referral signup with the box unticked made the account with no
+grant and no referral; an agency invite to a new login made the agency with
+the person as owner and its referral link. Still for you in Supabase: no
+broad wildcards in Redirect URLs, and "Allow new users to sign up" off.
+
 ## Access rules: reviewed (27 Nov)
 
 Who can see which customer's data. Every entry point that takes an id was

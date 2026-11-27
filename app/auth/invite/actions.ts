@@ -2,7 +2,7 @@
 
 import { createSupabaseServerClient } from '@/lib/supabase-server'
 import { adminDb } from '@/lib/feeds'
-import { completeSignup } from '@/lib/signup'
+import { completeSignup, pendingReferralAgency, setReferralConsent } from '@/lib/signup'
 import { clientMessage } from '@/lib/errors'
 
 // Finishes an invite: turns the tokens from the invite link into a cookie
@@ -11,10 +11,21 @@ import { clientMessage } from '@/lib/errors'
 //
 // The same link finishes an open signup (lib/signup.ts): then the User account
 // is created here and `next` points at choosing a plan.
+// The agency that referred this signup, for the page to ask about. Read from
+// the invite's own access token, so it only answers for that login.
+export async function inviteReferral(accessToken: string): Promise<{ agency: string | null }> {
+  if (typeof accessToken !== 'string' || !accessToken) return { agency: null }
+  const { data, error } = await adminDb().auth.getUser(accessToken)
+  if (error || !data.user) return { agency: null }
+  return { agency: await pendingReferralAgency(adminDb(), data.user) }
+}
+
 export async function acceptInvite(input: {
   accessToken: string
   refreshToken: string
   password: string
+  /** The answer to "the referring agency gets access" (only asked when there is one). */
+  referralConsent?: boolean
 }): Promise<{ error?: string; next?: string }> {
   if (typeof input.password !== 'string' || input.password.length < 8) {
     return { error: 'The password must be at least 8 characters.' }
@@ -34,6 +45,7 @@ export async function acceptInvite(input: {
   if (error) return { error: error.message }
 
   try {
+    if (data.user) await setReferralConsent(adminDb(), data.user.id, input.referralConsent === true)
     const next = data.user ? await completeSignup(adminDb(), data.user.id) : null
     return next ? { next } : {}
   } catch (err) {

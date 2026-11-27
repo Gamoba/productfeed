@@ -554,7 +554,11 @@ export async function getPartnerOverview(db: SupabaseClient, userId: string, mcc
 export type AdminOverview = {
   invites: { id: string; email: string; name: string | null; createdAt: string; expiresAt: string; usedAt: string | null }[]
   agencies: { id: string; name: string; rate: number | null; clients: number; referrals: number; code: string | null }[]
-  referrals: { id: string; agency: string; client: string; status: string; stopReason: string | null; override: boolean; note: string | null; rate: number }[]
+  referrals: {
+    id: string; agency: string; client: string; status: string; stopReason: string | null; override: boolean; note: string | null; rate: number
+    /** Possible self-referral: why, while its kickback is held (migration 068). */
+    review: string | null
+  }[]
 }
 
 export async function getAdminOverview(db: SupabaseClient, adminId: string): Promise<AdminOverview> {
@@ -563,10 +567,10 @@ export async function getAdminOverview(db: SupabaseClient, adminId: string): Pro
     db.from('mcc_signup_invites').select('id, email, name, created_at, expires_at, used_at').order('created_at', { ascending: false }).limit(50),
     db.from('accounts').select('id, name, commission_rate').eq('type', 'mcc').order('created_at'),
     db.from('access_grants').select('mcc_account_id, user_account_id').eq('status', 'active'),
-    db.from('referrals').select('id, mcc_account_id, user_account_id, status, stop_reason, kickback_override, override_note, commission_rate').order('signed_up_at', { ascending: false }),
+    db.from('referrals').select('id, mcc_account_id, user_account_id, status, stop_reason, kickback_override, override_note, commission_rate, needs_review, review_reason').order('signed_up_at', { ascending: false }),
     db.from('referral_links').select('mcc_account_id, code').eq('active', true),
   ])
-  type Ref = { id: string; mcc_account_id: string; user_account_id: string; status: string; stop_reason: string | null; kickback_override: boolean; override_note: string | null; commission_rate: number | string }
+  type Ref = { id: string; mcc_account_id: string; user_account_id: string; status: string; stop_reason: string | null; kickback_override: boolean; override_note: string | null; commission_rate: number | string; needs_review: boolean; review_reason: string | null }
   const refRows = (refs ?? []) as Ref[]
   const names = await nameMap(db, [...new Set(refRows.flatMap((r) => [r.mcc_account_id, r.user_account_id]))])
   const clientsOf = new Map<string, Set<string>>()
@@ -596,6 +600,7 @@ export async function getAdminOverview(db: SupabaseClient, adminId: string): Pro
       override: r.kickback_override,
       note: r.override_note,
       rate: Number(r.commission_rate),
+      review: r.needs_review ? (r.review_reason ?? 'Held for review') : null,
     })),
   }
 }
@@ -605,6 +610,14 @@ export async function setAgencyRate(db: SupabaseClient, adminId: string, mccId: 
   if (rate !== null && (!Number.isFinite(rate) || rate < 0 || rate > 1)) throw new AppError('The rate must be between 0 % and 100 %')
   const { error } = await db.from('accounts').update({ commission_rate: rate }).eq('id', mccId).eq('type', 'mcc')
   if (error) dbError('setAgencyRate', error)
+}
+
+// Approves a referral flagged as a possible self-referral: its kickback parts
+// pay out from now on, including any already due.
+export async function approveReferral(db: SupabaseClient, adminId: string, referralId: string): Promise<void> {
+  await requirePlatformAdmin(db, adminId)
+  const { error } = await db.from('referrals').update({ needs_review: false }).eq('id', referralId)
+  if (error) dbError('approveReferral', error)
 }
 
 // Switches a referral's kickback back on (or off again), whatever its access

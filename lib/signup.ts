@@ -12,6 +12,12 @@
 //
 // An email that already has a login gets the same "check your email" answer
 // and no email, so the form can't be used to find out who has an account.
+//
+// A referral (?ref=) gives an agency access to the new account, so it is only
+// recorded when the person agrees on the password page (refConsent): someone
+// else could have typed their email on another agency's link. Submitting the
+// form again for a signup that's still waiting re-sends the email but keeps
+// the first submission's details.
 
 import type { SupabaseClient, User } from '@supabase/supabase-js'
 import { AppError, dbError } from '@/lib/errors'
@@ -25,8 +31,12 @@ export { newAccessCode }
 const EMAIL_RE = /^[^\s@]+@[^\s@]+\.[^\s@]+$/
 const REF_RE = /^[A-Za-z0-9_-]{3,64}$/
 
-/** `plan`: a custom plan's signup link token (lib/customPlans.ts). */
-export type PendingSignup = { company: string; ref: string | null; plan?: string | null }
+/**
+ * `plan`: a custom plan's signup link token (lib/customPlans.ts).
+ * `refConsent`: the person's answer on the password page to the referring
+ * agency getting access; the referral is recorded only when true.
+ */
+export type PendingSignup = { company: string; ref: string | null; plan?: string | null; refConsent?: boolean }
 
 export async function startSignup(
   db: SupabaseClient,
@@ -42,18 +52,27 @@ export async function startSignup(
   const ref = typeof input.ref === 'string' && REF_RE.test(input.ref) ? input.ref : null
   const plan = typeof input.plan === 'string' && /^[A-Za-z0-9_-]{20,64}$/.test(input.plan) ? input.plan : null
 
+  let pending: PendingSignup = { company, ref, plan }
+  let fullName = name
   const { data: existingId, error: lookupErr } = await db.rpc('auth_user_id_by_email', { p_email: email })
   if (lookupErr) dbError('startSignup lookup', lookupErr)
   if (existingId) {
-    // A signup that was never finished (link expired, or opened but no
-    // password chosen): start it over. Only a login that still waits on this
-    // signup and belongs to no account is replaced; it owns nothing yet.
-    // Every other existing login is left alone.
+    // A signup that was never finished (the link expired, or was never
+    // opened): send the email again. Only a login that still waits on a
+    // signup, has never signed in and belongs to no account is replaced; it
+    // owns nothing yet. Every other existing login is left alone — one that
+    // has signed in finishes its signup on its next visit (app/page.tsx).
     const { data: ex } = await db.auth.admin.getUserById(existingId as string)
     const u = ex?.user
-    if (!u || !readPending(u)) return
+    const first = u ? readPending(u) : null
+    if (!u || !first || u.last_sign_in_at) return
     const { data: memberships } = await db.from('account_members').select('account_id').eq('user_id', u.id).limit(1)
     if ((memberships ?? []).length > 0) return
+    // The first submission's details stay: a second one, by anyone, can't
+    // change the company, the referral or the plan link.
+    pending = { company: first.company, ref: first.ref, plan: first.plan ?? null }
+    const firstName = (u.user_metadata as Record<string, unknown> | undefined)?.full_name
+    if (typeof firstName === 'string' && firstName) fullName = firstName
     const { error: delErr } = await db.auth.admin.deleteUser(u.id)
     if (delErr) {
       console.error('[startSignup] replace stale signup:', delErr)
@@ -63,14 +82,13 @@ export async function startSignup(
 
   const { data, error } = await db.auth.admin.inviteUserByEmail(email, {
     redirectTo,
-    data: { full_name: name },
+    data: { full_name: fullName },
   })
   if (error || !data?.user) {
     console.error('[startSignup] inviteUserByEmail:', error)
     throw new AppError('We could not send the email. Try again in a moment.')
   }
 
-  const pending: PendingSignup = { company, ref, plan }
   const { error: metaErr } = await db.auth.admin.updateUserById(data.user.id, {
     app_metadata: { ...(data.user.app_metadata ?? {}), pending_signup: pending },
   })
@@ -164,7 +182,8 @@ export async function completeSignup(db: SupabaseClient, userId: string): Promis
     .upsert({ account_id: accountId, user_id: userId, role: 'owner' }, { onConflict: 'account_id,user_id', ignoreDuplicates: true })
   if (memberErr) dbError('completeSignup member', memberErr)
 
-  if (pending.ref) await recordReferral(db, accountId, userId, pending.ref)
+  // Only with the person's yes on the password page (see the top of the file).
+  if (pending.ref && pending.refConsent === true) await recordReferral(db, accountId, userId, pending.ref)
   // A custom plan's link: the plan becomes this account's (once).
   if (pending.plan) await claimPlanLink(db, pending.plan, accountId, user.email ?? '')
 
@@ -176,7 +195,61 @@ export async function completeSignup(db: SupabaseClient, userId: string): Promis
   return `/billing?account=${accountId}`
 }
 
-// Referral link → the MCC gets account access at once, and the referral is
+// Mail domains anyone can sign up with: sharing one says nothing.
+const PUBLIC_MAIL = new Set([
+  'gmail.com', 'googlemail.com', 'outlook.com', 'outlook.dk', 'hotmail.com', 'hotmail.dk', 'live.com', 'live.dk',
+  'msn.com', 'icloud.com', 'me.com', 'mac.com', 'yahoo.com', 'yahoo.dk', 'aol.com', 'proton.me', 'protonmail.com',
+  'pm.me', 'gmx.com', 'gmx.net', 'gmx.de', 'mail.com', 'mail.dk', 'jubii.dk', 'webspeed.dk', 'stofanet.dk', 'youmail.dk',
+  'tdcadsl.dk', 'post.tele.dk', 'example.com',
+])
+const domainOf = (email: string | null | undefined) => (email ?? '').split('@')[1]?.trim().toLowerCase() || null
+
+// A referral that may be the agency referring itself (security review, 27
+// Nov): the new user's email domain is a company domain one of the agency's
+// members also uses. Returns the reason to show in Admin, or null.
+async function possibleSelfReferral(db: SupabaseClient, mccAccountId: string, userId: string): Promise<string | null> {
+  const { data: u } = await db.auth.admin.getUserById(userId)
+  const domain = domainOf(u?.user?.email)
+  if (!domain || PUBLIC_MAIL.has(domain)) return null
+  const { data: members } = await db.from('account_members').select('user_id').eq('account_id', mccAccountId)
+  for (const m of (members ?? []) as { user_id: string }[]) {
+    const { data } = await db.auth.admin.getUserById(m.user_id)
+    if (domainOf(data?.user?.email) === domain) {
+      return `The client signed up with an @${domain} address, the same domain as a member of the agency.`
+    }
+  }
+  return null
+}
+
+// The agency behind a waiting signup's referral code, for the password page
+// to name and ask about. Null when there's no (usable) referral.
+export async function pendingReferralAgency(db: SupabaseClient, user: Pick<User, 'app_metadata'>): Promise<string | null> {
+  const ref = readPending(user)?.ref
+  if (!ref) return null
+  const { data } = await db
+    .from('referral_links')
+    .select('accounts!referral_links_mcc_account_id_fkey(name, type)')
+    .eq('code', ref)
+    .eq('active', true)
+    .maybeSingle()
+  const acc = (data as unknown as { accounts: { name: string; type: string } | null } | null)?.accounts
+  return acc?.type === 'mcc' ? acc.name : null
+}
+
+// Stores the person's answer about the referring agency on the waiting
+// signup, before completeSignup() reads it.
+export async function setReferralConsent(db: SupabaseClient, userId: string, consent: boolean): Promise<void> {
+  const { data, error } = await db.auth.admin.getUserById(userId)
+  if (error || !data?.user) return
+  const pending = readPending(data.user)
+  if (!pending?.ref) return
+  const { error: upErr } = await db.auth.admin.updateUserById(userId, {
+    app_metadata: { ...(data.user.app_metadata ?? {}), pending_signup: { ...pending, refConsent: consent } },
+  })
+  if (upErr) dbError('setReferralConsent', upErr)
+}
+
+// Referral link, agreed to → the MCC gets account access at once, and the referral is
 // pending until the first paid invoice. Unknown or retired codes are ignored:
 // the signup still goes through, just without a referrer.
 async function recordReferral(db: SupabaseClient, userAccountId: string, userId: string, code: string): Promise<void> {
@@ -220,12 +293,15 @@ async function recordReferral(db: SupabaseClient, userAccountId: string, userId:
   if (gErr) dbError('recordReferral grant', gErr)
 
   const rate = l.accounts.commission_rate !== null ? Number(l.accounts.commission_rate) : await defaultCommissionRate(db)
+  const selfReferral = await possibleSelfReferral(db, l.mcc_account_id, userId)
   const { error: rErr } = await db.from('referrals').insert({
     mcc_account_id: l.mcc_account_id,
     user_account_id: userAccountId,
     referral_link_id: l.id,
     access_grant_id: grant?.id ?? null,
     commission_rate: rate,
+    // Kickback held until a platform admin approves it (migration 068).
+    ...(selfReferral ? { needs_review: true, review_reason: selfReferral } : {}),
   })
   if (rErr && rErr.code !== '23505') dbError('recordReferral referral', rErr)
 }
