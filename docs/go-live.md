@@ -18,12 +18,17 @@ reference section after it has the details the steps point to.
       applied.
 - [x] Test the two untested agency paths: an agency invite to someone with no
       login yet, and an agency with its own shops on a paid plan (27 Nov).
-- [ ] Test a downgrade through the customer portal (test mode): it should
-      wait until the period ends, then the app should show the new plan.
-- [ ] Rename FeedFlow → Kompara in the UI and emails (43 places in 21 files
-      on 27 Nov; the sidebar brand, page titles, the invite page, Stripe
-      product names made by `scripts/stripe-setup.ts`).
-- [ ] `npm run build` passes (it also runs the Shopify read-only check).
+- [x] Test a downgrade through the customer portal (27 Nov): Advanced →
+      Standard was scheduled for the period end (27 Dec), no refund invoice,
+      the app keeps showing Advanced until then. Billing doesn't yet say
+      that a change is scheduled.
+- [x] Rename FeedFlow → Kompara in what people see (27 Nov): titles, brand,
+      login/signup/invite/consent pages, app texts, the MCP connector's name
+      and instructions, the Stripe product names `npm run stripe:setup`
+      creates. Internal names (functions, CSS comments, price lookup keys
+      `feedflow_<plan>_<interval>`) stay. Test-mode Stripe products keep
+      their old names.
+- [x] `npm run build` passes, with the Shopify read-only check (27 Nov).
 
 ### 2. Decide (you)
 

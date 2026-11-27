@@ -28,7 +28,7 @@ const jetbrains = localFont({
 })
 
 export const metadata: Metadata = {
-  title: 'FeedFlow',
+  title: 'Kompara',
   description: 'Google Shopping Feed Generator',
 }
 

@@ -22,7 +22,7 @@ export type ConnectionsState = {
   channels: Record<string, number>
 }
 
-// The catalogue, from the prototype. Only a few entries exist in FeedFlow
+// The catalogue, from the prototype. Only a few entries exist in Kompara
 // today; `live` below decides which. The rest is the build list, shown as
 // "Planlagt" with no action, so nobody toggles something that does nothing.
 const GROUPS: Record<string, string[]> = {
@@ -45,12 +45,12 @@ const GROUPS: Record<string, string[]> = {
     'Miravia', 'Obelink', 'Otto', 'PcComponentes', 'Rakuten', 'Shop Apotheke', 'Showroomprivé', 'Spartoo', 'Sprinter',
     'Teract', 'To Be Dressed', 'Veepee', 'vtwonen', 'Walmart', 'Winkelstraat.nl', 'Worten',
   ],
-  'Files and API': ['SFTP Upload', 'FeedFlow API'],
+  'Files and API': ['SFTP Upload', 'Kompara API'],
 }
 const GROUP_NOTE: Record<string, string> = {
   'Shop systems': 'The shop has one source at a time: Shopify or a feed URL. Other shop systems can currently connect through their feed URL.',
   'Google and ads': "Channels are feeds you create under Feeds. Google Ads is linked per feed under the feed's Settings.",
-  AI: "AI Titles and AI mapping use FeedFlow's own connection. There is no key to set up.",
+  AI: "AI Titles and AI mapping use Kompara's own connection. There is no key to set up.",
 }
 
 type Tone = 'on' | 'bad' | 'avail' | 'planned'
@@ -224,7 +224,7 @@ export function ConnectionsClient({ initial }: { initial: ConnectionsState }) {
       })}
 
       <p className="cn-foot">
-        FeedFlow only reads from Shopify and Google Ads and never changes anything there. Tokens are stored encrypted
+        Kompara only reads from Shopify and Google Ads and never changes anything there. Tokens are stored encrypted
         and never shown again.
       </p>
 

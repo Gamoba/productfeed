@@ -5,7 +5,7 @@ import { getMemberships } from '@/lib/accounts'
 import { decideAuthorization } from './actions'
 import './consent.css'
 
-// OAuth consent for MCP clients (Claude's FeedFlow connector).
+// OAuth consent for MCP clients (Claude's Kompara connector).
 //
 // Supabase Auth is the authorization server (OAuth 2.1 server, enabled in the
 // Supabase dashboard with this page as the authorization path). Claude sends
@@ -46,8 +46,8 @@ export default async function ConsentPage({
   return (
     <main className="oc">
       <div className="oc-card card">
-        <span className="oc-brand">FeedFlow</span>
-        <h1>{data.client.name || 'An app'} wants access to FeedFlow</h1>
+        <span className="oc-brand">Kompara</span>
+        <h1>{data.client.name || 'An app'} wants access to Kompara</h1>
         <p className="oc-muted">
           Signed in as <strong>{user.email}</strong>. It gets the same access as you
           {agencies.length ? <> in {agencies.join(', ')}</> : null}, on every shop you can open.
@@ -77,7 +77,7 @@ function Shell({ title, text }: { title: string; text: string }) {
   return (
     <main className="oc">
       <div className="oc-card card">
-        <span className="oc-brand">FeedFlow</span>
+        <span className="oc-brand">Kompara</span>
         <h1>{title}</h1>
         <p className="oc-muted">{text}</p>
       </div>

@@ -22,7 +22,7 @@ export function SignupForm({
   return (
     <main className="iv">
       <div className="iv-card card">
-        <span className="iv-brand">FeedFlow</span>
+        <span className="iv-brand">Kompara</span>
         {state.status === 'sent' ? (
           <>
             <h1>Check your email</h1>

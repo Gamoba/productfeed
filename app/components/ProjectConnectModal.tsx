@@ -209,7 +209,7 @@ export function ProjectConnectModal({
           {source === 'shopify' ? (
             <>
               <p className="pc-muted">
-                We check the token against Shopify before saving it. It is stored encrypted and never shown again. FeedFlow
+                We check the token against Shopify before saving it. It is stored encrypted and never shown again. Kompara
                 only reads and never changes anything in the shop.
               </p>
               <label className="pc-field">

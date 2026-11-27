@@ -3,7 +3,7 @@
 // only do the change, log it to the Activity log and keep the feed cache in
 // step. `via` marks changes made through an assistant ("Theis via Claude").
 //
-// Nothing here talks to Shopify: it is FeedFlow's own configuration.
+// Nothing here talks to Shopify: it is Kompara's own configuration.
 
 import type { SupabaseClient, User } from '@supabase/supabase-js'
 import { validateFeed } from '@/lib/feedValidator'

@@ -61,7 +61,7 @@ async function run() {
   // 2. Customer on a test clock, subscribed with a working card.
   const clock = await stripe.testHelpers.testClocks.create({
     frozen_time: Math.floor(Date.now() / 1000),
-    name: 'FeedFlow failed-payment test',
+    name: 'Kompara failed-payment test',
   })
   const customer = await stripe.customers.create({
     name: 'Billing Clock Test',

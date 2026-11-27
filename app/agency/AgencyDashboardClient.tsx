@@ -475,7 +475,7 @@ function DeleteDialog({ shop, onClose, onDeleted }: { shop: AgencyShop; onClose:
             <>
               {' '}
               This also deletes {shop.feeds === 1 ? 'its feed' : `its ${formatNumber(shop.feeds)} feeds`} and all its data in
-              FeedFlow.
+              Kompara.
             </>
           )}{' '}
           This cannot be undone. Shopify is not touched.

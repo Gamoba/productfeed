@@ -2,7 +2,7 @@
 // the MCP tools. Callers check access to the shop first (getOwnedProject).
 // Saving re-validates every feed that uses the field, after the response.
 //
-// Nothing here talks to Shopify: master fields are FeedFlow's own configuration.
+// Nothing here talks to Shopify: master fields are Kompara's own configuration.
 
 import type { SupabaseClient } from '@supabase/supabase-js'
 import { describeMapping, logActivity } from '@/lib/activity'

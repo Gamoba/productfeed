@@ -23,7 +23,7 @@ export function mcpResourceMetadata(req: Request) {
     resource: `${origin}${MCP_PATH}`,
     authorization_servers: [authorizationServerUrl()],
     bearer_methods_supported: ['header'],
-    resource_name: 'FeedFlow',
+    resource_name: 'Kompara',
   }
 }
 
@@ -60,7 +60,7 @@ function clientIdOf(token: string): string | null {
 export function unauthorized(req: Request): Response {
   const origin = new URL(req.url).origin
   return Response.json(
-    { error: 'invalid_token', error_description: 'Sign in to FeedFlow to use this connector.' },
+    { error: 'invalid_token', error_description: 'Sign in to Kompara to use this connector.' },
     {
       status: 401,
       headers: {

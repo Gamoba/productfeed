@@ -84,7 +84,7 @@ export function McpClient({ initial }: { initial: McpState }) {
         <div>
           <h1>API / MCP</h1>
           <p className="mc-lede">
-            Connect Claude to FeedFlow and ask it to read and change your feeds. It reaches every shop in {initial.agencyName} that
+            Connect Claude to Kompara and ask it to read and change your feeds. It reaches every shop in {initial.agencyName} that
             you can open, and it never writes to Shopify.
           </p>
         </div>
@@ -107,8 +107,8 @@ export function McpClient({ initial }: { initial: McpState }) {
         </div>
         <ol className="mc-steps">
           <li>In Claude, open Settings › Connectors and choose <b>Add custom connector</b>.</li>
-          <li>Name it FeedFlow, paste the address above and choose <b>Connect</b>.</li>
-          <li>Claude opens FeedFlow. Sign in and choose <b>Allow access</b>.</li>
+          <li>Name it Kompara, paste the address above and choose <b>Connect</b>.</li>
+          <li>Claude opens Kompara. Sign in and choose <b>Allow access</b>.</li>
         </ol>
         <p className="mc-muted">On a Claude Team or Enterprise plan, an owner may have to add the connector for the organisation first.</p>
       </section>
@@ -181,11 +181,11 @@ export function McpClient({ initial }: { initial: McpState }) {
           <div className="mc-card-h">
             <div>
               <h3>Your connected assistants</h3>
-              <small>Apps that can use FeedFlow with your login.</small>
+              <small>Apps that can use Kompara with your login.</small>
             </div>
           </div>
           {grants === null ? (
-            <p className="mc-muted">Not available yet: sign-in for assistants is not switched on for FeedFlow.</p>
+            <p className="mc-muted">Not available yet: sign-in for assistants is not switched on for Kompara.</p>
           ) : grants.length === 0 ? (
             <p className="mc-empty">None yet. Connect Claude with the address above.</p>
           ) : (

@@ -78,7 +78,7 @@ export function LoginForm({ next }: { next: string | null }) {
             </button>
           </form>
           <p className="text-sm text-gray-500 mt-6">
-            New to FeedFlow?{' '}
+            New to Kompara?{' '}
             <a href="/signup" className="text-indigo-600 hover:underline">
               Create an account
             </a>

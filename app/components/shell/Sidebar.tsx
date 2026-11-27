@@ -65,7 +65,7 @@ export function Sidebar({ shell, pathname }: { shell: Shell; pathname: string })
       <span className="shell-brand-mark">
         <Icon name="bolt" size={15} />
       </span>
-      FeedFlow
+      Kompara
     </>
   )
 

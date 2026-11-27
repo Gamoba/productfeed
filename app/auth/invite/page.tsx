@@ -56,7 +56,7 @@ export default function InvitePage() {
   return (
     <main className="iv">
       <div className="iv-card card">
-        <span className="iv-brand">FeedFlow</span>
+        <span className="iv-brand">Kompara</span>
         {tokens === null ? (
           <p className="iv-muted">Opening the invitation…</p>
         ) : tokens === 'none' ? (

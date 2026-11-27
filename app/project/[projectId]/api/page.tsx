@@ -7,7 +7,7 @@ import { listChanges } from '@/lib/mcp/changes'
 import { MCP_PATH } from '@/lib/mcp/auth'
 import { McpClient, type McpState } from './McpClient'
 
-// Shop › API / MCP. Connecting Claude (or another MCP client) to FeedFlow,
+// Shop › API / MCP. Connecting Claude (or another MCP client) to Kompara,
 // approving the changes it asks for, and the agency's "apply without
 // approval" setting. The connection itself is per user and reaches every shop
 // in the agency; the change list here is this shop's.

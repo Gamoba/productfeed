@@ -40,7 +40,7 @@ async function productFor(planId: string, name: string): Promise<string> {
     if (p.metadata?.plan_id === planId) return p.id
   }
   const p = await stripe.products.create({
-    name: `FeedFlow ${name}`,
+    name: `Kompara ${name}`,
     metadata: { plan_id: planId },
     tax_code: 'txcd_10103001', // SaaS, business use
   })

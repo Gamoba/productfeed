@@ -230,7 +230,7 @@ export function BillingClient({ billing, plans, canManage, configured, detail, u
                     {contactEmail && (
                       <a
                         className="wl-btn-secondary bl-cta"
-                        href={`mailto:${contactEmail}?subject=${encodeURIComponent('FeedFlow Enterprise')}`}
+                        href={`mailto:${contactEmail}?subject=${encodeURIComponent('Kompara Enterprise')}`}
                       >
                         Contact us
                       </a>

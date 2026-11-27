@@ -1,4 +1,4 @@
-// FeedFlow's MCP server: the tools Claude (or another MCP client) can call.
+// Kompara's MCP server: the tools Claude (or another MCP client) can call.
 //
 // One server per request (the endpoint is stateless), built for the signed-in
 // user. Every tool starts from that user and goes through getOwnedFeed /
@@ -51,10 +51,10 @@ import * as titleSvc from '@/lib/titleOptimizationService'
 import * as titleWorkshop from '@/lib/bucketExamples'
 import { MAX_RUN_PRODUCTS } from '@/lib/ops/titles'
 
-const INSTRUCTIONS = `FeedFlow builds product feeds (Google Shopping and other channels) from an agency's shops.
+const INSTRUCTIONS = `Kompara builds product feeds (Google Shopping and other channels) from an agency's shops.
 Hierarchy: agency → shop → feed (one channel + country). Start with list_shops to get shop and feed ids.
-Reads are free. Every change (set_mapping, set_rules, set_feed_settings) is a proposal: it is applied at once only if the agency allows changes without approval; otherwise it waits for a person to approve it in FeedFlow under Shop › API / MCP. Always tell the user which it was.
-FeedFlow never writes to Shopify. Product data comes from Shopify (read-only); FeedFlow decides how it is mapped and filtered into the feed.
+Reads are free. Every change (set_mapping, set_rules, set_feed_settings) is a proposal: it is applied at once only if the agency allows changes without approval; otherwise it waits for a person to approve it in Kompara under Shop › API / MCP. Always tell the user which it was.
+Kompara never writes to Shopify. Product data comes from Shopify (read-only); Kompara decides how it is mapped and filtered into the feed.
 Before changing a mapping, read get_mapping and check the result on real products with search_products.
 Labels: custom labels (custom_label_0–4) computed from Google Ads performance. Read get_labels before set_label / set_label_bucket.
 AI Titles: products are grouped in buckets; each bucket has a scope (which products), instructions, and a review queue. Generating titles costs AI usage and changes the feed, so run_ai_titles is always a proposal of at most ${MAX_RUN_PRODUCTS} products.`
@@ -116,7 +116,7 @@ Any type may add config.onlyIf = { conditions: [{ field: <source>, operator, val
 Keep the config of the other kind of keys exactly as get_mapping shows them; only send the fields you change.`
 
 export function createFeedFlowServer(caller: McpCaller): McpServer {
-  const server = new McpServer({ name: 'FeedFlow', version: '1.0.0' }, { instructions: INSTRUCTIONS })
+  const server = new McpServer({ name: 'Kompara', version: '1.0.0' }, { instructions: INSTRUCTIONS })
   const db = adminDb()
   const userId = caller.user.id
   let client: string | null = null
@@ -1187,7 +1187,7 @@ function checkMapping(type: string, config: Record<string, unknown>): string | n
 }
 
 function describeOutcome(r: ProposeResult, summary: string): string {
-  if (r.status === 'pending') return `${summary}: waiting for approval in FeedFlow (Shop › API / MCP), change #${r.id}. Nothing has changed yet.`
+  if (r.status === 'pending') return `${summary}: waiting for approval in Kompara (Shop › API / MCP), change #${r.id}. Nothing has changed yet.`
   if (r.status === 'applied')
     return `${summary}: applied (the agency allows changes without approval), change #${r.id}.${r.warnings?.length ? ` Note: ${r.warnings.join(' ')}` : ''}`
   return `${summary}: could not be applied: ${r.error ?? 'unknown error'} (change #${r.id}).`
