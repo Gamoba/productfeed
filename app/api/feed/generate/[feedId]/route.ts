@@ -4,14 +4,16 @@ import { validateFeed, type ValidationResult } from '@/lib/feedValidator'
 import { adminDb, getOwnedFeed } from '@/lib/feeds'
 import { enforceRateLimit, RateLimitError } from '@/lib/rateLimit'
 import { errorResponse } from '@/lib/errors'
-import { regenerateFeedCache } from '@/lib/feedCache'
+import { FEED_CACHE_TTL_MS, regenerateFeedCache } from '@/lib/feedCache'
 import { feedServingBlocked } from '@/lib/entitlements'
 
 // Generating a ~28k-item feed takes ~45 s on a cache miss; give it the
 // Hobby-plan ceiling (as cron/sync does) rather than the platform default.
 export const maxDuration = 300
 
-const CACHE_TTL_MS = 6 * 60 * 60 * 1000 // 6 hours
+// One definition, shared with the scheduled sync, which renews the stored XML
+// a little before this runs out (lib/feedCache.ts).
+const CACHE_TTL_MS = FEED_CACHE_TTL_MS
 
 function xmlResponse(body: string, status = 200) {
   return new Response(body, {

@@ -41,16 +41,16 @@ try {
       check('a feed with products exists to count', false, 'none found; counting not checked')
     } else {
       // Product mode: one SKU per product that goes out.
-      const spec = JSON.stringify([{ feed_id: feed.feed_id, mode: 'product', ids: null }])
-      const [all] = await tx`SELECT * FROM public.shop_sku_usage_count(${spec}::jsonb)`
+      const spec = [{ feed_id: feed.feed_id, mode: 'product', ids: null }]
+      const [all] = await tx`SELECT * FROM public.shop_sku_usage_count(${sql.json(spec)})`
       check('counts every active product of a feed', Number(all.product_count) === Number(feed.products),
         `${all.product_count} products, ${all.sku_count} SKUs`)
       check('a product-mode feed sends one item per product', Number(all.sku_count) === Number(all.product_count),
         `${all.sku_count} SKUs`)
 
       // Variant mode: one SKU per variant, so never fewer than in product mode.
-      const varSpec = JSON.stringify([{ feed_id: feed.feed_id, mode: 'variant', ids: null }])
-      const [variants] = await tx`SELECT * FROM public.shop_sku_usage_count(${varSpec}::jsonb)`
+      const varSpec = [{ feed_id: feed.feed_id, mode: 'variant', ids: null }]
+      const [variants] = await tx`SELECT * FROM public.shop_sku_usage_count(${sql.json(varSpec)})`
       const [{ vs }] = await tx`
         SELECT coalesce(sum(jsonb_array_length(coalesce(variants, '[]'::jsonb))), 0) AS vs
         FROM products WHERE feed_id = ${feed.feed_id} AND status = 'active'`
@@ -58,32 +58,32 @@ try {
         `${variants.sku_count} SKUs against ${vs} variants`)
 
       // Mode is per feed, and the mode missing means product mode.
-      const noMode = JSON.stringify([{ feed_id: feed.feed_id, ids: null }])
-      const [defaulted] = await tx`SELECT * FROM public.shop_sku_usage_count(${noMode}::jsonb)`
+      const noMode = [{ feed_id: feed.feed_id, ids: null }]
+      const [defaulted] = await tx`SELECT * FROM public.shop_sku_usage_count(${sql.json(noMode)})`
       check('no mode given means product mode', Number(defaulted.sku_count) === Number(all.sku_count))
 
       const ids = await tx`SELECT shopify_id FROM products WHERE feed_id = ${feed.feed_id} AND status = 'active' LIMIT 3`
-      const some = JSON.stringify([{ feed_id: feed.feed_id, mode: 'product', ids: ids.map((r) => r.shopify_id) }])
-      const [few] = await tx`SELECT * FROM public.shop_sku_usage_count(${some}::jsonb)`
+      const some = [{ feed_id: feed.feed_id, mode: 'product', ids: ids.map((r) => r.shopify_id) }]
+      const [few] = await tx`SELECT * FROM public.shop_sku_usage_count(${sql.json(some)})`
       check('an id list counts only those products', Number(few.product_count) === ids.length,
         `${few.product_count} of ${ids.length}`)
 
       // The same feed twice stands in for two feeds of one shop: the products
       // must be counted once (de-duplication per shop).
-      const twice = JSON.stringify([
+      const twice = [
         { feed_id: feed.feed_id, mode: 'product', ids: null },
         { feed_id: feed.feed_id, mode: 'product', ids: null },
-      ])
-      const [dedup] = await tx`SELECT * FROM public.shop_sku_usage_count(${twice}::jsonb)`
+      ]
+      const [dedup] = await tx`SELECT * FROM public.shop_sku_usage_count(${sql.json(twice)})`
       check('a product in two feeds counts once', Number(dedup.sku_count) === Number(all.sku_count))
 
       // Two feeds of one shop, one per variant: the product counts as the most
       // any one feed sends out, not the sum.
-      const mixed = JSON.stringify([
+      const mixed = [
         { feed_id: feed.feed_id, mode: 'product', ids: null },
         { feed_id: feed.feed_id, mode: 'variant', ids: null },
-      ])
-      const [both] = await tx`SELECT * FROM public.shop_sku_usage_count(${mixed}::jsonb)`
+      ]
+      const [both] = await tx`SELECT * FROM public.shop_sku_usage_count(${sql.json(mixed)})`
       check('a product in a product feed and a variant feed counts its variants once',
         Number(both.sku_count) === Math.max(Number(variants.sku_count), Number(all.sku_count)),
         `${both.sku_count} SKUs`)

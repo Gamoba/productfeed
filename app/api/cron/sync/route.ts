@@ -1,8 +1,8 @@
 import { isCronAuthorized } from '@/lib/cronAuth'
 import { adminDb } from '@/lib/feeds'
-import { syncProducts } from '@/lib/sync'
+import { changedAnything, syncProducts, type SyncResult } from '@/lib/sync'
 import { SyncAlreadyRunningError } from '@/lib/syncProgress'
-import { regenerateFeedCache } from '@/lib/feedCache'
+import { feedCacheAgeMs, FEED_CACHE_REFRESH_MS, regenerateFeedCache } from '@/lib/feedCache'
 import { clientMessage } from '@/lib/errors'
 import { logActivity } from '@/lib/activity'
 import { capFrequency, getEntitlementsMany, shopsLocked } from '@/lib/entitlements'
@@ -110,8 +110,9 @@ export async function GET(req: Request) {
     }
 
     try {
+      let synced: SyncResult | null = null
       try {
-        await syncProducts(feed.id)
+        synced = await syncProducts(feed.id)
       } catch (err) {
         if (!(err instanceof SyncAlreadyRunningError)) throw err
         // Someone pressed Sync and it is still running. Not a failure: hand the
@@ -130,16 +131,29 @@ export async function GET(req: Request) {
       }
 
       // Refresh the served XML so Google picks up the new data on its next
-      // fetch, instead of a cache that can be up to 6 hours old. Skipped for
-      // feeds with AI mappings: generation calls the model per product, and an
-      // hourly schedule would multiply that cost — those feeds keep the
-      // regular cache expiry.
+      // fetch, instead of a cache that can be up to 6 hours old.
+      //
+      // Only when there is a reason to. Rebuilding reads the whole catalogue
+      // with every metafield, generates the XML and validates it — by far the
+      // heaviest thing the scheduled run does — and an hourly feed whose
+      // products haven't moved would do it 24 times a day for an identical
+      // result. So it rebuilds when the sync wrote something, and otherwise
+      // only once the stored XML is old enough to be worth renewing before
+      // Merchant Center hits an expired cache and waits for one.
+      //
+      // Skipped for feeds with AI mappings whatever happens: generation calls
+      // the model per product, and an hourly schedule would multiply that
+      // cost — those feeds keep the regular cache expiry.
       const { count: aiMappings } = await db
         .from('feed_mappings')
         .select('google_field', { count: 'exact', head: true })
         .eq('feed_id', feed.id)
         .eq('mapping_type', 'AI')
-      if (!aiMappings) await regenerateFeedCache(feed.id)
+      if (!aiMappings) {
+        const age = await feedCacheAgeMs(feed.id)
+        const stale = age === null || age > FEED_CACHE_REFRESH_MS
+        if (!synced || changedAnything(synced) || stale) await regenerateFeedCache(feed.id)
+      }
 
       await db
         .from('feeds')

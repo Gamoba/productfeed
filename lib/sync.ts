@@ -61,12 +61,23 @@ export type SyncResult = {
   synced: number
   metafields: number
   durationMs: number
+  /**
+   * Rows the sync actually wrote. All zero means the source hadn't changed
+   * since the last run, so anything derived from the products — the feed XML
+   * above all — is still current (see changedAnything).
+   */
+  changed: { products: number; productsRemoved: number; metafields: number }
   // Non-fatal problems worth telling the user about. The sync itself succeeded;
   // these say the data it wrote is not everything it could have been. Empty on
   // a clean sync.
   warnings: SyncWarning[]
   /** Stock snapshot rows written — i.e. variants whose stock actually changed. */
   stockChanges: number
+}
+
+/** True when the sync wrote anything at all, i.e. the feed's data moved. */
+export function changedAnything(r: SyncResult): boolean {
+  return r.changed.products > 0 || r.changed.productsRemoved > 0 || r.changed.metafields > 0
 }
 
 export type SyncWarning = {
@@ -635,6 +646,11 @@ async function runSync(
     synced: products.length,
     metafields: metafieldCount,
     durationMs: totalMs,
+    changed: {
+      products: productStats.inserted + productStats.updated,
+      productsRemoved: staleIds.length,
+      metafields: mfStats.inserted + mfStats.updated + mfStats.deleted,
+    },
     warnings: source.warnings,
     stockChanges,
   }
