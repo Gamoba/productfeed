@@ -269,8 +269,8 @@ export async function createCheckout(
 // Moves a paying account onto its custom plan (lib/customPlans.ts). Checkout
 // can't (one plan subscription per account) and the Stripe portal only offers
 // the public plans, so the app swaps the price on the existing subscription.
-// Stripe prorates and invoices the difference at once; if the card is
-// declined, nothing changes. Add-on items stay; changing the interval is only
+// Stripe prorates: a dearer plan is invoiced at once (a declined card changes
+// nothing), a cheaper one credited on the next invoice. Add-on items stay; changing the interval is only
 // possible without them, since every item on a subscription shares it.
 export async function switchToCustomPlan(
   db: SupabaseClient,
@@ -312,11 +312,20 @@ export async function switchToCustomPlan(
     )
   }
 
+  // A switch that costs more is charged now. One that costs less is credited
+  // on the next invoice instead: a credit invoice of its own would not reduce
+  // the agency's kickback (lib/commissions.ts only counts paid invoices).
+  const preview = await stripe().invoices.createPreview({
+    subscription: sub.id,
+    subscription_details: { items: [{ id: item.id, price: price.stripePriceId }], proration_behavior: 'always_invoice' },
+  })
+  const prorationBehavior = preview.total < 0 ? 'create_prorations' : 'always_invoice'
+
   let updated: Stripe.Subscription
   try {
     updated = await stripe().subscriptions.update(sub.id, {
       items: [{ id: item.id, price: price.stripePriceId }],
-      proration_behavior: 'always_invoice',
+      proration_behavior: prorationBehavior,
       // Declined card: Stripe rejects the change instead of leaving it unpaid.
       payment_behavior: 'error_if_incomplete',
       metadata: { ...sub.metadata, account_id: accountId, plan_id: plan.id },

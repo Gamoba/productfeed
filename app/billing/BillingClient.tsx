@@ -172,7 +172,7 @@ export function BillingClient({ billing, plans, canManage, configured, accounts,
             />
           ))}
         <Usage usage={detail.usage} />
-        <AddonList accountId={account.id} detail={detail} canManage={canManage && configured} hasPlan />
+        <AddonList accountId={account.id} detail={detail} canManage={canManage && configured} interval={subscription.interval} />
         </>
       ) : (
         <>
@@ -475,20 +475,23 @@ function AddonList({
   accountId,
   detail,
   canManage,
-  hasPlan,
+  interval,
 }: {
   accountId: string
   detail: BillingDetail
   canManage: boolean
-  hasPlan: boolean
+  /** The plan's interval: an add-on is billed with the plan, at its interval. */
+  interval: Interval | null
 }) {
+  const hasPlan = interval !== null
   const router = useRouter()
   const [busy, setBusy] = useState<string | null>(null)
   const [error, setError] = useState<string | null>(null)
   const [qty, setQty] = useState<Record<string, string>>({})
   const [, start] = useTransition()
   const owned = new Set(detail.addons.map((a) => a.addonId))
-  const available = detail.catalogue.filter((a) => !owned.has(a.id) || a.quantityEnabled)
+  // Only what the customer may buy itself; the rest only Gamoba puts on.
+  const available = detail.catalogue.filter((a) => a.selfServe && (!owned.has(a.id) || a.quantityEnabled))
 
   function run(key: string, fn: () => Promise<{ ok?: true; error?: string }>) {
     setBusy(key)
@@ -560,9 +563,12 @@ function AddonList({
               </div>
               <div className="bl-addon-right">
                 <span>
-                  {a.prices
-                    .map((p) => `${money(p.amountCents, p.currency)} / ${p.interval === 'year' ? 'year' : 'month'}`)
-                    .join(' · ') || 'No price yet'}
+                  {(() => {
+                    const p = a.prices.find((x) => x.interval === interval && x.stripePriceId)
+                    return p
+                      ? `${money(p.amountCents, p.currency)} / ${p.interval === 'year' ? 'year' : 'month'}${a.quantityEnabled ? ' each' : ''}`
+                      : `Not available ${interval === 'year' ? 'yearly' : 'monthly'} yet`
+                  })()}
                 </span>
                 {canManage ? (
                   <>
@@ -578,7 +584,7 @@ function AddonList({
                     <button
                       type="button"
                       className="wl-btn-secondary"
-                      disabled={busy !== null || a.prices.length === 0}
+                      disabled={busy !== null || !a.prices.some((x) => x.interval === interval && x.stripePriceId)}
                       onClick={() => run(`add-${a.id}`, () => addAddonAction(accountId, a.id, qty[a.id] ?? '1'))}
                     >
                       {busy === `add-${a.id}` ? 'Adding…' : 'Add'}

@@ -42,25 +42,44 @@ setup steps in `docs/go-live.md`.
   the public plans, so Billing shows each custom plan made for the account
   under its current plan, with a "Switch" button per price and a confirm step
   (`switchToCustomPlan` in `lib/billing.ts`). It swaps the price on the
-  existing subscription, prorates and invoices the difference at once
-  (`always_invoice`; a declined card leaves the plan unchanged), and keeps
-  add-ons — changing the interval is refused while there are add-ons. Checked:
-  €450 → €600/month on 27 Nov gave invoice N44TXD2O-0006, €149.95 net
-  (−€449.87 unused, +€599.82 remaining) + VAT, paid; the subscription row,
-  limits and Admin followed. Such an invoice earns a kickback like any other
-  (open decision: kickback on prorated invoices).
-
-## Built, not yet tested in the browser
-
-- **Add-ons** (migration 066; `lib/addons.ts`, Admin › Add-ons, Billing):
-  catalogue kept by platform admins with prices per interval, an optional
-  quantity and the limits one unit raises; bought by the account on Billing or
-  put on by an admin, billed or free. Limits flow through
-  `lib/entitlements.ts`, so Claude is held to them too. The tables are
-  migrated and the code builds, but nothing has been bought through the UI
-  yet, and **the catalogue is empty**: the add-ons you sell (managed service,
-  coaching, feed packs) have to be created in Admin, with a price for both
-  intervals, before a customer sees anything.
+  existing subscription and keeps add-ons — changing the interval is refused
+  while there are add-ons. A dearer plan is invoiced at once
+  (`always_invoice`; a declined card leaves the plan unchanged), a cheaper one
+  credited on the next invoice (Stripe's preview decides). Checked: €450 →
+  €600/month on 27 Nov gave invoice N44TXD2O-0006, €149.95 net (−€449.87
+  unused, +€599.82 remaining) + VAT, paid; the subscription row, limits and
+  Admin followed. €600 → €450 put the −€149.87 net on the 27 Dec invoice, with
+  no credit invoice. Such an invoice earns a kickback like any other (open
+  decision: kickback on prorated invoices).
+- **Add-ons** (migration 066; `lib/addons.ts`, Admin › Add-ons, Billing;
+  tested 27 Nov): catalogue kept by platform admins with prices per interval,
+  an optional quantity and the limits one unit raises; bought by the account
+  on Billing or put on by an admin, billed or free. Every account on a plan
+  sees every active add-on whose "Customers can buy it themselves" is on;
+  the others only an admin puts on. Limits flow through `lib/entitlements.ts`,
+  so Claude is held to them too. Checked with "Feed pack (test)" (€15/month,
+  €150/year, +5 feeds, pack; now retired):
+  - monthly (Custom Plan Test ApS): buy 1, then 1 more → one Stripe line × 2,
+    limit 20 → 30, proration on the next invoice; remove → limit back, Stripe
+    credited the unused part on the next invoice.
+  - yearly (Referral Client ApS): add → the yearly price. Changes on a yearly
+    plan are now **invoiced at once** (before, the €149.55 proration waited
+    for the renewal in Nov 2027): raising to 2 gave invoice N44TXD2O-0007,
+    €299.10 net, paid, and the kickback in 12 parts of €4.98.
+  - free grant (Gambora) and "Take off" from Admin: no Stripe line, limits
+    up and down. No plan → "needs a plan"; retired → not offered on Billing.
+  - Fixed while testing: Billing offered admin-only add-ons (the Add button
+    then failed) and listed both prices; it now offers only self-serve ones
+    at the plan's interval.
+  - Taking one off always credits on the next invoice, never as a credit
+    invoice of its own: `recordPaidInvoice` skips invoices with nothing paid,
+    so a separate credit invoice would leave the agency's kickback on the
+    refunded part in place. The first yearly removal test did just that
+    (N44TXD2O-0008, −€299.10; Referral Client ApS has a −€373.88 balance and
+    the 12 kickback parts above stand) before this was changed.
+  - **The catalogue is empty of real add-ons**: the ones you sell (managed
+    service, coaching, feed packs) have to be created in Admin, with a price
+    for both intervals, before a customer sees anything.
 
 ## Extra-SKU billing: built and tested end to end (2026-11-27)
 
@@ -175,8 +194,7 @@ Left as notes, not fixed:
 1. Stripe → Tax registrations (above). Nothing else on this list costs real
    money if it waits.
 2. Create the real add-ons in Admin (managed service, coaching, feed packs)
-   with a price for both intervals, then buy one on a subscribed account to
-   see the proration and the raised limit.
+   with a price for both intervals.
 4. Account switcher (decision 14).
 5. Untested paths: agency invite for a brand-new login, an agency with its own
    shops on a plan. (Feed-only agency access was checked on 27 Nov.)

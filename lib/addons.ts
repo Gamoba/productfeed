@@ -7,7 +7,9 @@
 //     hard-coded, so a price change needs no release.
 //   - The app creates the Stripe product and prices, as for custom plans.
 //   - An add-on rides on the account's plan subscription, at the same interval,
-//     so the customer gets one invoice. Stripe prorates the rest of the period.
+//     so the customer gets one invoice. Stripe prorates the rest of the period:
+//     on a monthly plan on the next invoice, on a yearly one invoiced at once.
+//     Taking one off credits the unused part on the next invoice.
 //   - An owner or admin of the account buys and removes add-ons on Billing
 //     (self-serve). A platform admin can also put one on an account, billed or
 //     free (decision 30). A free grant has no Stripe item: it raises the
@@ -378,12 +380,41 @@ function wantedQuantity(addon: Addon, quantity: unknown): number {
   return n
 }
 
-type ActiveRow = { id: string; quantity: number; free: boolean; stripe_subscription_item_id: string | null }
+// How Stripe settles an add-on change mid-period. Monthly: on the next
+// invoice, at most a month away. Yearly: invoiced at once, or the customer
+// would get the extra limits now and pay for them up to a year later. A
+// declined card then rejects the change instead of leaving it unpaid.
+// Taking one off always credits on the next invoice: a credit invoice of its
+// own (negative total) would not reduce the agency's kickback
+// (lib/commissions.ts only counts paid invoices), a credit line does.
+function settle(interval: Interval) {
+  return interval === 'year'
+    ? ({ proration_behavior: 'always_invoice', payment_behavior: 'error_if_incomplete' } as const)
+    : ({ proration_behavior: 'create_prorations' } as const)
+}
+async function declinedAsAppError<T>(run: () => Promise<T>): Promise<T> {
+  try {
+    return await run()
+  } catch (err) {
+    if ((err as { type?: string }).type === 'StripeCardError') {
+      throw new AppError('The card was declined, so the add-on was not changed. Update it under Manage billing and try again.', 402)
+    }
+    throw err
+  }
+}
+
+type ActiveRow = {
+  id: string
+  quantity: number
+  interval: Interval | null
+  free: boolean
+  stripe_subscription_item_id: string | null
+}
 
 async function activeRow(db: SupabaseClient, accountId: string, addonId: string): Promise<ActiveRow | null> {
   const { data, error } = await db
     .from('account_addons')
-    .select('id, quantity, free, stripe_subscription_item_id')
+    .select('id, quantity, interval, free, stripe_subscription_item_id')
     .eq('account_id', accountId)
     .eq('addon_id', addonId)
     .eq('livemode', stripeLivemode())
@@ -418,10 +449,12 @@ async function attach(
     if (existing.free || !existing.stripe_subscription_item_id) {
       throw new AppError(`“${addon.name}” was given to this account by us. Ask us to change it.`)
     }
-    await stripe().subscriptionItems.update(existing.stripe_subscription_item_id, {
-      quantity: existing.quantity + quantity,
-      proration_behavior: 'create_prorations',
-    })
+    await declinedAsAppError(() =>
+      stripe().subscriptionItems.update(existing.stripe_subscription_item_id!, {
+        quantity: existing.quantity + quantity,
+        ...settle(sub.interval),
+      })
+    )
     const { error } = await db
       .from('account_addons')
       .update({ quantity: existing.quantity + quantity, updated_at: new Date().toISOString() })
@@ -430,13 +463,15 @@ async function attach(
     return
   }
 
-  const item = await stripe().subscriptionItems.create({
-    subscription: sub.stripe_subscription_id,
-    price: price.stripePriceId,
-    quantity,
-    proration_behavior: 'create_prorations',
-    metadata: { addon_id: addon.id, account_id: accountId },
-  })
+  const item = await declinedAsAppError(() =>
+    stripe().subscriptionItems.create({
+      subscription: sub.stripe_subscription_id,
+      price: price.stripePriceId!,
+      quantity,
+      ...settle(sub.interval),
+      metadata: { addon_id: addon.id, account_id: accountId },
+    })
+  )
   const { error } = await db.from('account_addons').insert({
     account_id: accountId,
     addon_id: addon.id,
