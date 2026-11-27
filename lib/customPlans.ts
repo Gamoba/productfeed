@@ -29,6 +29,8 @@ export type CustomPlanInput = {
   monthlyEuros?: unknown
   yearlyEuros?: unknown
   includedSkus?: unknown
+  /** € per 1,000 SKUs above the included ones, per month; empty = extras free. */
+  extraPer1000Euros?: unknown
   feedLimit?: unknown
   shopLimit?: unknown
   userLimit?: unknown
@@ -78,6 +80,12 @@ export async function createCustomPlan(
     user_limit: limit(input.userLimit, 'Users', 1),
     syncs_per_day: limit(input.syncsPerDay, 'Syncs per day', 1),
   }
+  // Stored per month, as the public plans; a yearly plan pays 10/12 of it
+  // (lib/extraSkus.ts ratePer1000).
+  const extraPer1000 = cents(input.extraPer1000Euros, 'The price per 1,000 extra SKUs')
+  if (extraPer1000 !== null && limits.included_skus === null) {
+    throw new AppError('Set the included SKUs too: extra SKUs are the ones above that number')
+  }
 
   let accountId: string | null = null
   if (typeof input.accountId === 'string' && input.accountId) {
@@ -100,6 +108,7 @@ export async function createCustomPlan(
     sort_order: 0,
     created_by: adminId,
     ...limits,
+    extra_per_1000_cents: extraPer1000,
   })
   if (pErr) dbError('createCustomPlan plan', pErr)
 
@@ -266,6 +275,8 @@ export type CustomPlanRow = {
   active: boolean
   account: { id: string; name: string } | null
   prices: { interval: 'month' | 'year'; amountCents: number }[]
+  /** Monthly € cents per 1,000 SKUs above the included ones; null = free. */
+  extraPer1000Cents: number | null
   limits: { includedSkus: number | null; feeds: number | null; shops: number | null; users: number | null; syncsPerDay: number | null }
   link: { email: string | null; expiresAt: string; expired: boolean } | null
   subscribed: boolean
@@ -277,7 +288,7 @@ export async function listCustomPlans(db: SupabaseClient, adminId: string): Prom
   const [{ data: plans, error }, { data: links }, { data: accounts }, { data: subs }] = await Promise.all([
     db
       .from('plans')
-      .select('id, name, note, active, account_id, included_skus, feed_limit, shop_limit, user_limit, syncs_per_day, created_at, plan_prices(interval, livemode, amount_cents)')
+      .select('id, name, note, active, account_id, included_skus, extra_per_1000_cents, feed_limit, shop_limit, user_limit, syncs_per_day, created_at, plan_prices(interval, livemode, amount_cents)')
       .eq('is_custom', true)
       .order('created_at', { ascending: false }),
     db.from('plan_signup_links').select('plan_id, email, expires_at, used_at').is('used_at', null).order('created_at', { ascending: false }),
@@ -293,7 +304,7 @@ export async function listCustomPlans(db: SupabaseClient, adminId: string): Prom
   const subscribed = new Set(((subs ?? []) as { plan_id: string }[]).map((s) => s.plan_id))
   type P = {
     id: string; name: string; note: string | null; active: boolean; account_id: string | null
-    included_skus: number | null; feed_limit: number | null; shop_limit: number | null; user_limit: number | null; syncs_per_day: number | null
+    included_skus: number | null; extra_per_1000_cents: number | null; feed_limit: number | null; shop_limit: number | null; user_limit: number | null; syncs_per_day: number | null
     plan_prices: { interval: 'month' | 'year'; livemode: boolean; amount_cents: number }[]
   }
   return {
@@ -310,6 +321,7 @@ export async function listCustomPlans(db: SupabaseClient, adminId: string): Prom
           .filter((x) => x.livemode === livemode)
           .map((x) => ({ interval: x.interval, amountCents: x.amount_cents }))
           .sort((a, b) => (a.interval === b.interval ? 0 : a.interval === 'month' ? -1 : 1)),
+        extraPer1000Cents: p.extra_per_1000_cents,
         limits: { includedSkus: p.included_skus, feeds: p.feed_limit, shops: p.shop_limit, users: p.user_limit, syncsPerDay: p.syncs_per_day },
         link: !p.account_id && l ? { email: l.email, expiresAt: l.expires_at, expired: new Date(l.expires_at) < new Date() } : null,
         subscribed: subscribed.has(p.id),

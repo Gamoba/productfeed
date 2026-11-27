@@ -28,14 +28,18 @@ setup steps in `docs/go-live.md`.
   (`getOwnedProject` needs account scope). Checked end to end with a
   temporary grant, since no account uses feed scope today.
 
+- **Custom plans** (`lib/customPlans.ts`, Admin › Custom plans, migration
+  065; tested end to end 27 Nov): plan with own prices/limits for an existing
+  account, or a one-time signup link (`/signup?plan=…`). Checked: link →
+  signup (`scripts/test-signup-link.ts … --plan <token>`) → "Made for you" on
+  Billing → Checkout → webhook → Admin "Subscribed", link marked used, limits
+  applied. The form now also takes a price per 1,000 extra SKUs (per month,
+  yearly pays 10/12; empty = extras free) — before that, a custom plan's SKU
+  allowance was never charged above. Test company: Custom Plan Test ApS
+  (custom-plan-test-1@example.com), monthly Stripe *test* subscription.
+
 ## Built, not yet tested in the browser
 
-- **Custom plans** (`lib/customPlans.ts`, Admin › Custom plans, migration
-  065, applied): plan with own prices/limits for an existing account, or a
-  one-time signup link (`/signup?plan=…`). Test: create one for a new company,
-  sign up through the link with
-  `npx tsx scripts/test-signup-link.ts <email> "<company>" --plan <token>`
-  (the token is the part after `plan=`), pay, check Admin shows "Subscribed".
 - **Add-ons** (migration 066; `lib/addons.ts`, Admin › Add-ons, Billing):
   catalogue kept by platform admins with prices per interval, an optional
   quantity and the limits one unit raises; bought by the account on Billing or
@@ -100,6 +104,10 @@ Checkout); the account configuration is what's missing.
   Referral Client ApS, referral code `w7vd5atm`, one test payout.
 - **Referral Client ApS** (login referral-test-1@example.com): active Standard
   yearly Stripe *test* subscription, referral + commission rows.
+- **Custom Plan Test ApS** (login custom-plan-test-1@example.com): custom plan
+  "Enterprise – Custom Plan Test" with a monthly Stripe *test* subscription.
+  Cancel it in Stripe, then `--cleanup` the login as below (the plan goes with
+  the account).
 
 Remove before go-live (cancel the Stripe test subscription first, then
 `npx tsx scripts/test-signup-link.ts --cleanup referral-test-1@example.com`,
@@ -151,7 +159,6 @@ Left as notes, not fixed:
 2. Create the real add-ons in Admin (managed service, coaching, feed packs)
    with a price for both intervals, then buy one on a subscribed account to
    see the proration and the raised limit.
-3. Test custom plans end to end (the one piece of billing still untried).
 4. Account switcher (decision 14).
 5. Untested paths: agency invite for a brand-new login, an agency with its own
    shops on a plan. (Feed-only agency access was checked on 27 Nov.)

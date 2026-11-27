@@ -266,7 +266,7 @@ export function BillingClient({ billing, plans, canManage, configured, accounts,
                       disabled={!configured || !price?.stripePriceId || busy !== null}
                       onClick={() => go(plan.id, () => startCheckout(account.id, plan.id, interval))}
                     >
-                      {busy === plan.id ? 'Opening checkout…' : `Choose ${plan.name}`}
+                      {busy === plan.id ? 'Opening checkout…' : plan.isCustom ? 'Choose this plan' : `Choose ${plan.name}`}
                     </button>
                   ) : (
                     <p className="bl-sub">Ask an owner or admin to choose a plan.</p>

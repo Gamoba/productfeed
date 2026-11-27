@@ -7,7 +7,8 @@ import { createCustomPlanAction, newPlanLinkAction, setPlanActiveAction, type Ad
 
 const money = (cents: number) => new Intl.NumberFormat('en-IE', { style: 'currency', currency: 'EUR' }).format(cents / 100)
 const when = (iso: string) => new Date(iso).toLocaleDateString('en-GB', { day: 'numeric', month: 'short', year: 'numeric' })
-const lim = (n: number | null, unit: string) => (n === null ? `unlimited ${unit}` : `${n} ${unit}`)
+const num = new Intl.NumberFormat('en-IE')
+const lim = (n: number | null, unit: string) => (n === null ? `unlimited ${unit}` : `${num.format(n)} ${unit}`)
 
 const EMPTY = {
   name: '',
@@ -15,6 +16,7 @@ const EMPTY = {
   monthlyEuros: '',
   yearlyEuros: '',
   includedSkus: '',
+  extraPer1000Euros: '',
   feedLimit: '',
   shopLimit: '',
   userLimit: '',
@@ -96,6 +98,17 @@ export function CustomPlans({ plans, accounts }: { plans: CustomPlanRow[]; accou
           <input className="mc-input" inputMode="numeric" value={f.includedSkus} onChange={set('includedSkus')} placeholder="unlimited" />
         </label>
         <label>
+          <span>Per 1,000 extra SKUs (€/month)</span>
+          <input
+            className="mc-input"
+            inputMode="decimal"
+            value={f.extraPer1000Euros}
+            onChange={set('extraPer1000Euros')}
+            placeholder="free"
+            title="Billed monthly on the month's highest SKU count above the included ones. A yearly subscription pays 10/12 of it."
+          />
+        </label>
+        <label>
           <span>Feeds</span>
           <input className="mc-input" inputMode="numeric" value={f.feedLimit} onChange={set('feedLimit')} placeholder="unlimited" />
         </label>
@@ -168,7 +181,11 @@ export function CustomPlans({ plans, accounts }: { plans: CustomPlanRow[]; accou
                 <td className="ag-muted">
                   {lim(p.limits.feeds, 'feeds')} · {lim(p.limits.shops, 'shops')} · {lim(p.limits.users, 'users')}
                   <br />
-                  {lim(p.limits.syncsPerDay, 'syncs/day')} · {p.limits.includedSkus === null ? 'unlimited SKUs' : `${p.limits.includedSkus} SKUs`}
+                  {lim(p.limits.syncsPerDay, 'syncs/day')} · {p.limits.includedSkus === null
+                    ? 'unlimited SKUs'
+                    : `${num.format(p.limits.includedSkus)} SKUs · ${
+                        p.extraPer1000Cents === null ? 'extras free' : `${money(p.extraPer1000Cents)} per 1,000 extra/month`
+                      }`}
                 </td>
                 <td>
                   {p.account ? (
