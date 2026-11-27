@@ -104,8 +104,7 @@ read; it is a preference, not access.
   follow; opening BWH from Test Agency switched to Gamoba, opening Gambora
   Shop from Gamoba switched to Test Agency.
 - A customer account has its own words: "Dashboard", "Users", "Shops",
-  "Create shop" (an agency keeps "Agency dashboard", "Customers"). The Danish
-  branch has none of the billing work yet, so the switcher isn't there either.
+  "Create shop" (an agency keeps "Agency dashboard", "Customers").
 
 ## Extra-SKU billing: built and tested end to end (2026-11-27)
 
@@ -155,8 +154,17 @@ Checkout); the account configuration is what's missing.
 
 Update 27 Nov: the custom plan test invoices (Danish address) carry 25 %
 Danish VAT, `standard_rated`, although `tax.registrations.list()` in test mode
-is still empty. Check under Stripe → Tax which registration produces it, and
-that the live account has the same, before go-live.
+is still empty. Found while settling F3: the account has **Stripe Managed
+Payments** enabled by default (a Checkout session reports
+`managed_payments.enabled: true`). That is Stripe acting as merchant of
+record: Stripe sells on Gamoba's behalf and works out and pays the tax
+itself, which is most likely where the VAT comes from. It also decides the
+payment methods (Checkout refuses `allowed_payment_method_types` while it's
+on; it offers card only today) and has its own fees. **Decide before go-live
+whether to keep it** (Stripe dashboard → Settings → Managed payments): with
+it, no tax registrations are needed in Stripe; without it, Stripe Tax needs
+the Danish registration and any others, and the app's `automatic_tax` does
+the rest.
 
 ## Test data kept on purpose (shared DB = production too)
 
@@ -227,10 +235,14 @@ Followed up (27 Nov):
    with a price for both intervals.
 5. Untested paths: agency invite for a brand-new login, an agency with its own
    shops on a plan. (Feed-only agency access was checked on 27 Nov.)
-7. Open decisions: D1–D3, D5, E4, E5, F3, F4 in the brief; kickback on
-   prorated mid-year invoices.
+7. Decisions settled 27 Nov (D1–D3, D5, E4, E5, F3, F4, kickback on
+   prorated invoices; brief §5). "Downgrades at period end" is set in the
+   test-mode portal; the live portal needs it too, and whether to keep
+   Managed Payments is still to decide (go-live.md).
 8. Go-live: `docs/go-live.md` (Stripe live, Vercel env incl. SMTP, Supabase
-   redirect URLs, rename FeedFlow → Kompara, Danish branch, remove test data).
+   redirect URLs, rename FeedFlow → Kompara, remove test data). English only:
+   the Danish branch is dropped (27 Nov). `docs/go-live.md` is now an ordered
+   checklist.
    The add-ons have to be created again under live keys, as custom plans do.
 
 ## Database load (27 Nov)

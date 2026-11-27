@@ -1,140 +1,188 @@
-# Going live with the redesign
+# Going live
 
-Production (rankclimbr.com) runs `master`. The redesign lives on two branches
-with the same code and different UI language:
+Production (rankclimbr.com) runs `master`. The new app is
+`feed-tool-gennemgang-en` (English). Going live = merging it into `master`.
+The Danish branch `feed-tool-gennemgang` is dropped (decided 2026-11-27).
 
-- `feed-tool-gennemgang` — Danish
-- `feed-tool-gennemgang-en` — English
+The checklist below is in order. Each step says who does it: **code** is done
+in a Claude session on the branch, **you** is a dashboard or a decision. The
+reference section after it has the details the steps point to.
 
-Going live = merging the chosen branch into `master`. The other branch is then
-left as it is.
+## The checklist
 
-## State on 25 Nov 2026
+### 1. Finish the branch (code)
 
-- **Merge:** both branches contain all of `master`, so merging is a
-  fast-forward: no conflicts, `master` becomes exactly the branch.
-  If `master` gets new commits before then (the Google Ads work), merge `master`
-  into the branch first, test, then merge the branch into `master`.
-- **Database:** migrations 052–057 have already run on production (backup
-  taken first, rollback script in `supabase/rollback/rollback_057_to_051.sql`).
-  058 (master fields, a new table only) has run too; rollback in
-  `supabase/rollback/rollback_058.sql`.
-  `master` keeps working on that schema in the meantime (trigger in 052).
-- **Vercel settings in `vercel.json` (take effect with the merge):**
-  - `regions: ["lhr1"]`: functions run in London, next to the database
-    (Supabase eu-west-2). The dashboard default is Frankfurt; the file wins.
-  - A Vercel Cron calls `/api/warm` every 3 minutes, so a production server
-    is always running (no cold start on the first click after a quiet
-    spell). Needs the Pro plan (the project is on Pro). The product, order
-    and Google Ads syncs are still ticked by `.github/workflows/cron-sync.yml`.
-- **Environment variables (billing):** new, server-only unless noted:
-  - `STRIPE_SECRET_KEY`: `sk_test_…` until go-live, then `sk_live_…`. The key's
-    prefix decides which billing rows (`livemode`) the app reads and writes.
-  - `STRIPE_WEBHOOK_SECRET`: the signing secret of the webhook endpoint below
-    (test and live endpoints have different secrets).
-  - `NEXT_PUBLIC_SALES_EMAIL` (public, optional): where the Enterprise
-    "Contact us" button mails. Hidden when unset.
-  - `SMTP_HOST`, `SMTP_PORT`, `SMTP_USER`, `SMTP_PASSWORD`, `SMTP_FROM`: the
-    app's own emails (agency access requests, agency invites for existing
-    logins), lib/email.ts. Today Google: `smtp.gmail.com`, `587`,
-    `contact@kompara.io`, a Google app password, `Kompara <contact@kompara.io>`.
-    Unset: no app email; everything also shows in the app.
-  Everything else is the same as `master`.
-- **Billing setup (per Stripe mode):**
-  1. Apply migrations `061_billing_accounts.sql` to
-     `066_sku_usage_and_addons.sql` (ask first; dry runs:
-     `npx tsx scripts/dryrun-061.mts`, `…-063`, `…-064`, `…-065`, `…-066`).
-     066 adds the daily SKU count, what was billed for extra SKUs, and the
-     add-on catalogue.
-  2. `npm run stripe:setup` creates the plans' products and prices and stores
-     their ids in `plan_prices`.
-  3. Stripe → Webhooks: endpoint `https://<app>/api/stripe/webhook` with
-     `checkout.session.completed`, `customer.subscription.created`,
-     `customer.subscription.updated`, `customer.subscription.deleted`,
-     `invoice.paid` and `credit_note.created` (refunds, for agency
-     kickbacks). Locally (the CLI requires the events listed):
-     `stripe listen --events "checkout.session.completed,customer.subscription.created,customer.subscription.updated,customer.subscription.deleted,invoice.paid,credit_note.created" --forward-to localhost:3000/api/stripe/webhook`.
-     Keep the quotes: in PowerShell, an unquoted comma list becomes an array
-     and reaches the CLI as one space-separated (invalid) event name.
-     `stripe listen` prints its own signing secret (`whsec_…`); that one goes
-     in `.env.local` as `STRIPE_WEBHOOK_SECRET` for local testing, not the
-     Dashboard endpoint's.
-  4. Stripe → Tax: switch on Stripe Tax, set the origin address, and **add
-     the tax registrations** (Denmark, plus every country Gamoba is
-     registered in). Without a registration Stripe Tax computes 0 % for
-     everyone and invoices go out with no VAT — which is what the test
-     account does today. `automatic_tax` is already on at Checkout and on the
-     extra-SKU invoices, so this is configuration, not code.
-  5. Stripe → Customer portal: allow card updates, invoices, cancelling and
-     switching between the FeedFlow plans.
-  6. Supabase → Authentication: custom SMTP set up, and the "Invite user"
-     email template worded for signup ("Confirm your email and choose a
-     password"). "Allow new users to sign up" stays **off**: signup goes
-     through `/signup`, which creates logins server-side.
-  7. Default commission set on the Admin page (`/admin`). Until then
-     referrals record a 0 % rate.
-  7b. Add-ons created on the Admin page, one per thing you sell (managed
-     service, coaching, extra-feed packs), with a price for **both** intervals
-     so monthly and yearly customers can buy them. The app creates the Stripe
-     product and prices in the mode the keys are for, so the add-ons have to be
-     created again after switching to live keys (as for custom plans).
-  8. Platform admins: rows in `platform_admins` (today kontakt@gamoba.dk).
-     They see Admin in the agency menu.
-- **Routes:** no page or API route is removed. Feed links in Merchant Center
-  (`/api/feed/generate/<feedId>`) keep working.
-- **Database load:** migration 067 indexes the read every heavy path does
-  (`products` by feed, status and created_at); without it each page of a
-  catalogue read sorted the whole feed. If the database's CPU climbs after
-  go-live, start at Reports → Query Performance, check that `products` and
-  `product_metafields` have been analysed recently, and look at
-  `/api/feeds/counts`, which still recounts every feed in parallel on each
-  dashboard load.
-- **Scheduled jobs:** `.github/workflows/cron-sync.yml` gets two more steps,
-  `/api/cron/google-ads` (scheduled Google Ads fetch) and
-  `/api/cron/sku-usage` (the daily SKU count, which also bills each paying
-  account for last month's extra SKUs on the first tick after a month ends).
-  GitHub runs workflows from `master`, so they start with the merge. They use
-  the existing `vars.APP_URL` and `secrets.CRON_SECRET`.
-- **Dependencies:** `@modelcontextprotocol/sdk` and `zod` are added; Vercel
-  installs them on build.
+- [ ] Commit what's open, and push the branch (5 commits weren't pushed on
+      27 Nov).
+- [ ] Security review of the open signup (decision A3): `/signup`, the
+      invite link, rate limits, abuse. Run `/security-review` on the branch.
+- [ ] Test the two untested agency paths: an agency invite to someone with no
+      login yet, and an agency with its own shops on a paid plan.
+- [ ] Test a downgrade through the customer portal (test mode): it should
+      wait until the period ends, then the app should show the new plan.
+- [ ] Rename FeedFlow → Kompara in the UI and emails (43 places in 21 files
+      on 27 Nov; the sidebar brand, page titles, the invite page, Stripe
+      product names made by `scripts/stripe-setup.ts`).
+- [ ] `npm run build` passes (it also runs the Shopify read-only check).
 
-## Before the merge
+### 2. Decide (you)
 
-1. Decide the language, and merge that branch.
-2. Supabase dashboard (Authentication):
-   - Site URL is the production address.
-   - Redirect URLs include `https://<production>/auth/invite` (invites).
-   - For Claude: turn on the OAuth server, authorization path `/oauth/consent`,
-     allow dynamic client registration (see `docs/mcp.md`).
-3. Decide what to do with `.claude/settings.local.json`: the branches carry a
-   change to it (allowed commands, no secrets). Keep it, or take the file out of
-   git on `master` together.
+- [ ] **Stripe Managed Payments**: keep it (Stripe is the merchant of record
+      and handles VAT; no tax registrations needed) or turn it off (then
+      Stripe Tax needs Gamoba's registrations). See "Stripe and VAT" below.
+- [ ] **Production address**: stay on rankclimbr.com, or move to kompara.io.
+      Every URL below (Stripe webhook, Supabase redirects, Claude's OAuth)
+      uses it, so decide first.
+- [ ] `.claude/settings.local.json` is in git (allowed commands, no secrets):
+      keep it, or take it out of git.
 
-## The merge
+### 3. Stripe live mode (you)
+
+- [ ] Account activated for live payments; business details and payout bank
+      account filled in.
+- [ ] The Managed Payments choice from step 2 set in live mode (and, if it's
+      off: Stripe Tax on, origin address, tax registrations).
+- [ ] Customer portal (live): card updates, invoices, cancelling, switching
+      between the plans; upgrades "prorate and invoice immediately",
+      **downgrades at the end of the period** (cheaper price and shorter
+      interval). Test mode has this already (`bpc_1Ug1eCCKF2esnRoaAv9fR1RB`).
+- [ ] Webhook endpoint `https://<production>/api/stripe/webhook` with the six
+      events listed under "Stripe webhook" below. Copy its signing secret.
+- [ ] A live secret key (`sk_live_…`), restricted to what the app uses if
+      you prefer.
+
+### 4. Vercel environment, Production (you)
+
+- [ ] `STRIPE_SECRET_KEY` = the live key. Its prefix decides which billing
+      rows the app reads and writes (`livemode`).
+- [ ] `STRIPE_WEBHOOK_SECRET` = the live endpoint's signing secret.
+- [ ] `SMTP_HOST`, `SMTP_PORT`, `SMTP_USER`, `SMTP_PASSWORD`, `SMTP_FROM`
+      (Google today: `smtp.gmail.com`, `587`, `contact@kompara.io`, an app
+      password, `Kompara <contact@kompara.io>`).
+- [ ] `NEXT_PUBLIC_SALES_EMAIL` (optional): where Enterprise "Contact us"
+      mails; the button is hidden without it.
+- [ ] `TOKEN_ENCRYPTION_KEY`, the Supabase keys and `CRON_SECRET` already
+      exist for `master`; check they're set for Production.
+
+### 5. Supabase, Authentication (you)
+
+- [ ] Site URL = the production address.
+- [ ] Redirect URLs include `https://<production>/auth/invite`.
+- [ ] Custom SMTP set (contact@kompara.io), and the "Invite user" template
+      worded for signup ("Confirm your email and choose a password").
+- [ ] "Allow new users to sign up" stays **off** (signup creates logins
+      server-side).
+- [ ] For Claude: OAuth server on, authorization path `/oauth/consent`,
+      dynamic client registration allowed (`docs/mcp.md`).
+- [ ] Database: nothing to run. Migrations 052–067 are already applied on the
+      shared database (rollbacks in `supabase/rollback/`).
+
+### 6. Clean up the test data (code, with you approving)
+
+The database is shared with production, so test rows are real rows. Cancel
+the Stripe **test** subscriptions first, then:
+
+- [ ] Custom Plan Test ApS: `npx tsx scripts/test-signup-link.ts --cleanup custom-plan-test-1@example.com`
+      (its two custom plans go with the account).
+- [ ] Referral Client ApS: `--cleanup referral-test-1@example.com`; its
+      referral, kickback rows and test payout.
+- [ ] Test Agency (owned by kontakt@gamoba.dk): grants, referral code, payout.
+- [ ] Gambora: `billing_exempt` back to `false`, and its shop "Gambora Shop
+      (agency test)".
+- [ ] The retired test add-on "Feed pack (test)".
+- [ ] Not test data, keep: kontakt@gamoba.dk as platform admin, the default
+      commission (20 %).
+
+### 7. Merge and deploy (code, with your go-ahead)
 
 ```
 git checkout master
 git pull
-git merge --ff-only feed-tool-gennemgang      # or feed-tool-gennemgang-en
+git merge --ff-only feed-tool-gennemgang-en
 git push
 ```
 
-`--ff-only` refuses if `master` has moved on, which is the signal to merge
-`master` into the branch first.
+`--ff-only` refuses if `master` has moved on; then merge `master` into the
+branch first, test, and try again. Vercel deploys `master`; the GitHub
+workflow (scheduled syncs, Google Ads, SKU count) runs from `master` too.
 
-## After the merge (on rankclimbr.com)
+### 8. Live setup after the deploy (you, in the app and Stripe)
 
-- Agency dashboard, a shop's Feeds page and a feed's Overview load.
-- Save a mapping, an include/exclude rule and a setting on a test shop, and
-  see them in the Activity log.
-- The Google Ads page of a feed with an account shows figures and labels.
-- Open a feed link in the browser and check the XML.
-- The SKU count has run: `shop_sku_usage` has a row per shop for today, and a
-  customer's Billing page shows the month's figures.
-- The next scheduled run of the GitHub workflow succeeds (all three calls).
+With the live key in place:
 
-## If something is wrong
+- [ ] `npm run stripe:setup` with the live key: creates the plans' live
+      products and prices and stores them in `plan_prices`.
+- [ ] Admin (`/admin`): the default commission; the real add-ons (managed
+      service, coaching, feed packs) with **both** a monthly and a yearly
+      price; any custom plans again (test-mode ones don't carry over).
+- [ ] Buy a plan once with a real card on a throwaway account, check
+      Billing, the invoice and VAT, then refund and cancel it in Stripe.
+
+### 9. Check production (you)
+
+- [ ] Dashboard, a shop's Feeds page and a feed's Overview load.
+- [ ] Save a mapping, an include/exclude rule and a setting on a test shop,
+      and see them in the Activity log.
+- [ ] The Google Ads page of a feed with an account shows figures.
+- [ ] A feed link opens and shows XML; Merchant Center still fetches.
+- [ ] The next GitHub workflow run succeeds (all three calls); the next day
+      `shop_sku_usage` has a row per shop and Billing shows the figures.
+- [ ] A few weeks on: search the Vercel logs for `[legacy-feed-url]`. When
+      nothing shows, delete `/api/feed/[userId]` and `getFirstFeed`.
+
+### If something is wrong
 
 Vercel → Deployments → the previous production deployment → Promote / Instant
-rollback. The database does not need rolling back: the old `master` code works
+rollback. The database doesn't need rolling back: the old `master` code works
 on the migrated schema.
+
+## Reference
+
+### What the merge brings
+
+- **Vercel settings in `vercel.json`** (take effect with the merge):
+  `regions: ["lhr1"]` (functions in London, next to the database in
+  eu-west-2), and a Vercel Cron calling `/api/warm` every 3 minutes so a
+  server is always warm (needs Pro; the project is on Pro).
+- **Scheduled jobs:** `.github/workflows/cron-sync.yml` gains
+  `/api/cron/google-ads` and `/api/cron/sku-usage` (the daily SKU count,
+  which also bills last month's extra SKUs on the first tick of a month).
+  They use the existing `vars.APP_URL` and `secrets.CRON_SECRET`.
+- **Dependencies:** `@modelcontextprotocol/sdk` and `zod`; Vercel installs
+  them on build.
+- **Routes:** none removed. Merchant Center links
+  (`/api/feed/generate/<feedId>`) keep working; the old `/api/feed/[userId]`
+  stays until the logs show it's unused.
+
+### Stripe webhook
+
+Endpoint `https://<production>/api/stripe/webhook`, events:
+`checkout.session.completed`, `customer.subscription.created`,
+`customer.subscription.updated`, `customer.subscription.deleted`,
+`invoice.paid`, `credit_note.created` (refunds, for agency kickbacks).
+
+Locally (the CLI needs the events listed; keep the quotes in PowerShell):
+
+    stripe listen --events "checkout.session.completed,customer.subscription.created,customer.subscription.updated,customer.subscription.deleted,invoice.paid,credit_note.created" --forward-to localhost:3000/api/stripe/webhook
+
+`stripe listen` prints its own signing secret; that one goes in `.env.local`
+for local testing, not the Dashboard endpoint's.
+
+### Stripe and VAT
+
+The test account has **Managed Payments** on by default: Stripe acts as
+merchant of record, works out and pays the VAT, and decides the payment
+methods (card only today). That is why test invoices to a Danish address carry
+25 % VAT although no tax registration exists. With it off, Stripe Tax computes
+0 % until registrations are added; the app's `automatic_tax` (Checkout and
+the extra-SKU invoices) needs no change either way. See
+`docs/billing-status.md`, "Stripe Tax".
+
+### Database load
+
+Migration 067 indexes the read every heavy path does (`products` by feed,
+status and created_at). If the database's CPU climbs after go-live, start at
+Reports → Query Performance, check that `products` and `product_metafields`
+have been analysed recently, and consider the compute size (PostgREST, Auth,
+Storage and the log agent share it). `/api/feeds/counts` is only called per
+shop and counts three feeds at a time.

@@ -6,6 +6,9 @@
 //   - A monthly invoice gives one part, due on the last day of the month it
 //     was paid. A yearly invoice gives 12 parts of one twelfth each, due on
 //     the last day of each of the 12 months from the payment month.
+//   - An invoice in the middle of a yearly plan (an upgrade, a yearly add-on:
+//     Stripe's prorations) is spread over the months left in the plan year,
+//     at least one, so the agency is paid in step with the period it covers.
 //   - A refund reduces (or drops) parts not paid out yet; for parts already
 //     paid out it adds a negative 'reversed' row, deducted from the next payout.
 //   - Cancelling the plan, or the client revoking the agency's access, drops
@@ -38,7 +41,7 @@ function invoiceSubscriptionId(invoice: Stripe.Invoice): string | null {
   return typeof ref === 'string' ? ref : (ref?.id ?? null)
 }
 
-type InvoiceSub = { id: string; account_id: string; interval: 'month' | 'year' }
+type InvoiceSub = { id: string; account_id: string; interval: 'month' | 'year'; current_period_end: string | null }
 
 // Our subscription row for the invoice's Stripe subscription, if it has one.
 // A subscription can carry both the plan and the extra-SKU row; the plan's
@@ -48,7 +51,7 @@ async function invoiceSubscription(db: SupabaseClient, invoice: Stripe.Invoice):
   if (!stripeSubId) return null
   const { data, error } = await db
     .from('subscriptions')
-    .select('id, account_id, interval, kind')
+    .select('id, account_id, interval, kind, current_period_end')
     .eq('stripe_subscription_id', stripeSubId)
   if (error) dbError('invoiceSubscription', error)
   const rows = (data ?? []) as (InvoiceSub & { kind: string })[]
@@ -116,7 +119,7 @@ export async function recordPaidInvoice(db: SupabaseClient, invoice: Stripe.Invo
   const base = invoice.total_excluding_tax ?? invoice.subtotal_excluding_tax ?? invoice.subtotal
   if (!base || base <= 0) return
   const rate = Number(ref.commission_rate)
-  const parts = interval === 'year' ? 12 : 1
+  const parts = interval === 'year' ? yearlyParts(invoice, paidAt, sub?.current_period_end ?? null) : 1
   const each = Math.floor(base / parts)
   // The commission is rounded once, on the whole invoice, and split the same
   // way, so the parts add up to exactly rate × invoice.
@@ -142,6 +145,17 @@ export async function recordPaidInvoice(db: SupabaseClient, invoice: Stripe.Invo
   })
   const { error } = await db.from('commissions').insert(rows)
   if (error && error.code !== '23505') dbError('recordPaidInvoice insert', error)
+}
+
+// How many monthly parts a paid invoice on a yearly plan gives: 12 for the
+// year itself (its first invoice and each renewal), else the months left until
+// the plan year ends, counting the payment month (1–12).
+export function yearlyParts(invoice: Pick<Stripe.Invoice, 'billing_reason'>, paidAt: Date, periodEnd: string | null): number {
+  const wholeYear = invoice.billing_reason === 'subscription_create' || invoice.billing_reason === 'subscription_cycle'
+  if (wholeYear || !periodEnd) return 12
+  const end = new Date(periodEnd)
+  const months = (end.getUTCFullYear() - paidAt.getUTCFullYear()) * 12 + (end.getUTCMonth() - paidAt.getUTCMonth())
+  return Math.min(12, Math.max(1, months))
 }
 
 // A refund (credit note) on an invoice: scale its commission down by the

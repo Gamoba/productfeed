@@ -9,7 +9,7 @@ This version has breaking changes — APIs, conventions, and file structure may 
 
 UI and structure work for the redesign follows `docs/redesign/GUIDELINES.md`. It covers scope decisions (CSS and Master fields are postponed), the Agency → Shop → Feed hierarchy, page notes and the chosen visual system. Read it before redesign work.
 
-- **Keep the two branches in sync.** `feed-tool-gennemgang` (Danish UI) and `feed-tool-gennemgang-en` (English UI) carry the same code; only UI text differs. Make every change on both.
+- **English only.** The app goes live in English from `feed-tool-gennemgang-en` (decided 2026-11-27). The Danish branch `feed-tool-gennemgang` is dropped: don't port changes to it.
 - **Feed changes go through `lib/ops/*`.** The UI and the MCP tools (Claude) share that code, so a rule added there applies to both. See `docs/mcp.md` for the MCP server and `docs/go-live.md` for the merge and release checklist.
 
 # Shopify is strictly read-only — never write

@@ -171,7 +171,7 @@ The `feedflow-design` skill (`.claude/skills/feedflow-design/`) has been rewritt
 
 ## 6. Copy and tone
 
-- **Two languages, two branches.** `feed-tool-gennemgang` is the Danish UI, and `feed-tool-gennemgang-en` is the same app in English. Every change is made on both branches; only UI text differs between them. Work in English first, then port.
+- **English only.** The app goes live in English from `feed-tool-gennemgang-en` (decided 2026-11-27). The Danish branch `feed-tool-gennemgang` is dropped; changes are no longer ported to it.
 - In the Danish UI, feature and page names stay in English where the prototype uses English (Overview, Products, Mapping, AI Titles, Labels, Settings).
 - Keep it plain, short and direct. Address the user as "du" or "I/jeres".
 - No exclamation marks and no marketing language. Use concrete numbers.

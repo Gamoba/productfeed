@@ -291,6 +291,7 @@ The webhook on preview deployments: is Vercel's deployment protection on for pre
 | # | Decision | Date |
 |---|---|---|
 | A1 | Danish branch: port billing to `feed-tool-gennemgang` afterwards, as with earlier work. | 2026-11-26 |
+| A1 | **Replaced:** the app goes live in English only; the Danish branch is dropped. | 2026-11-27 |
 | A2 | Existing accounts (the production customer and Gamoba's own shops) stay free, with no subscription needed. | 2026-11-26 |
 | A3 | Open signup: anyone can create an account and subscribe. This reopens signup that was closed for security, so the signup path needs a security pass (abuse, email verification, rate limits). | 2026-11-26 |
 | A4 | No free trial. | 2026-11-26 |
@@ -314,6 +315,14 @@ The webhook on preview deployments: is Vercel's deployment protection on for pre
 | E2 | Syncs: Standard daily; Advanced also every 12 h; Pro and Enterprise also every 6 h; hourly only for free accounts or custom plans with 24+ a day. Only scheduled syncs count; "Sync now" doesn't. A schedule kept from before a downgrade runs at the plan's most frequent. | 2026-11-26 |
 | E6 / gate | No plan yet: only Billing. Plan ended or unpaid: only Billing, showing the previous plan, Manage billing and Reactivate; feeds stop being served (HTTP 402) and syncs stop. Payment failed while Stripe still retries (past_due): full access with a notice (grace, chosen while building). Order syncs keep running for every account, since a gap in the 60-day order window can't be filled later. | 2026-11-26 |
 | D4 | Annual plans: the base is paid yearly up front, and extra SKUs are billed monthly on each month's peak, at the annual rate (× 10 / 12). | 2026-11-26 |
+| D1 / D2 | Free choice: the customer picks any plan at any SKU count, also a bigger one for its feeds, shops or users. No SKU ranges, no ceiling on Pro (as E3); Enterprise is a custom plan made on request. | 2026-11-27 |
+| D3 | Bill exact cents. The formula's numbers are right; the examples in §2 were rounded by hand. | 2026-11-27 |
+| D5 | Upgrades at once, the difference charged now; downgrades when the current period ends, so nothing is refunded. Set in Stripe's customer portal (go-live.md). Switching to a cheaper custom plan in the app credits the difference on the next invoice instead (kickbacks stay right either way). | 2026-11-27 |
+| — | Kickback on an invoice in the middle of a yearly plan (an upgrade, a yearly add-on): spread over the months left in the plan year, at least one. The year's own invoices still give 12 parts. | 2026-11-27 |
+| E4 | Features that don't exist yet stay out of the plan text until they're built; plans are sold on their limits. Master fields (within one shop) is in every plan; "across shops" is a later Pro feature. | 2026-11-27 |
+| E5 | Claude (MCP) is in every plan, held to the plan's limits. | 2026-11-27 |
+| F3 | Card only at launch (with Apple Pay, Google Pay and Link). Checkout offers card only today; the account uses Stripe Managed Payments, which decides the methods (see billing-status.md). | 2026-11-27 |
+| F4 | Invoices in English, with the details Checkout collects (company name, billing address, VAT number), found in Stripe's customer portal. | 2026-11-27 |
 
 ## 6. Suggested build order (after the decisions)
 
