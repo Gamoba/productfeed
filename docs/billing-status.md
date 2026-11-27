@@ -140,7 +140,8 @@ charge, fake — the file's header explains each).
 
 061 billing tables · 062 cancel_at · 063 RLS everywhere · 064 MCC invite name ·
 065 custom plan links · **066 SKU usage, charges and add-ons** (27 Nov) ·
-**067 index on products (feed_id, status, created_at, id)** (27 Nov). All have
+**067 index on products (feed_id, status, created_at, id)** (27 Nov) ·
+**068 referral review (possible self-referrals)** (27 Nov). All have
 rollbacks in `supabase/rollback/`.
 
 ## Stripe Tax has no registrations
@@ -180,9 +181,14 @@ the rest.
   Cancel it in Stripe, then `--cleanup` the login as below (the plan goes with
   the account).
 
-Remove before go-live (cancel the Stripe test subscription first, then
-`npx tsx scripts/test-signup-link.ts --cleanup referral-test-1@example.com`,
-then Test Agency, then Gambora back to `billing_exempt = false`).
+- **From 27 Nov's tests:** Consent Test ApS (login
+  referral-consent-test@example.com), New Login Agency (test) (login
+  agency-test-new@example.com), Test Agency's own test subscription (Advanced,
+  downgrade to Standard scheduled for 27 Dec) and its shop "Agency Own Shop
+  (test)", the retired add-on "Feed pack (test)".
+
+Remove before go-live: the full list, in order, is step 6 of
+`docs/go-live.md`.
 
 Not test data: default commission 20 %, kontakt@gamoba.dk as platform admin.
 
@@ -257,21 +263,20 @@ Followed up (27 Nov):
 
 ## Next
 
-1. Stripe → Tax registrations (above). Nothing else on this list costs real
-   money if it waits.
-2. Create the real add-ons in Admin (managed service, coaching, feed packs)
-   with a price for both intervals.
-5. Untested paths: agency invite for a brand-new login, an agency with its own
-   shops on a plan. (Feed-only agency access was checked on 27 Nov.)
-7. Decisions settled 27 Nov (D1–D3, D5, E4, E5, F3, F4, kickback on
-   prorated invoices; brief §5). "Downgrades at period end" is set in the
-   test-mode portal; the live portal needs it too, and whether to keep
-   Managed Payments is still to decide (go-live.md).
-8. Go-live: `docs/go-live.md` (Stripe live, Vercel env incl. SMTP, Supabase
-   redirect URLs, rename FeedFlow → Kompara, remove test data). English only:
-   the Danish branch is dropped (27 Nov). `docs/go-live.md` is now an ordered
+Everything left is in `docs/go-live.md`, in order. As of 27 Nov:
+
+1. **Done (step 1):** the branch is finished, tested and pushed — security
+   fixes, both agency paths, a portal downgrade, the Kompara rename, a
+   passing build. All decisions are settled (brief §5); English only.
+2. **Yours (steps 2–5):** Managed Payments yes/no, the production address,
+   Stripe live mode (portal with downgrades at period end, webhook, key),
+   Vercel environment, Supabase (redirects, SMTP, email link lifetime, OAuth
+   for Claude).
+3. **Then (steps 6–7):** remove the test data, merge into `master`.
+4. **After the deploy (steps 8–9):** `npm run stripe:setup` live, the real
+   add-ons, a real-card test purchase, production checks.
+5. **Known gaps** that don't block go-live are listed at the end of the
    checklist.
-   The add-ons have to be created again under live keys, as custom plans do.
 
 ## Database load (27 Nov)
 

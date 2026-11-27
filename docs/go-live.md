@@ -35,6 +35,9 @@ reference section after it has the details the steps point to.
 - [ ] **Stripe Managed Payments**: keep it (Stripe is the merchant of record
       and handles VAT; no tax registrations needed) or turn it off (then
       Stripe Tax needs Gamoba's registrations). See "Stripe and VAT" below.
+      Seen in testing: invoices on subscriptions started through Checkout
+      carry 25 % VAT; a subscription made directly through the API (a test
+      shortcut, not something the app does) got invoices with no VAT.
 - [ ] **Production address**: stay on rankclimbr.com, or move to kompara.io.
       Every URL below (Stripe webhook, Supabase redirects, Claude's OAuth)
       uses it, so decide first.
@@ -72,15 +75,21 @@ reference section after it has the details the steps point to.
 ### 5. Supabase, Authentication (you)
 
 - [ ] Site URL = the production address.
-- [ ] Redirect URLs include `https://<production>/auth/invite`.
+- [ ] Redirect URLs include `https://<production>/auth/invite`, and have
+      **no broad wildcards** (security review, 27 Nov).
 - [ ] Custom SMTP set (contact@kompara.io), and the "Invite user" template
       worded for signup ("Confirm your email and choose a password").
 - [ ] "Allow new users to sign up" stays **off** (signup creates logins
       server-side).
+- [ ] Email link lifetime (Auth → "Email OTP Expiration"): test signup links
+      stopped working after about an hour. A customer who opens the
+      confirmation email the next morning gets "The link does not work";
+      consider 24 hours (86400 s).
 - [ ] For Claude: OAuth server on, authorization path `/oauth/consent`,
       dynamic client registration allowed (`docs/mcp.md`).
-- [ ] Database: nothing to run. Migrations 052–067 are already applied on the
-      shared database (rollbacks in `supabase/rollback/`).
+- [ ] Database: nothing to run. Migrations 052–068 are already applied on the
+      shared database (rollbacks in `supabase/rollback/`); 068 (referral
+      review, for possible self-referrals) went on 27 Nov.
 
 ### 6. Clean up the test data (code, with you approving)
 
@@ -97,9 +106,12 @@ the Stripe **test** subscriptions first, then:
 - [ ] The retired test add-on "Feed pack (test)".
 - [ ] From the 27 Nov security tests: `--cleanup referral-consent-test@example.com`
       (Consent Test ApS) and `--cleanup agency-test-new@example.com`, then the
-      agency account "New Login Agency (test)" and its referral link; Test
-      Agency's test subscription (Standard monthly) and its shop "Agency Own
-      Shop (test)".
+      agency account "New Login Agency (test)" and its referral link.
+- [ ] Test Agency's own test subscription (`sub_1UgTdeCKF2esnRoaD4WIn699`:
+      Advanced monthly, with a downgrade to Standard scheduled for 27 Dec),
+      its Stripe test customer and its shop "Agency Own Shop (test)".
+- [ ] Referral Client ApS also has a −€373.88 test balance in Stripe and 12
+      kickback parts from the add-on test; they go with the account.
 - [ ] Not test data, keep: kontakt@gamoba.dk as platform admin, the default
       commission (20 %).
 
@@ -122,9 +134,10 @@ With the live key in place:
 
 - [ ] `npm run stripe:setup` with the live key: creates the plans' live
       products and prices and stores them in `plan_prices`.
-- [ ] Admin (`/admin`): the default commission; the real add-ons (managed
-      service, coaching, feed packs) with **both** a monthly and a yearly
-      price; any custom plans again (test-mode ones don't carry over).
+- [ ] Admin (`/admin`): check the default commission (20 % is set in the
+      shared database); create the real add-ons (managed service, coaching,
+      feed packs) with **both** a monthly and a yearly price; any custom plans
+      again (test-mode ones don't carry over).
 - [ ] Buy a plan once with a real card on a throwaway account, check
       Billing, the invoice and VAT, then refund and cancel it in Stripe.
 
@@ -139,6 +152,20 @@ With the live key in place:
       `shop_sku_usage` has a row per shop and Billing shows the figures.
 - [ ] A few weeks on: search the Vercel logs for `[legacy-feed-url]`. When
       nothing shows, delete `/api/feed/[userId]` and `getFirstFeed`.
+
+### Known gaps, not blocking go-live
+
+- Billing doesn't show a downgrade scheduled in the portal ("changes to
+  Standard on 27 Dec"); the customer sees it in the portal, and the app
+  switches when the period ends.
+- Not tested together: a portal downgrade that's waiting, then a switch to a
+  custom plan or an add-on bought before the period ends. Stripe keeps the
+  scheduled change; check in test mode before selling custom plans to
+  customers who have a pending downgrade.
+- A shop reached through a single-feed grant whose client has no active plan
+  isn't listed on the agency's dashboard (whole-account clients are, as
+  "No active plan").
+- `/api/feed/[userId]` stays until the logs show nothing calls it (step 9).
 
 ### If something is wrong
 
