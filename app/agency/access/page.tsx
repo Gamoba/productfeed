@@ -2,12 +2,13 @@ import { redirect } from 'next/navigation'
 import { createSupabaseServerClient, getSessionUser } from '@/lib/supabase-server'
 import { adminDb } from '@/lib/feeds'
 import { getMemberships } from '@/lib/accounts'
+import { currentAccountPreference } from '@/lib/currentAccount'
 import { getClientAccess } from '@/lib/mcc'
 import { AccessClient } from './AccessClient'
 
 // Agency › Agency access (a customer's side): the account's access code,
-// agencies asking for access, and agencies that have it. ?account picks the
-// account when the user belongs to several customer accounts.
+// agencies asking for access, and agencies that have it. The account is the
+// one the user is working in (lib/currentAccount.ts); ?account overrides it.
 export default async function AgencyAccessPage({ searchParams }: { searchParams: Promise<{ account?: string }> }) {
   const supabase = await createSupabaseServerClient()
   const {
@@ -25,7 +26,9 @@ export default async function AgencyAccessPage({ searchParams }: { searchParams:
     return <AccessClient data={null} accounts={[]} />
   }
   const { account } = await searchParams
-  const accountId = userAccounts.find((a) => a.id === account)?.id ?? userAccounts[0].id
+  const current = await currentAccountPreference()
+  const accountId =
+    userAccounts.find((a) => a.id === account)?.id ?? userAccounts.find((a) => a.id === current)?.id ?? userAccounts[0].id
   const data = await getClientAccess(db, user.id, accountId)
   return <AccessClient data={data} accounts={userAccounts.map(({ id, name }) => ({ id, name }))} />
 }

@@ -81,6 +81,32 @@ setup steps in `docs/go-live.md`.
     service, coaching, feed packs) have to be created in Admin, with a price
     for both intervals, before a customer sees anything.
 
+## Account switcher (decision 14): built and tested (27 Nov)
+
+One login can belong to several accounts; the app now shows one at a time
+(`lib/currentAccount.ts`). The sidebar's account card is the switcher when
+there is more than one ("Gamoba · Customer · Owner", "Test Agency · Agency ·
+Owner"). The choice is a cookie, checked against real memberships on every
+read; it is a preference, not access.
+
+- Scoped to it: the shell (`/api/shell`: shops, feeds, "Needs attention",
+  menu, blocked state), the dashboard, Monitoring, Users, Billing (its own
+  account picker is gone), Agency access, Connected companies, Partner
+  levels, and the account a new shop goes into. For an agency: its own shops
+  plus the clients it reaches (`getMccReach(…, onlyMcc)`).
+- Not scoped: access. `getOwnedFeed`/`getOwnedProject` still accept every
+  account the user belongs to, and Claude (MCP) still sees all of them.
+- Opening a shop or feed of another account switches to it (`/api/shell`
+  takes `?project=`/`?feed=`): the owning account when the user is a member,
+  else the agency of theirs whose grant reaches it, the current one first.
+- Checked as kontakt@gamoba.dk: Gamoba shows its 8 shops and the customer
+  menu; Test Agency shows Gambora Shop and the agency menu; Billing and Users
+  follow; opening BWH from Test Agency switched to Gamoba, opening Gambora
+  Shop from Gamoba switched to Test Agency.
+- Worth knowing: the menu still says "Agency dashboard" and "Agency users"
+  for a customer account (names from before the switcher). The Danish branch
+  has none of the billing work yet, so the switcher isn't there either.
+
 ## Extra-SKU billing: built and tested end to end (2026-11-27)
 
 `lib/skuMeasure.ts`, `lib/skuUsage.ts`, `lib/extraSkus.ts`,
@@ -195,7 +221,6 @@ Left as notes, not fixed:
    money if it waits.
 2. Create the real add-ons in Admin (managed service, coaching, feed packs)
    with a price for both intervals.
-4. Account switcher (decision 14).
 5. Untested paths: agency invite for a brand-new login, an agency with its own
    shops on a plan. (Feed-only agency access was checked on 27 Nov.)
 7. Open decisions: D1–D3, D5, E4, E5, F3, F4 in the brief; kickback on

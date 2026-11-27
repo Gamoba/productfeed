@@ -3,13 +3,14 @@ import { headers } from 'next/headers'
 import { createSupabaseServerClient, getSessionUser } from '@/lib/supabase-server'
 import { adminDb } from '@/lib/feeds'
 import { mccAccountIdsOf } from '@/lib/mccAccess'
+import { currentAccountPreference } from '@/lib/currentAccount'
 import { getPartnerOverview } from '@/lib/mcc'
 import { getDefaultCommissionRate } from '@/lib/platformAdmin'
 import { PartnerClient } from './PartnerClient'
 
 // Agency › Partner levels (an agency's side): its referral link and what it
-// earns on the clients it referred. ?agency picks the agency when the user
-// belongs to several.
+// earns on the clients it referred. The agency is the account the user is
+// working in (lib/currentAccount.ts); ?agency overrides it.
 export default async function PartnerLevelsPage({ searchParams }: { searchParams: Promise<{ agency?: string }> }) {
   const supabase = await createSupabaseServerClient()
   const {
@@ -21,7 +22,8 @@ export default async function PartnerLevelsPage({ searchParams }: { searchParams
   const mccIds = await mccAccountIdsOf(db, user.id)
   if (mccIds.length === 0) return <PartnerClient data={null} signupBase="" />
   const { agency } = await searchParams
-  const mccId = mccIds.includes(agency ?? '') ? agency! : mccIds[0]
+  const current = await currentAccountPreference()
+  const mccId = mccIds.includes(agency ?? '') ? agency! : mccIds.includes(current ?? '') ? current! : mccIds[0]
   const h = await headers()
   const host = h.get('x-forwarded-host') ?? h.get('host')
   const proto = h.get('x-forwarded-proto') ?? (host?.startsWith('localhost') ? 'http' : 'https')

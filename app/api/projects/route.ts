@@ -3,6 +3,7 @@ import { createSupabaseServerClient, getSessionUser } from '@/lib/supabase-serve
 import { adminDb, type ProjectRow } from '@/lib/feeds'
 import { errorResponse } from '@/lib/errors'
 import { getAccessibleAccountIds, resolveAccountForNewProject } from '@/lib/accounts'
+import { getCurrentAccount } from '@/lib/currentAccount'
 import { assertCanCreateShop } from '@/lib/ops/limits'
 
 function hostOf(url: string | null): string | null {
@@ -104,7 +105,8 @@ export async function POST(req: Request) {
     name?: string
     description?: string
     // Optional: which of the user's accounts the project goes into. Defaults
-    // to the user's oldest membership (see resolveAccountForNewProject).
+    // to the account they're working in (lib/currentAccount.ts), else their
+    // oldest membership (see resolveAccountForNewProject).
     account_id?: string
   }
   const name = (body.name ?? '').trim()
@@ -113,7 +115,8 @@ export async function POST(req: Request) {
   const db = adminDb()
   let accountId: string | null
   try {
-    accountId = await resolveAccountForNewProject(db, user, body.account_id ?? null)
+    const current = body.account_id ? null : (await getCurrentAccount(db, user.id)).current
+    accountId = await resolveAccountForNewProject(db, user, body.account_id ?? current?.id ?? null)
   } catch (err) {
     return errorResponse(err, 'POST /api/projects account')
   }

@@ -36,10 +36,18 @@ export function useShell(pathname: string): Shell {
   const seq = useRef(0)
   const loadedAt = useRef(0)
 
+  // The page's shop or feed goes along: when it belongs to another of the
+  // user's accounts, the server switches to that account (lib/currentAccount).
+  const pathRef = useRef(pathname)
+  useEffect(() => {
+    pathRef.current = pathname
+  }, [pathname])
   const load = useCallback(() => {
     const mine = ++seq.current
     loadedAt.current = Date.now()
-    fetch('/api/shell')
+    const lvl = levelFromPath(pathRef.current)
+    const hint = lvl.kind === 'feed' ? `?feed=${lvl.feedId}` : lvl.kind === 'shop' ? `?project=${lvl.projectId}` : ''
+    fetch(`/api/shell${hint}`)
       .then((r) => (r.ok ? r.json() : null))
       .then((d: ShellData | null) => {
         if (d && mine === seq.current) setData(d)
@@ -78,8 +86,9 @@ export function useShell(pathname: string): Shell {
   const projectId =
     level.kind === 'shop' ? level.projectId : level.kind === 'feed' ? feed?.projectId : undefined
   const project = projectId ? (data?.projects.find((p) => p.id === projectId) ?? null) : null
-  const account =
-    (project && data?.accounts.find((a) => a.id === project.accountId)) ?? data?.accounts[0] ?? null
+  // The account the user is working in (the switcher), not the shop's owner:
+  // an agency in a client's shop is still working as the agency.
+  const account = data?.accounts.find((a) => a.id === data.currentAccountId) ?? null
   const projectFeeds = project ? (data?.feeds.filter((f) => f.projectId === project.id) ?? []) : []
 
   return { data, level, account, project, feed, projectFeeds }

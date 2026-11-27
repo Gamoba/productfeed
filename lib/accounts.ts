@@ -43,11 +43,16 @@ export async function getMemberships(
 //     (lib/mccAccess.ts), as role 'member' with via: 'mcc';
 // minus accounts locked for want of a plan (lib/entitlements.ts). Billing and
 // member management use getMemberships: real memberships only.
+//
+// `scope`: only the account the user is working in (lib/currentAccount.ts),
+// and for an agency the clients it reaches. Without it, every account (MCP).
 export async function getUsableMemberships(
   db: SupabaseClient,
-  userId: string
+  userId: string,
+  scope?: string
 ): Promise<AccountMembership[]> {
-  const [own, reach] = await Promise.all([getMemberships(db, userId), getMccReach(db, userId)])
+  const [mine, reach] = await Promise.all([getMemberships(db, userId), getMccReach(db, userId, scope)])
+  const own = scope === undefined ? mine : mine.filter((m) => m.account_id === scope)
   const ownIds = new Set(own.map((m) => m.account_id))
   const granted: AccountMembership[] = reach.accountIds
     .filter((id) => !ownIds.has(id))

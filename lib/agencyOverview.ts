@@ -49,8 +49,10 @@ const hostOf = (url: string | null): string | null => {
   }
 }
 
-export async function getAgencyOverview(db: SupabaseClient, userId: string): Promise<AgencyOverview> {
-  const memberships = await getUsableMemberships(db, userId)
+// `scope`: the account the user is working in (lib/currentAccount.ts); without
+// it, every account they reach (MCP's list_shops).
+export async function getAgencyOverview(db: SupabaseClient, userId: string, scope?: string): Promise<AgencyOverview> {
+  const memberships = await getUsableMemberships(db, userId, scope)
   const accountIds = memberships.map((m) => m.account_id)
   if (!accountIds.length) return { multipleAccounts: false, shops: [] }
 
@@ -139,7 +141,7 @@ export async function getAgencyOverview(db: SupabaseClient, userId: string): Pro
     }
   })
 
-  const granted = await grantedFeedShops(db, userId, new Set(projectRows.map((p) => p.id)))
+  const granted = await grantedFeedShops(db, userId, new Set(projectRows.map((p) => p.id)), scope)
   const all = [...shops, ...granted]
   return {
     multipleAccounts: new Set(all.map((s) => s.accountName)).size > 1 || accountIds.length > 1,
@@ -154,9 +156,10 @@ export async function getAgencyOverview(db: SupabaseClient, userId: string): Pro
 async function grantedFeedShops(
   db: SupabaseClient,
   userId: string,
-  alreadyListed: Set<string>
+  alreadyListed: Set<string>,
+  scope?: string
 ): Promise<AgencyShop[]> {
-  const { feeds: grants } = await getMccReach(db, userId)
+  const { feeds: grants } = await getMccReach(db, userId, scope)
   if (!grants.length) return []
 
   const locked = await lockedAccountIds(db, grants.map((g) => g.accountId))

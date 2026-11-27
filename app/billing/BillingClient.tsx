@@ -12,7 +12,6 @@ type Props = {
   plans: Plan[]
   canManage: boolean
   configured: boolean
-  accounts: { id: string; name: string }[]
   detail: BillingDetail
   /** Set when ?account named an account the user doesn't manage. */
   unmanaged: { name: string | null } | null
@@ -37,7 +36,7 @@ function limit(n: number | null, one: string, many: string): string {
   return `${num.format(n)} ${n === 1 ? one : many}`
 }
 
-export function BillingClient({ billing, plans, canManage, configured, accounts, detail, unmanaged, checkoutNote }: Props) {
+export function BillingClient({ billing, plans, canManage, configured, detail, unmanaged, checkoutNote }: Props) {
   const [interval, setInterval] = useState<Interval>('month')
   const [busy, setBusy] = useState<string | null>(null)
   const [error, setError] = useState<string | null>(null)
@@ -82,20 +81,6 @@ export function BillingClient({ billing, plans, canManage, configured, accounts,
           </p>
         </div>
         <div className="bl-actions">
-          {accounts.length > 1 && (
-            <select
-              className="bl-select"
-              aria-label="Account"
-              value={account.id}
-              onChange={(e) => window.location.assign(`/billing?account=${e.target.value}`)}
-            >
-              {accounts.map((a) => (
-                <option key={a.id} value={a.id}>
-                  {a.name}
-                </option>
-              ))}
-            </select>
-          )}
           {manageButton}
         </div>
       </div>

@@ -1,12 +1,12 @@
 import { redirect } from 'next/navigation'
 import { createSupabaseServerClient, getSessionUser } from '@/lib/supabase-server'
 import { adminDb } from '@/lib/feeds'
-import { getMemberships } from '@/lib/accounts'
+import { getCurrentAccount } from '@/lib/currentAccount'
 import { listAccountUsers } from '@/lib/accountMembers'
 import { UsersClient } from './UsersClient'
 
-// Agency › Agency users. Who in the agency can reach its shops. The account is
-// the user's first membership, the same one the shell shows at this level.
+// Users: who can reach the account the user is working in
+// (lib/currentAccount.ts), the one the sidebar shows.
 export default async function AgencyUsersPage() {
   const supabase = await createSupabaseServerClient()
   const {
@@ -15,9 +15,9 @@ export default async function AgencyUsersPage() {
   if (!user) redirect('/login')
 
   const db = adminDb()
-  const [first] = await getMemberships(db, user.id)
-  if (!first) redirect('/')
+  const { current } = await getCurrentAccount(db, user.id)
+  if (!current) redirect('/')
 
-  const data = await listAccountUsers(db, user.id, first.account_id)
+  const data = await listAccountUsers(db, user.id, current.id)
   return <UsersClient initial={data} />
 }

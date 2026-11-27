@@ -79,15 +79,7 @@ export function Sidebar({ shell, pathname }: { shell: Shell; pathname: string })
       )}
 
       {level.kind === 'account' ? (
-        account && (
-          <div className="shell-ctx">
-            <span className="shell-avatar shell-avatar-hi">{initials(account.name)}</span>
-            <span className="shell-ctx-text">
-              <b>{account.name}</b>
-              <small>Account · {ROLE_LABEL[account.role]}</small>
-            </span>
-          </div>
-        )
+        account && <AccountSwitcher shell={shell} />
       ) : (
         <ShopSwitcher shell={shell} />
       )}
@@ -197,6 +189,93 @@ function NavGroupItem({ group, pathname, shell }: { group: NavGroup; pathname: s
         </div>
       )}
     </div>
+  )
+}
+
+const ACCOUNT_TYPE_LABEL = { mcc: 'Agency', user: 'Customer' } as const
+
+// The account the user is working in (lib/currentAccount.ts). With more than
+// one account it opens a list to switch; the whole app then shows that one.
+function AccountSwitcher({ shell }: { shell: Shell }) {
+  const { account, data } = shell
+  const accounts = data?.accounts ?? []
+  const [switching, setSwitching] = useState<string | null>(null)
+  if (!account) return null
+  const label = (a: { name: string; type: 'mcc' | 'user'; role: keyof typeof ROLE_LABEL }) => (
+    <span className="shell-ctx-text">
+      <b>{a.name}</b>
+      <small>
+        {ACCOUNT_TYPE_LABEL[a.type]} · {ROLE_LABEL[a.role]}
+      </small>
+    </span>
+  )
+
+  if (accounts.length < 2) {
+    return (
+      <div className="shell-ctx">
+        <span className="shell-avatar shell-avatar-hi">{initials(account.name)}</span>
+        {label(account)}
+      </div>
+    )
+  }
+
+  async function choose(id: string, close: () => void) {
+    if (id === account?.id) return close()
+    setSwitching(id)
+    const res = await fetch('/api/accounts/current', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ accountId: id }),
+    }).catch(() => null)
+    if (!res?.ok) {
+      setSwitching(null)
+      return
+    }
+    // A full load: every page, the menu and the shell start over in the new account.
+    window.location.assign('/')
+  }
+
+  return (
+    <Popover
+      label="Switch account"
+      className="shell-shopsel-wrap"
+      triggerClassName="shell-shopsel"
+      trigger={
+        <>
+          <span className="shell-avatar shell-avatar-hi">{initials(account.name)}</span>
+          {label(account)}
+          <Icon name="chevron-down" size={14} className="shell-muted" />
+        </>
+      }
+    >
+      {(close) =>
+        accounts.map((a) => {
+          const current = a.id === account.id
+          return (
+            <button
+              key={a.id}
+              type="button"
+              role="menuitem"
+              className="shell-menu-item shell-menu-shop"
+              aria-current={current ? 'true' : undefined}
+              disabled={switching !== null}
+              onClick={() => void choose(a.id, close)}
+            >
+              <span className="shell-avatar shell-avatar-hi shell-avatar-sm">{initials(a.name)}</span>
+              {switching === a.id ? (
+                <span className="shell-ctx-text">
+                  <b>{a.name}</b>
+                  <small>Switching…</small>
+                </span>
+              ) : (
+                label(a)
+              )}
+              {current && <Icon name="check" size={14} />}
+            </button>
+          )
+        })
+      }
+    </Popover>
   )
 }
 

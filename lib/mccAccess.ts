@@ -34,8 +34,11 @@ export async function mccAccountIdsOf(db: SupabaseClient, userId: string): Promi
   return ((data ?? []) as { account_id: string }[]).map((r) => r.account_id)
 }
 
-export async function getMccReach(db: SupabaseClient, userId: string): Promise<MccReach> {
-  const mccIds = await mccAccountIdsOf(db, userId)
+// `onlyMcc`: just that agency's clients (the account the user is working in,
+// lib/currentAccount.ts); nothing when the user isn't a member of it.
+export async function getMccReach(db: SupabaseClient, userId: string, onlyMcc?: string): Promise<MccReach> {
+  const all = await mccAccountIdsOf(db, userId)
+  const mccIds = onlyMcc === undefined ? all : all.filter((id) => id === onlyMcc)
   if (mccIds.length === 0) return EMPTY
   const { data, error } = await db
     .from('access_grants')

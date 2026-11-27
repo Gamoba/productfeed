@@ -94,8 +94,9 @@ function feedSample(cache: CacheRow | undefined): { checked: number; affected: n
   return { checked, affected: Math.min(checked, affected) }
 }
 
-export async function getAgencyMonitoring(db: SupabaseClient, userId: string): Promise<AgencyMonitoring> {
-  const memberships = await getUsableMemberships(db, userId)
+// `scope`: the account the user is working in (lib/currentAccount.ts).
+export async function getAgencyMonitoring(db: SupabaseClient, userId: string, scope?: string): Promise<AgencyMonitoring> {
+  const memberships = await getUsableMemberships(db, userId, scope)
   const accountIds = memberships.map((m) => m.account_id)
   const empty: AgencyMonitoring = {
     multipleAccounts: false,
