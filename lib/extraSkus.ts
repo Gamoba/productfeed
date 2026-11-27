@@ -246,6 +246,13 @@ export async function chargeExtraSkusFor(
     if (basis.interval === 'year') {
       // Nothing else is due this month, so the extras get their own invoice,
       // charged to the card on file.
+      //
+      // Which card: Checkout puts it on the subscription, not in the
+      // customer's invoice settings, and an invoice of our own doesn't
+      // inherit it. Without it Stripe finalises the invoice and then can't
+      // collect ("no default_payment_method set on this Customer or
+      // Invoice"), so it is passed explicitly.
+      const paymentMethod = await subscriptionPaymentMethod(sub.stripe_subscription_id)
       const invoice = await stripe().invoices.create(
         {
           customer: cust.stripe_customer_id,
@@ -255,6 +262,7 @@ export async function chargeExtraSkusFor(
           pending_invoice_items_behavior: 'include',
           auto_advance: true,
           description: `Extra SKUs for ${monthLabel(month)}`,
+          ...(paymentMethod ? { default_payment_method: paymentMethod } : {}),
           metadata,
         },
         { idempotencyKey: `skus-inv-${accountId}-${month}-${livemode ? 'live' : 'test'}` }
@@ -292,6 +300,25 @@ export async function chargeExtraSkusFor(
       .is('stripe_invoice_item_id', null)
     console.error('[extraSkus] charging failed for', accountId, month, err)
     return none('skipped', err instanceof Error ? err.message : 'Stripe refused the charge')
+  }
+}
+
+// The card the plan is paid with, for an invoice that stands on its own.
+// Falls back to the customer's own default, and to nothing — Stripe then
+// finalises the invoice and duns the customer for it.
+async function subscriptionPaymentMethod(stripeSubscriptionId: string): Promise<string | null> {
+  try {
+    const sub = await stripe().subscriptions.retrieve(stripeSubscriptionId)
+    const pm = sub.default_payment_method
+    if (pm) return typeof pm === 'string' ? pm : pm.id
+    const customerId = typeof sub.customer === 'string' ? sub.customer : sub.customer.id
+    const customer = await stripe().customers.retrieve(customerId)
+    if ('deleted' in customer) return null
+    const fallback = customer.invoice_settings?.default_payment_method
+    return fallback ? (typeof fallback === 'string' ? fallback : fallback.id) : null
+  } catch (err) {
+    console.error('[extraSkus] could not read the subscription’s payment method:', err)
+    return null
   }
 }
 
