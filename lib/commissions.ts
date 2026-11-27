@@ -38,26 +38,56 @@ function invoiceSubscriptionId(invoice: Stripe.Invoice): string | null {
   return typeof ref === 'string' ? ref : (ref?.id ?? null)
 }
 
+type InvoiceSub = { id: string; account_id: string; interval: 'month' | 'year' }
+
+// Our subscription row for the invoice's Stripe subscription, if it has one.
+// A subscription can carry both the plan and the extra-SKU row; the plan's
+// interval is the one the kickback is spread over.
+async function invoiceSubscription(db: SupabaseClient, invoice: Stripe.Invoice): Promise<InvoiceSub | null> {
+  const stripeSubId = invoiceSubscriptionId(invoice)
+  if (!stripeSubId) return null
+  const { data, error } = await db
+    .from('subscriptions')
+    .select('id, account_id, interval, kind')
+    .eq('stripe_subscription_id', stripeSubId)
+  if (error) dbError('invoiceSubscription', error)
+  const rows = (data ?? []) as (InvoiceSub & { kind: string })[]
+  return rows.find((r) => r.kind === 'plan') ?? rows[0] ?? null
+}
+
+// The account a subscription-less invoice belongs to.
+async function invoiceAccount(db: SupabaseClient, invoice: Stripe.Invoice): Promise<string | null> {
+  const fromMeta = invoice.metadata?.account_id
+  if (fromMeta) return fromMeta
+  const customer = typeof invoice.customer === 'string' ? invoice.customer : invoice.customer?.id
+  if (!customer) return null
+  const { data, error } = await db
+    .from('stripe_customers')
+    .select('account_id')
+    .eq('stripe_customer_id', customer)
+    .maybeSingle<{ account_id: string }>()
+  if (error) dbError('invoiceAccount', error)
+  return data?.account_id ?? null
+}
+
 // A paid invoice: start the referral on its first payment, then write the
 // invoice's commission parts (once).
 export async function recordPaidInvoice(db: SupabaseClient, invoice: Stripe.Invoice): Promise<void> {
-  if (invoice.amount_paid <= 0) return
-  const stripeSubId = invoiceSubscriptionId(invoice)
-  if (!stripeSubId || !invoice.id) return
+  if (invoice.amount_paid <= 0 || !invoice.id) return
 
-  const { data: sub, error: sErr } = await db
-    .from('subscriptions')
-    .select('id, account_id, interval')
-    .eq('stripe_subscription_id', stripeSubId)
-    .eq('kind', 'plan')
-    .maybeSingle<{ id: string; account_id: string; interval: 'month' | 'year' }>()
-  if (sErr) dbError('recordPaidInvoice subscription', sErr)
-  if (!sub) return
+  // Which account paid, and over how many months the kickback is spread: a
+  // yearly plan invoice into 12, anything else into one. An invoice with no
+  // subscription is a one-off — extra SKUs on a yearly plan (lib/extraSkus.ts)
+  // — and the account comes from its metadata or its Stripe customer.
+  const sub = await invoiceSubscription(db, invoice)
+  const accountId = sub?.account_id ?? (await invoiceAccount(db, invoice))
+  if (!accountId) return
+  const interval = sub?.interval ?? 'month'
 
   const { data: ref, error: rErr } = await db
     .from('referrals')
     .select('id, status, commission_rate, kickback_override')
-    .eq('user_account_id', sub.account_id)
+    .eq('user_account_id', accountId)
     .maybeSingle<Referral>()
   if (rErr) dbError('recordPaidInvoice referral', rErr)
   if (!ref) return
@@ -86,7 +116,7 @@ export async function recordPaidInvoice(db: SupabaseClient, invoice: Stripe.Invo
   const base = invoice.total_excluding_tax ?? invoice.subtotal_excluding_tax ?? invoice.subtotal
   if (!base || base <= 0) return
   const rate = Number(ref.commission_rate)
-  const parts = sub.interval === 'year' ? 12 : 1
+  const parts = interval === 'year' ? 12 : 1
   const each = Math.floor(base / parts)
   // The commission is rounded once, on the whole invoice, and split the same
   // way, so the parts add up to exactly rate × invoice.
@@ -98,7 +128,7 @@ export async function recordPaidInvoice(db: SupabaseClient, invoice: Stripe.Invo
     const amount = last ? base - each * (parts - 1) : each
     return {
       referral_id: ref.id,
-      subscription_id: sub.id,
+      subscription_id: sub?.id ?? null,
       stripe_invoice_id: invoice.id,
       installment: i + 1,
       invoice_amount_cents: amount,

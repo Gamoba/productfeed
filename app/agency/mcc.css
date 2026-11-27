@@ -40,3 +40,8 @@
 .cp-form .cp-wide { grid-column: 1 / -1; }
 .cp-form .mc-input, .cp-form .mc-select { min-width: 0; width: 100%; }
 .cp-retired td { opacity: .55; }
+/* Admin > Add-ons: checkboxes sit on one line, the grant form is set apart. */
+.cp-form .ad-check { flex-direction: row; align-items: center; gap: 8px; }
+.cp-form .ad-check input { accent-color: var(--accent-ink); }
+.ad-grant { margin-top: 14px; padding-top: 14px; border-top: 1px solid var(--line); }
+.mc-h4 { grid-column: 1 / -1; margin: 0; font-size: 13px; font-weight: 500; }

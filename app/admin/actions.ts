@@ -10,6 +10,7 @@ import { requirePlatformAdmin, setDefaultCommissionRate } from '@/lib/platformAd
 import { inviteMcc, setAgencyRate, setKickbackOverride } from '@/lib/mcc'
 import { markPayoutPaid } from '@/lib/commissions'
 import { createCustomPlan, newPlanLink, setCustomPlanActive, type CustomPlanInput } from '@/lib/customPlans'
+import { createAddon, grantAddon, revokeFreeAddon, setAddonActive, type AddonInput } from '@/lib/addons'
 
 export type AdminResult = { ok?: true; error?: string; message?: string; link?: string }
 
@@ -121,4 +122,50 @@ export async function setPlanActiveAction(planId: string, active: boolean): Prom
     await setCustomPlanActive(db, user.id, planId, active)
     return { ok: true as const, message: active ? 'Plan offered again.' : 'Plan retired. Existing subscriptions on it keep running.' }
   }, 'setPlanActiveAction')
+}
+
+// ── Add-ons ────────────────────────────────────────────────────────────────
+
+export async function createAddonAction(input: AddonInput): Promise<AdminResult> {
+  return done(async () => {
+    const { user, db } = await admin()
+    await createAddon(db, user.id, input)
+    return { ok: true as const, message: 'Add-on created. Customers on a plan can add it from Billing.' }
+  }, 'createAddonAction')
+}
+
+export async function setAddonActiveAction(addonId: string, active: boolean): Promise<AdminResult> {
+  return done(async () => {
+    const { user, db } = await admin()
+    await setAddonActive(db, user.id, addonId, active)
+    return {
+      ok: true as const,
+      message: active ? 'Add-on offered again.' : 'Add-on retired. Accounts that have it keep it.',
+    }
+  }, 'setAddonActiveAction')
+}
+
+export async function grantAddonAction(
+  accountId: string,
+  addonId: string,
+  quantity: string,
+  free: boolean,
+  note: string
+): Promise<AdminResult> {
+  return done(async () => {
+    const { user, db } = await admin()
+    await grantAddon(db, user.id, accountId, addonId, { quantity, free, note })
+    return {
+      ok: true as const,
+      message: free ? 'Added for free: it raises their limits and bills nothing.' : 'Added to their subscription. Stripe bills the rest of the period.',
+    }
+  }, 'grantAddonAction')
+}
+
+export async function revokeFreeAddonAction(accountAddonId: string): Promise<AdminResult> {
+  return done(async () => {
+    const { user, db } = await admin()
+    await revokeFreeAddon(db, user.id, accountAddonId)
+    return { ok: true as const, message: 'Taken off the account.' }
+  }, 'revokeFreeAddonAction')
 }

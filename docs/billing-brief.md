@@ -300,10 +300,13 @@ The webhook on preview deployments: is Vercel's deployment protection on for pre
 | C3 | Counted per feed, with no de-duplication across feeds, and summed over the account. | 2026-11-26 |
 | C4 | Billed on the highest daily total in the billing period. | 2026-11-26 |
 | C5 | Feed-URL shops follow the same rule. | 2026-11-26 |
-| C1–C5 | **Under review:** Gamoba is reconsidering the SKU counting rules above. | 2026-11-26 |
+| C1–C5 | **Settled 27 Nov 2026:** a SKU is an **item a feed sends out** — a product where the feed is set per product, a variant where it is set per variant — counted **once per shop** however many of its feeds send it, summed over the account, and billed on the highest daily total of the **calendar month**. Feed-URL shops the same. (C1 "a SKU is a variant" and C3 "per feed, no de-duplication" above are superseded: a shop pays for what its feeds really list.) | 2026-11-27 |
+| E3 | No ceiling: extras are billed by the formula on every plan, however far above the included count. The Billing page says when another plan would be cheaper, and the customer chooses. | 2026-11-27 |
+| D7 | Add-ons are built: a catalogue platform admins keep (Admin › Add-ons), with prices per interval, an optional quantity, and the limits one unit raises. Customers buy them on Billing; admins can also put one on an account, billed or free. | 2026-11-27 |
 | — | Custom plans per account (made by platform admins), access by the User's code, and the kickback payout schedule: see `docs/billing-data-model.md`, decisions 23–26. | 2026-11-26 |
 | — | Email: custom SMTP in Supabase. Signup creates logins server-side through the admin API (invite email), so Supabase's public signup stays off. | 2026-11-26 |
 | — | First version: the User picks Standard, Advanced or Pro, monthly or yearly, and pays the base price. Extra SKUs come when the counting rule is settled. | 2026-11-26 |
+| — | Extra SKUs and add-ons built (migration 066): a daily count per shop, billed monthly on the month's peak; add-ons on the plan's subscription. See `docs/billing-data-model.md`, decisions 28–31. | 2026-11-27 |
 | F2 | VAT: Stripe Tax, with VAT ID collection at Checkout. | 2026-11-26 |
 | F5 | Stripe's hosted Customer portal for card, invoices, plan changes and cancelling (chosen while building; revisit if needed). | 2026-11-26 |
 | B3 | Owners and admins manage billing; members see it (chosen while building, as for member management; revisit if needed). | 2026-11-26 |

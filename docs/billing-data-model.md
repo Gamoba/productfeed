@@ -1,8 +1,9 @@
 # Billing and MCC: data model (draft)
 
-Status: **sketch for discussion, not implemented.** Nothing here is migrated yet.
-Builds on `docs/billing-brief.md` and the existing `accounts` / `account_members`
-tables (migration 052). The decisions behind it are listed at the end.
+Status: **built.** Migrations 061–066 are applied; `docs/billing-status.md`
+says what has been tested. Builds on `docs/billing-brief.md` and the existing
+`accounts` / `account_members` tables (migration 052). The decisions behind it
+are listed at the end.
 
 ## The idea in short
 
@@ -24,19 +25,26 @@ One login may be a member of several accounts, MCC and User alike, and switches 
 - The public plans are Standard, Advanced, Pro and Enterprise.
 - A platform admin can create a **custom plan** for one specific account in the admin interface. It has its own prices and limits, and only that account can see it and subscribe to it.
 
-**SKUs.**
+**SKUs.** Settled 27 Nov 2026 (decisions 17–21).
 
-*Under review. Gamoba is rethinking the counting rule, and it's the easiest part to change later.*
-
-The current draft:
-- A SKU is a **variant** that is **included in a feed**, meaning it passes the feed's filters and goes out.
-- It is counted **per feed**, so a variant in three feeds counts three times.
-- The account's total for a day is the sum over all its feeds.
-- Billing uses the **highest daily total** in the period.
+- A SKU is an **item a feed sends out**: a product where the feed is set per product, a variant where it is set per variant (feed Settings → Level). It only counts if it passes the feed's filters and goes out.
+- It is counted **once per shop**, however many of the shop's feeds it appears in. A product listed by several feeds counts as the most any one of them sends out, so a variant-level feed decides for that product.
+- The account's total for a day is the **sum over its shops**.
+- Billing uses the **highest daily total** in the calendar month.
 - Feed-URL shops follow the same rule: each item included in a feed counts.
+- There is no ceiling: every plan bills extras however far above its included count, and the Billing page says when another plan would be cheaper (decision 28).
 - Extra SKUs are always billed **monthly**, on that month's peak, at the plan's rate:
-  - On a monthly plan, they go on the monthly invoice.
-  - On an annual plan, the base is paid up front for the year, and the extras are billed each month at the annual rate (× 10 / 12).
+  - On a monthly plan, they go on the next invoice as a pending invoice item, so the customer gets one invoice.
+  - On an annual plan, the base is paid up front for the year, and the extras get an invoice of their own each month, at the annual rate (× 10 / 12).
+
+**Add-ons** (decisions 29–30). A platform admin creates them in Admin › Add-ons:
+a name, a description, a monthly and/or yearly price, an optional quantity (a
+pack), and the limits one unit raises — feeds, shops, users and included SKUs.
+An owner or admin of the account buys one on Billing, and it goes on the plan's
+Stripe subscription at the plan's interval, so it lands on the same invoice and
+Stripe settles the rest of the period. A platform admin can also put one on an
+account, billed the same way or **free** (no Stripe item: it raises the limits
+and costs nothing).
 
 **Access.** A User grants an MCC access with one of two scopes:
 
@@ -92,8 +100,12 @@ erDiagram
     accounts ||--o{ subscriptions : "pays"
     accounts ||--o{ stripe_customers : "is"
     subscriptions ||--o{ commissions : "invoice of"
-    feeds ||--o{ feed_sku_usage : "counted daily"
-    accounts ||--o{ feed_sku_usage : "billed to"
+    projects ||--o{ shop_sku_usage : "counted daily"
+    accounts ||--o{ shop_sku_usage : "billed to"
+    accounts ||--o{ sku_charges : "billed monthly"
+    addons ||--o{ addon_prices : "priced as"
+    addons ||--o{ account_addons : "put on"
+    accounts ||--o{ account_addons : "has"
 
     accounts {
         uuid id PK
@@ -241,12 +253,64 @@ erDiagram
         boolean cancel_at_period_end
         boolean livemode
     }
-    feed_sku_usage {
-        uuid feed_id PK
+    shop_sku_usage {
+        uuid project_id PK
         date measured_on PK
-        uuid account_id FK "owner of the feed's shop that day"
-        int sku_count "under review"
+        uuid account_id FK "owner of the shop that day"
+        int sku_count "items sent out, once per shop"
+        int product_count "products behind them, if the rule changes"
+        int feed_count
         timestamptz measured_at
+    }
+    sku_charges {
+        uuid id PK
+        uuid account_id FK
+        date period_month "the month counted"
+        text plan_id FK
+        text interval
+        int peak_skus "highest daily total that month"
+        int included_skus "plan plus add-ons"
+        int extra_thousands
+        int rate_per_1000_cents "annual rate on a yearly plan"
+        int amount_cents
+        text stripe_invoice_item_id
+        text stripe_invoice_id "yearly plans: the month's own invoice"
+        text status "charged | none | skipped"
+        boolean livemode
+    }
+    addons {
+        text id PK
+        text name
+        text description
+        boolean active
+        boolean self_serve "false = we put it on"
+        boolean quantity_enabled "a pack"
+        int max_quantity
+        int feed_delta "limits one unit raises"
+        int shop_delta
+        int user_delta
+        int sku_delta
+        uuid created_by FK "platform admin"
+    }
+    addon_prices {
+        text addon_id PK
+        text interval PK "month | year"
+        boolean livemode PK
+        int amount_cents
+        text stripe_price_id
+    }
+    account_addons {
+        uuid id PK
+        uuid account_id FK
+        text addon_id FK
+        int quantity
+        text interval "null for a free grant"
+        text status "active | removed"
+        boolean free "granted by an admin, not billed"
+        uuid granted_by FK
+        text note "the deal behind it"
+        text stripe_subscription_item_id "null when free"
+        boolean livemode
     }
     stripe_events {
         text id PK "evt_..., for webhook idempotency"
@@ -294,7 +358,11 @@ The User can generate a new code at any time, and the old one stops working. Ent
 
 **Payout.** At the end of each month, the admin page sums each MCC's `scheduled` commissions with `payable_on` in that month and no payout, negative rows included. When Gamoba has paid, an admin creates a `commission_payouts` row with the reference and links those commissions to it.
 
-**SKU measuring** (under review). A daily job writes one `feed_sku_usage` row per feed. `account_id` is set to the account owning the shop that day, so a shop moving between accounts doesn't change past figures. Each month, the figure is the highest daily sum over the account's feeds. The SKUs above the plan's `included_skus` are reported to Stripe as the extra-SKU quantity.
+**SKU measuring.** A daily job (`/api/cron/sku-usage`, ticked by the same GitHub workflow as the syncs) writes one `shop_sku_usage` row per shop. `account_id` is the account owning the shop that day, so a shop moving between accounts doesn't change past figures. The counting itself runs in Postgres (`shop_sku_usage_count`), so the variants JSON never crosses the wire; each feed is passed with its level, and only feeds with a rule that filters something are evaluated in the app, which then sends down the ids it included. Shops already counted today are skipped, and a big install that doesn't fit in one run is finished by the next tick.
+
+**Billing the extras.** On the first run after a month ends, each paying account is billed for that month: `peak − (plan.included_skus + the add-ons' sku_delta)`, rounded up to whole thousands, at `extra_per_1000_cents` (× 10 / 12 on a yearly plan). A monthly plan gets a pending invoice item, so the amount rides on its next invoice; a yearly plan gets an invoice of its own, charged to the card on file. One `sku_charges` row per account, month and mode records it, written before Stripe is called and released again if Stripe fails, so a retry can never bill twice. The kickback follows from the invoice as usual, since it is a share of the whole invoice excluding VAT.
+
+**Add-ons.** Buying one adds an item to the plan's Stripe subscription with `proration_behavior: create_prorations`; removing one deletes that item, which credits the unused part. Stripe is the truth: every subscription event reconciles `account_addons` against the subscription's items, so an add-on removed in the customer portal is closed here too. A free grant has no Stripe item and is left alone by that reconciliation. Retiring an add-on (`active = false`) stops new purchases and leaves the accounts that have it untouched.
 
 **Annual plans and monthly extras.** The plan is billed yearly, and the extra SKUs monthly. Stripe has traditionally required every item on one subscription to share a billing interval. So the draft gives an annual account two `subscriptions` rows:
 - `kind = plan`, billed yearly;
@@ -318,6 +386,13 @@ A monthly account can carry both on one Stripe subscription. It's recorded as on
 | The UI shows the accounts a login belongs to, with a switcher; every check uses the account currently selected | shell + `lib/accounts` |
 | MCC invites, custom plans, commission rates, overrides and payouts: platform admins only | admin ops |
 | Every Stripe-backed row carries `livemode`, and the app only acts on rows that match the keys in use | billing ops |
+| A SKU is an item a feed sends out (product or variant, by the feed's level), counted once per shop; a day's figure for an account is the sum over its shops | `lib/skuMeasure.ts` + `shop_sku_usage_count` |
+| A month's extras are billed on the highest daily total, above the plan's included SKUs plus the add-ons', with no ceiling | `lib/extraSkus.ts` |
+| An account is billed once per month and mode, whatever happens to the run | `sku_charges` unique key |
+| Add-ons raise the plan's limits (feeds, shops, users, included SKUs); an unlimited limit stays unlimited | `lib/entitlements.ts` |
+| An add-on needs a live plan to sit on, and is billed at the plan's interval | buy / grant ops |
+| What Stripe bills is what the account has: add-on rows follow the subscription's items | `reconcileAddonItems` |
+| Creating add-ons, and granting or revoking free ones: platform admins only | admin ops |
 
 ## Decisions
 
@@ -339,18 +414,22 @@ A monthly account can carry both on one Stripe subscription. It's recorded as on
 | 14 | One login may belong to several accounts, MCC and User alike, with an account switcher in the UI. | 2026-11-26 |
 | 15 | A refund after payout is deducted from the MCC's next payout. | 2026-11-26 |
 | 16 | If the User grants the referring MCC access again, the kickback resumes automatically, from the next paid invoice. | 2026-11-26 |
-| 17–21 | SKU counting (variant, included in a feed, per feed, highest daily total, feed-URL shops the same). **Under review**: Gamoba is rethinking it. | 2026-11-26 |
+| 17–21 | SKU counting, **settled**: a SKU is an **item a feed sends out** — a product in a product-level feed, a variant in a variant-level one — counted **once per shop** however many of its feeds send it, summed over the account, and billed on the highest daily total of the calendar month. Feed-URL shops the same. (Replaces the draft's per-feed counting of every variant: a shop is billed for what its feeds really list, which is also what Merchant Center sees.) | 2026-11-27 |
 | 22 | Annual plans: the base is paid yearly up front, and extra SKUs are billed monthly on each month's peak, at the annual rate. | 2026-11-26 |
 | 23 | Connecting without a referral: each User has an access code. The MCC enters it, the User gets an email, and the User approves and picks the scope. The MCC code, User-to-MCC invites and MCC requests by email are dropped. | 2026-11-26 |
 | 24 | Platform admins can create custom plans for a specific account in the admin interface. | 2026-11-26 |
 | 25 | Kickback timing: monthly plans pay the MCC at the end of the month the User paid. Yearly plans split the amount into 12, and each month the MCC gets the rate × one twelfth, on the same schedule. | 2026-11-26 |
 | 26 | Yearly plan cancelled or refunded partway: the parts not yet paid out are dropped, or reduced by the refund. | 2026-11-26 |
 | 27 | Revoking the referring MCC's access during a yearly plan drops the remaining parts, as for a cancellation. If access is granted again, the dropped parts don't come back. Commission resumes from the next paid invoice. | 2026-11-26 |
+| 28 | No ceiling on extra SKUs: every plan bills them at its own rate however far above the included count. Nobody is forced to upgrade; the Billing page says when another plan would be cheaper. | 2026-11-27 |
+| 29 | Add-ons are a catalogue platform admins keep: name, description, prices per interval, an optional quantity, and the limits one unit raises. Nothing hard-coded, so prices change without a release. | 2026-11-27 |
+| 30 | An add-on can be bought by the account itself on Billing, and a platform admin can also put one on an account — billed, or free (limits only, nothing charged). | 2026-11-27 |
+| 31 | Extras are billed per **calendar month**, not per billing period, so monthly and yearly plans work the same way and the kickback months line up. A monthly plan's extras ride on its next invoice; a yearly plan's get their own monthly invoice. | 2026-11-27 |
 
 ## Still open
 
-1. **SKU counting:** Gamoba is reconsidering the rule (decisions 17–21). Only `feed_sku_usage` and the measuring job depend on it.
-2. The rest of the brief's §4 still needs answers before building, but these decide prices and behaviour, not tables:
+1. **Prices for add-ons.** The catalogue is empty until someone creates the add-ons (managed service, coaching, feed packs) in Admin › Add-ons with real prices.
+2. The rest of the brief's §4 still needs answers, but these decide prices and behaviour, not tables:
    - plan ranges (D1–D2);
    - rounding (D3);
    - plan changes (D5);

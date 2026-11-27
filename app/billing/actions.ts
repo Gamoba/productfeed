@@ -1,9 +1,11 @@
 'use server'
 
 import { headers } from 'next/headers'
+import { revalidatePath } from 'next/cache'
 import { createSupabaseServerClient } from '@/lib/supabase-server'
 import { adminDb } from '@/lib/feeds'
 import { createCheckout, createPortal } from '@/lib/billing'
+import { buyAddon, removeAddon } from '@/lib/addons'
 import { enforceRateLimit } from '@/lib/rateLimit'
 import { clientMessage } from '@/lib/errors'
 
@@ -43,5 +45,35 @@ export async function openPortal(accountId: string): Promise<BillingActionResult
     return { url: await createPortal(adminDb(), user, accountId, await origin()) }
   } catch (err) {
     return { error: clientMessage(err, 'openPortal') }
+  }
+}
+
+// ── Add-ons ────────────────────────────────────────────────────────────────
+
+export type AddonActionResult = { ok?: true; error?: string }
+
+export async function addAddonAction(accountId: string, addonId: string, quantity: string): Promise<AddonActionResult> {
+  try {
+    const user = await currentUser()
+    if (!user) return { error: 'Sign in again.' }
+    await enforceRateLimit(user.id, 'billing_session')
+    await buyAddon(adminDb(), user.id, accountId, addonId, quantity)
+    revalidatePath('/billing')
+    return { ok: true }
+  } catch (err) {
+    return { error: clientMessage(err, 'addAddonAction') }
+  }
+}
+
+export async function removeAddonAction(accountId: string, addonId: string): Promise<AddonActionResult> {
+  try {
+    const user = await currentUser()
+    if (!user) return { error: 'Sign in again.' }
+    await enforceRateLimit(user.id, 'billing_session')
+    await removeAddon(adminDb(), user.id, accountId, addonId)
+    revalidatePath('/billing')
+    return { ok: true }
+  } catch (err) {
+    return { error: clientMessage(err, 'removeAddonAction') }
   }
 }

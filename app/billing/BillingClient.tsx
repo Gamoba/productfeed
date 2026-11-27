@@ -1,8 +1,9 @@
 'use client'
 
 import { useState, useTransition } from 'react'
-import type { AccountBilling, Interval, Plan } from '@/lib/billing'
-import { openPortal, startCheckout } from './actions'
+import { useRouter } from 'next/navigation'
+import type { AccountBilling, BillingDetail, BillingUsage, Interval, Plan } from '@/lib/billing'
+import { addAddonAction, openPortal, removeAddonAction, startCheckout } from './actions'
 import '../agency/agency.css'
 import './billing.css'
 
@@ -12,6 +13,7 @@ type Props = {
   canManage: boolean
   configured: boolean
   accounts: { id: string; name: string }[]
+  detail: BillingDetail
   checkoutNote: 'done' | 'pending' | null
 }
 
@@ -33,7 +35,7 @@ function limit(n: number | null, one: string, many: string): string {
   return `${num.format(n)} ${n === 1 ? one : many}`
 }
 
-export function BillingClient({ billing, plans, canManage, configured, accounts, checkoutNote }: Props) {
+export function BillingClient({ billing, plans, canManage, configured, accounts, detail, checkoutNote }: Props) {
   const [interval, setInterval] = useState<Interval>('month')
   const [busy, setBusy] = useState<string | null>(null)
   const [error, setError] = useState<string | null>(null)
@@ -112,8 +114,19 @@ export function BillingClient({ billing, plans, canManage, configured, accounts,
             <span className="st">Active</span>
           </div>
           <p className="bl-sub">This account doesn&rsquo;t need a plan. Nothing will be charged.</p>
+          {detail.addons.length > 0 && (
+            <ul className="bl-limits">
+              {detail.addons.map((a) => (
+                <li key={a.id}>
+                  {a.name}
+                  {a.quantity > 1 ? ` × ${a.quantity}` : ''}
+                </li>
+              ))}
+            </ul>
+          )}
         </section>
       ) : subscription ? (
+        <>
         <section className="card tint bl-current">
           <div className="bl-current-head">
             <h3>{current?.name ?? subscription.planId} plan</h3>
@@ -136,9 +149,12 @@ export function BillingClient({ billing, plans, canManage, configured, accounts,
           {subscription.status === 'past_due' && (
             <p className="note warn">Stripe couldn&rsquo;t take the last payment. Update your card under Manage billing.</p>
           )}
-          {current && <PlanLimits plan={current} />}
+          {current && <PlanLimits plan={current} addons={detail.addons} />}
           {!canManage && <p className="bl-sub">Owners and admins can change the plan.</p>}
         </section>
+        <Usage usage={detail.usage} />
+        <AddonList accountId={account.id} detail={detail} canManage={canManage && configured} hasPlan />
+        </>
       ) : (
         <>
           {lapsed && (
@@ -257,14 +273,240 @@ export function BillingClient({ billing, plans, canManage, configured, accounts,
   )
 }
 
-function PlanLimits({ plan }: { plan: Plan }) {
+function PlanLimits({ plan, addons = [] }: { plan: Plan; addons?: BillingDetail['addons'] }) {
+  // Add-ons raise the plan's limits (lib/addons.ts), so each line shows the
+  // plan's own figure and what the add-ons add.
+  const extra = {
+    feed: addons.reduce((n, a) => n + a.feedDelta * a.quantity, 0),
+    shop: addons.reduce((n, a) => n + a.shopDelta * a.quantity, 0),
+    user: addons.reduce((n, a) => n + a.userDelta * a.quantity, 0),
+    sku: addons.reduce((n, a) => n + a.skuDelta * a.quantity, 0),
+  }
+  const plus = (n: number) => (n > 0 ? ` + ${num.format(n)} from add-ons` : '')
   return (
     <ul className="bl-limits">
-      <li>{plan.includedSkus === null ? 'SKUs by agreement' : `${num.format(plan.includedSkus)} SKUs included`}</li>
-      <li>{limit(plan.feedLimit, 'feed', 'feeds')}</li>
-      <li>{limit(plan.shopLimit, 'shop', 'shops')}</li>
-      <li>{limit(plan.userLimit, 'user', 'users')}</li>
+      <li>
+        {plan.includedSkus === null ? 'SKUs by agreement' : `${num.format(plan.includedSkus)} SKUs included`}
+        {plan.includedSkus === null ? '' : plus(extra.sku)}
+      </li>
+      <li>
+        {limit(plan.feedLimit, 'feed', 'feeds')}
+        {plan.feedLimit === null ? '' : plus(extra.feed)}
+      </li>
+      <li>
+        {limit(plan.shopLimit, 'shop', 'shops')}
+        {plan.shopLimit === null ? '' : plus(extra.shop)}
+      </li>
+      <li>
+        {limit(plan.userLimit, 'user', 'users')}
+        {plan.userLimit === null ? '' : plus(extra.user)}
+      </li>
       <li>{plan.syncsPerDay === null ? 'Syncs by agreement' : `${plan.syncsPerDay} sync${plan.syncsPerDay === 1 ? '' : 's'} a day`}</li>
     </ul>
   )
 }
+
+const monthName = (month: string) =>
+  new Date(`${month}T00:00:00Z`).toLocaleDateString('en-GB', { month: 'long', year: 'numeric', timeZone: 'UTC' })
+
+// This month's SKUs. Extras are billed once the month is over
+// (lib/extraSkus.ts), so these are the figures so far.
+function Usage({ usage }: { usage: BillingUsage }) {
+  const b = usage.basis
+  if (!b) return null
+  const priced = b.includedSkus !== null && b.ratePer1000Cents !== null
+  return (
+    <section className="card bl-usage">
+      <div className="bl-current-head">
+        <h3>SKUs in {monthName(usage.month)}</h3>
+        {b.measuredDays > 0 && b.extraThousands > 0 && (
+          <span className="bl-extra">{money(b.amountCents, b.currency)} extra so far</span>
+        )}
+      </div>
+      {b.measuredDays === 0 ? (
+        <p className="bl-sub">Not counted yet. The first count runs within a day of the plan starting.</p>
+      ) : (
+        <ul className="bl-figures">
+          <li>
+            <b>{num.format(b.peakSkus)}</b>
+            <small>highest day this month</small>
+          </li>
+          <li>
+            <b>{b.includedSkus === null ? '—' : num.format(b.includedSkus)}</b>
+            <small>included</small>
+          </li>
+          <li>
+            <b>{num.format(b.extraThousands * 1000)}</b>
+            <small>extra, in thousands</small>
+          </li>
+          <li>
+            <b>{money(b.amountCents, b.currency)}</b>
+            <small>extra so far</small>
+          </li>
+        </ul>
+      )}
+      <p className="bl-sub">
+        A SKU is an item that goes out in a feed: a product, or a variant where the feed&rsquo;s Level is &ldquo;Per
+        variant&rdquo;. It counts once per shop, however many of your feeds send it. The month is billed on its highest day
+        {priced ? `, at ${money(b.ratePer1000Cents as number, b.currency)} per 1,000 above the plan` : ''}, once the month ends.
+      </p>
+      {usage.cheaper && (
+        <p className="note">
+          At this month&rsquo;s peak, {usage.cheaper.name} would come to{' '}
+          {money(usage.cheaper.wouldCostCents, usage.cheaper.currency)} against{' '}
+          {money(usage.cheaper.nowCostCents, usage.cheaper.currency)} on your plan. You can switch under Manage billing.
+        </p>
+      )}
+      {usage.charges.length > 0 && (
+        <table className="ag-table bl-months">
+          <thead>
+            <tr>
+              <th>Month</th>
+              <th className="r">Highest day</th>
+              <th className="r">Extra SKUs</th>
+              <th className="r">Billed</th>
+            </tr>
+          </thead>
+          <tbody>
+            {usage.charges.map((c) => (
+              <tr key={c.month}>
+                <td>{monthName(c.month)}</td>
+                <td className="r">{num.format(c.peakSkus)}</td>
+                <td className="r">{num.format(c.extraThousands * 1000)}</td>
+                <td className="r">{c.status === 'none' ? 'nothing' : money(c.amountCents, c.currency)}</td>
+              </tr>
+            ))}
+          </tbody>
+        </table>
+      )}
+    </section>
+  )
+}
+
+// The add-ons the account has, and the ones it can buy. Both go straight onto
+// the Stripe subscription, which settles the rest of the period.
+function AddonList({
+  accountId,
+  detail,
+  canManage,
+  hasPlan,
+}: {
+  accountId: string
+  detail: BillingDetail
+  canManage: boolean
+  hasPlan: boolean
+}) {
+  const router = useRouter()
+  const [busy, setBusy] = useState<string | null>(null)
+  const [error, setError] = useState<string | null>(null)
+  const [qty, setQty] = useState<Record<string, string>>({})
+  const [, start] = useTransition()
+  const owned = new Set(detail.addons.map((a) => a.addonId))
+  const available = detail.catalogue.filter((a) => !owned.has(a.id) || a.quantityEnabled)
+
+  function run(key: string, fn: () => Promise<{ ok?: true; error?: string }>) {
+    setBusy(key)
+    setError(null)
+    start(async () => {
+      const r = await fn()
+      if (r.error) setError(r.error)
+      setBusy(null)
+      router.refresh()
+    })
+  }
+
+  if (!detail.addons.length && !(hasPlan && available.length)) return null
+
+  return (
+    <section className="card bl-addons">
+      <div className="bl-current-head">
+        <h3>Add-ons</h3>
+      </div>
+      <p className="bl-sub">
+        Extras on top of the plan. They go on the same invoice, and Stripe settles the part of the period that is left.
+      </p>
+      {error && <p className="note warn">{error}</p>}
+
+      {detail.addons.length > 0 && (
+        <ul className="bl-addon-list">
+          {detail.addons.map((a) => (
+            <li key={a.id}>
+              <div>
+                <b>
+                  {a.name}
+                  {a.quantity > 1 ? ` × ${a.quantity}` : ''}
+                </b>
+                {a.description && <small>{a.description}</small>}
+                {a.free && <small>Included by us, at no charge.</small>}
+              </div>
+              <div className="bl-addon-right">
+                <span>
+                  {a.free
+                    ? 'Free'
+                    : a.unitAmountCents === null
+                      ? ''
+                      : `${money(a.unitAmountCents * a.quantity, a.currency)} / ${a.interval === 'year' ? 'year' : 'month'}`}
+                </span>
+                {canManage && !a.free && (
+                  <button
+                    type="button"
+                    className="link"
+                    disabled={busy !== null}
+                    onClick={() => run(`rm-${a.addonId}`, () => removeAddonAction(accountId, a.addonId))}
+                  >
+                    {busy === `rm-${a.addonId}` ? 'Removing…' : 'Remove'}
+                  </button>
+                )}
+              </div>
+            </li>
+          ))}
+        </ul>
+      )}
+
+      {hasPlan && available.length > 0 && (
+        <ul className="bl-addon-list bl-addon-buy">
+          {available.map((a) => (
+            <li key={a.id}>
+              <div>
+                <b>{a.name}</b>
+                {a.description && <small>{a.description}</small>}
+                {owned.has(a.id) && <small>You have this already; adding more raises the quantity.</small>}
+              </div>
+              <div className="bl-addon-right">
+                <span>
+                  {a.prices
+                    .map((p) => `${money(p.amountCents, p.currency)} / ${p.interval === 'year' ? 'year' : 'month'}`)
+                    .join(' · ') || 'No price yet'}
+                </span>
+                {canManage ? (
+                  <>
+                    {a.quantityEnabled && (
+                      <input
+                        className="bl-qty"
+                        inputMode="numeric"
+                        aria-label={`How many of ${a.name}`}
+                        value={qty[a.id] ?? '1'}
+                        onChange={(e) => setQty({ ...qty, [a.id]: e.target.value })}
+                      />
+                    )}
+                    <button
+                      type="button"
+                      className="wl-btn-secondary"
+                      disabled={busy !== null || a.prices.length === 0}
+                      onClick={() => run(`add-${a.id}`, () => addAddonAction(accountId, a.id, qty[a.id] ?? '1'))}
+                    >
+                      {busy === `add-${a.id}` ? 'Adding…' : 'Add'}
+                    </button>
+                  </>
+                ) : (
+                  <span className="bl-sub">Owners and admins can add this.</span>
+                )}
+              </div>
+            </li>
+          ))}
+        </ul>
+      )}
+    </section>
+  )
+}
+

@@ -6,6 +6,7 @@ import { getAdminOverview } from '@/lib/mcc'
 import { payoutsDue } from '@/lib/commissions'
 import { emailConfigured } from '@/lib/email'
 import { listCustomPlans } from '@/lib/customPlans'
+import { listAddonsForAdmin } from '@/lib/addons'
 import { AdminClient } from './AdminClient'
 
 // Admin (Gamoba staff only): agency invites, commission rates, kickback
@@ -19,11 +20,21 @@ export default async function AdminPage() {
   const db = adminDb()
   if (!(await isPlatformAdmin(db, user.id))) notFound()
 
-  const [overview, defaultRate, due, custom] = await Promise.all([
+  const [overview, defaultRate, due, custom, addons] = await Promise.all([
     getAdminOverview(db, user.id),
     getDefaultCommissionRate(db),
     payoutsDue(db),
     listCustomPlans(db, user.id),
+    listAddonsForAdmin(db, user.id),
   ])
-  return <AdminClient overview={overview} defaultRate={defaultRate} due={due} emailReady={emailConfigured()} custom={custom} />
+  return (
+    <AdminClient
+      overview={overview}
+      defaultRate={defaultRate}
+      due={due}
+      emailReady={emailConfigured()}
+      custom={custom}
+      addons={addons}
+    />
+  )
 }

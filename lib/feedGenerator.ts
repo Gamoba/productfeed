@@ -246,9 +246,26 @@ async function attachMastersForFeed(
 
 // ── Filter counts (used by dashboard) ──────────────────────────────────────
 
-export async function countFilteredProducts(
-  feedId: string
-): Promise<{ total: number; included: number }> {
+export type IncludedProducts = {
+  total: number
+  included: number
+  /**
+   * The included products' shopify_ids, or null when the feed has no rule that
+   * filters anything, so every active product is in it. Callers that only need
+   * numbers use countFilteredProducts instead.
+   */
+  includedShopifyIds: string[] | null
+}
+
+export async function countFilteredProducts(feedId: string): Promise<{ total: number; included: number }> {
+  const { total, included } = await includedProducts(feedId)
+  return { total, included }
+}
+
+// Which products a feed includes: the same work as counting them, and the same
+// rules, with the ids kept. Used by the daily SKU count (lib/skuUsage.ts),
+// which de-duplicates them across a shop's feeds.
+export async function includedProducts(feedId: string): Promise<IncludedProducts> {
   const db = adminClient()
 
   const { data: filtersData } = await db
@@ -268,7 +285,7 @@ export async function countFilteredProducts(
       .eq('feed_id', feedId)
       .eq('status', 'active')
     if (error) throw new Error(`Product count failed: ${error.message}`)
-    return { total: count ?? 0, included: count ?? 0 }
+    return { total: count ?? 0, included: count ?? 0, includedShopifyIds: null }
   }
 
   // With rules, fetch only the columns they read (no body_html, images…),
@@ -301,7 +318,11 @@ export async function countFilteredProducts(
   if (usesMasters) await attachMastersForFeed(db, feedId, rawProducts, marketUrl)
   const filtered = applyFeedFilters(rawProducts, filterRows, marketUrl)
 
-  return { total: rawProducts.length, included: filtered.length }
+  return {
+    total: rawProducts.length,
+    included: filtered.length,
+    includedShopifyIds: filtered.map((p) => p.shopify_id),
+  }
 }
 
 // The product columns a set of rule fields reads (see resolveField). Any field

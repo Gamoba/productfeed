@@ -6,6 +6,8 @@ import type { AdminOverview } from '@/lib/mcc'
 import type { PayoutDue } from '@/lib/commissions'
 import type { CustomPlanRow } from '@/lib/customPlans'
 import { CustomPlans } from './CustomPlans'
+import { Addons } from './Addons'
+import type { AdminAddons } from '@/lib/addons'
 import {
   inviteMccAction,
   markPaidAction,
@@ -28,12 +30,14 @@ export function AdminClient({
   due,
   emailReady,
   custom,
+  addons,
 }: {
   overview: AdminOverview
   defaultRate: number | null
   due: PayoutDue[]
   emailReady: boolean
   custom: { plans: CustomPlanRow[]; accounts: { id: string; name: string }[] }
+  addons: AdminAddons
 }) {
   const router = useRouter()
   const [, start] = useTransition()
@@ -61,7 +65,9 @@ export function AdminClient({
       <div className="ag-head">
         <div>
           <h1>Admin</h1>
-          <p className="ag-lede">Agencies, custom plans, commission and payouts. Only Gamoba staff see this page.</p>
+          <p className="ag-lede">
+            Agencies, custom plans, add-ons, commission and payouts. Only Gamoba staff see this page.
+          </p>
         </div>
       </div>
 
@@ -133,6 +139,8 @@ export function AdminClient({
       </section>
 
       <CustomPlans plans={custom.plans} accounts={custom.accounts} />
+
+      <Addons data={addons} />
 
       <section className="card flush">
         <div className="mc-cardhead">

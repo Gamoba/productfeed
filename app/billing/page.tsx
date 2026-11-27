@@ -2,7 +2,7 @@ import { redirect } from 'next/navigation'
 import { createSupabaseServerClient, getSessionUser } from '@/lib/supabase-server'
 import { adminDb } from '@/lib/feeds'
 import { getMemberships } from '@/lib/accounts'
-import { canManageBilling, getAccountBilling, listPlansForAccount, syncCheckoutSession } from '@/lib/billing'
+import { canManageBilling, getAccountBilling, getBillingDetail, listPlansForAccount, syncCheckoutSession } from '@/lib/billing'
 import { billingConfigured } from '@/lib/stripe'
 import { BillingClient } from './BillingClient'
 
@@ -34,10 +34,11 @@ export default async function BillingPage({ searchParams }: { searchParams: Prom
     }
   }
 
-  const [billing, plans, canManage, accounts] = await Promise.all([
+  const [billing, plans, canManage, detail, accounts] = await Promise.all([
     getAccountBilling(db, accountId),
     listPlansForAccount(db, accountId),
     canManageBilling(db, user.id, accountId),
+    getBillingDetail(db, accountId),
     memberships.length > 1
       ? db
           .from('accounts')
@@ -55,6 +56,7 @@ export default async function BillingPage({ searchParams }: { searchParams: Prom
       canManage={canManage}
       configured={billingConfigured()}
       accounts={accounts}
+      detail={detail}
       checkoutNote={checkoutNote}
     />
   )

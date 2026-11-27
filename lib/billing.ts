@@ -18,6 +18,16 @@ import { AppError, dbError } from '@/lib/errors'
 import { getAccountRole } from '@/lib/accounts'
 import { stripe, stripeLivemode } from '@/lib/stripe'
 import { dropFutureParts, recordCreditNote, recordPaidInvoice } from '@/lib/commissions'
+import { accountAddons, listAddons, reconcileAddonItems, type Addon, type AccountAddon } from '@/lib/addons'
+import {
+  extraSkuBasis,
+  extraThousands,
+  ratePer1000,
+  recentSkuCharges,
+  type ExtraSkuBasis,
+  type SkuChargeRow,
+} from '@/lib/extraSkus'
+import { monthStart } from '@/lib/skuUsage'
 
 export type Interval = 'month' | 'year'
 export const isInterval = (v: unknown): v is Interval => v === 'month' || v === 'year'
@@ -291,14 +301,20 @@ async function accountForCustomer(db: SupabaseClient, customerId: string): Promi
   return data?.account_id ?? null
 }
 
-async function planForPrice(db: SupabaseClient, priceId: string): Promise<string | null> {
+// Which of a subscription's prices are plan prices. The rest are add-ons
+// (lib/addons.ts), which ride on the same subscription.
+async function plansByPrice(db: SupabaseClient, priceIds: string[]): Promise<Map<string, string>> {
+  if (!priceIds.length) return new Map()
   const { data, error } = await db
     .from('plan_prices')
-    .select('plan_id')
-    .eq('stripe_price_id', priceId)
-    .maybeSingle<{ plan_id: string }>()
-  if (error) dbError('planForPrice', error)
-  return data?.plan_id ?? null
+    .select('plan_id, stripe_price_id')
+    .in('stripe_price_id', priceIds)
+  if (error) dbError('plansByPrice', error)
+  return new Map(
+    ((data ?? []) as { plan_id: string; stripe_price_id: string | null }[])
+      .filter((r) => r.stripe_price_id)
+      .map((r) => [r.stripe_price_id as string, r.plan_id])
+  )
 }
 
 // Writes Stripe's view of a subscription into `subscriptions`. Safe to call
@@ -314,10 +330,12 @@ export async function syncSubscription(db: SupabaseClient, sub: Stripe.Subscript
     return
   }
 
-  const item = sub.items.data[0]
+  // The plan's own item, not an add-on's (a subscription carries both).
+  const byPrice = await plansByPrice(db, sub.items.data.map((i) => i.price.id))
+  const item = sub.items.data.find((i) => byPrice.has(i.price.id)) ?? sub.items.data[0]
   if (!item) return
   // A plan switched in the portal changes the price; the price says which plan.
-  const planId = (await planForPrice(db, item.price.id)) ?? sub.metadata?.plan_id
+  const planId = byPrice.get(item.price.id) ?? sub.metadata?.plan_id
   if (!planId) {
     console.error('[billing] subscription with an unknown price:', sub.id, item.price.id)
     return
@@ -349,6 +367,10 @@ export async function syncSubscription(db: SupabaseClient, sub: Stripe.Subscript
     { onConflict: 'stripe_subscription_id,kind' }
   )
   if (error) dbError('syncSubscription', error)
+
+  // What Stripe bills is what the account has: add-on items on this
+  // subscription are written through, and ones taken off in the portal closed.
+  await reconcileAddonItems(db, accountId, sub)
 
   // Reactivated with a new subscription: cancel the account's old unpaid ones,
   // so Stripe can't charge for both.
@@ -450,4 +472,85 @@ export async function handleStripeEvent(db: SupabaseClient, event: Stripe.Event)
     .insert({ id: event.id, type: event.type, livemode: event.livemode })
   if (error && error.code !== '23505') dbError('handleStripeEvent record', error)
   return 'handled'
+}
+
+// ── Usage and add-ons for the Billing page ────────────────────────────────
+
+export type PlanSuggestion = {
+  planId: string
+  name: string
+  /** What that plan would cost at this month's peak, in the same interval. */
+  wouldCostCents: number
+  /** What the current plan costs at the same peak, base plus extra SKUs. */
+  nowCostCents: number
+  currency: string
+}
+
+export type BillingUsage = {
+  month: string
+  /** What the month's extras come to so far; null without a live plan. */
+  basis: ExtraSkuBasis | null
+  /** Earlier months, newest first. */
+  charges: SkuChargeRow[]
+  /** A cheaper plan at this month's peak, when extras have grown past one. */
+  cheaper: PlanSuggestion | null
+}
+
+export type BillingDetail = {
+  usage: BillingUsage
+  /** What the account has now. */
+  addons: AccountAddon[]
+  /** What it could add (active, self-serve, priced for its interval). */
+  catalogue: Addon[]
+}
+
+// Everything the Billing page shows besides the plan itself: this month's SKU
+// usage, what earlier months cost, the add-ons on the account and the ones it
+// can buy. One call, so the page makes a single round of queries.
+export async function getBillingDetail(db: SupabaseClient, accountId: string): Promise<BillingDetail> {
+  const month = monthStart(new Date())
+  const [basis, charges, addons, catalogue, plans] = await Promise.all([
+    extraSkuBasis(db, accountId, month),
+    recentSkuCharges(db, accountId),
+    accountAddons(db, accountId),
+    listAddons(db, true),
+    listPlansForAccount(db, accountId),
+  ])
+
+  return {
+    usage: { month, basis, charges, cheaper: cheaperPlan(basis, plans, addons) },
+    addons,
+    catalogue: catalogue.filter((a) => a.selfServe),
+  }
+}
+
+// With no ceiling on extra SKUs (decision 28), a shop can grow past the point
+// where the next plan is cheaper. This finds that plan so the page can say so;
+// nothing changes on its own.
+function cheaperPlan(basis: ExtraSkuBasis | null, plans: Plan[], addons: AccountAddon[]): PlanSuggestion | null {
+  if (!basis || basis.includedSkus === null || basis.ratePer1000Cents === null) return null
+  const skuDelta = addons.reduce((n, a) => n + a.skuDelta * a.quantity, 0)
+  const costOf = (plan: Plan): { cents: number; currency: string } | null => {
+    const price = plan.prices.find((p) => p.interval === basis.interval)
+    if (!price?.stripePriceId || plan.includedSkus === null || plan.extraPer1000Cents === null) return null
+    const included = plan.includedSkus + skuDelta
+    const rate = ratePer1000({ extraPer1000Cents: plan.extraPer1000Cents }, basis.interval) ?? 0
+    return {
+      cents: price.amountCents + Math.round(extraThousands(basis.peakSkus, included) * rate),
+      currency: price.currency,
+    }
+  }
+
+  const now = costOf(plans.find((p) => p.id === basis.planId) ?? ({} as Plan))
+  if (!now) return null
+  let best: PlanSuggestion | null = null
+  for (const plan of plans) {
+    if (plan.id === basis.planId || !plan.active || !plan.selfServe) continue
+    const cost = costOf(plan)
+    if (!cost || cost.cents >= now.cents) continue
+    if (!best || cost.cents < best.wouldCostCents) {
+      best = { planId: plan.id, name: plan.name, wouldCostCents: cost.cents, nowCostCents: now.cents, currency: cost.currency }
+    }
+  }
+  return best
 }

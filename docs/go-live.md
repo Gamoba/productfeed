@@ -41,8 +41,11 @@ left as it is.
     Unset: no app email; everything also shows in the app.
   Everything else is the same as `master`.
 - **Billing setup (per Stripe mode):**
-  1. Apply migration `061_billing_accounts.sql` (ask first; dry run:
-     `npx tsx scripts/dryrun-061.mts`).
+  1. Apply migrations `061_billing_accounts.sql` to
+     `066_sku_usage_and_addons.sql` (ask first; dry runs:
+     `npx tsx scripts/dryrun-061.mts`, `…-063`, `…-064`, `…-065`, `…-066`).
+     066 adds the daily SKU count, what was billed for extra SKUs, and the
+     add-on catalogue.
   2. `npm run stripe:setup` creates the plans' products and prices and stores
      their ids in `plan_prices`.
   3. Stripe → Webhooks: endpoint `https://<app>/api/stripe/webhook` with
@@ -65,14 +68,21 @@ left as it is.
      through `/signup`, which creates logins server-side.
   7. Default commission set on the Admin page (`/admin`). Until then
      referrals record a 0 % rate.
+  7b. Add-ons created on the Admin page, one per thing you sell (managed
+     service, coaching, extra-feed packs), with a price for **both** intervals
+     so monthly and yearly customers can buy them. The app creates the Stripe
+     product and prices in the mode the keys are for, so the add-ons have to be
+     created again after switching to live keys (as for custom plans).
   8. Platform admins: rows in `platform_admins` (today kontakt@gamoba.dk).
      They see Admin in the agency menu.
 - **Routes:** no page or API route is removed. Feed links in Merchant Center
   (`/api/feed/generate/<feedId>`) keep working.
-- **Scheduled jobs:** `.github/workflows/cron-sync.yml` gets a third step,
-  `/api/cron/google-ads` (scheduled Google Ads fetch). GitHub runs workflows
-  from `master`, so it starts with the merge. It uses the existing
-  `vars.APP_URL` and `secrets.CRON_SECRET`.
+- **Scheduled jobs:** `.github/workflows/cron-sync.yml` gets two more steps,
+  `/api/cron/google-ads` (scheduled Google Ads fetch) and
+  `/api/cron/sku-usage` (the daily SKU count, which also bills each paying
+  account for last month's extra SKUs on the first tick after a month ends).
+  GitHub runs workflows from `master`, so they start with the merge. They use
+  the existing `vars.APP_URL` and `secrets.CRON_SECRET`.
 - **Dependencies:** `@modelcontextprotocol/sdk` and `zod` are added; Vercel
   installs them on build.
 
@@ -107,6 +117,8 @@ git push
   see them in the Activity log.
 - The Google Ads page of a feed with an account shows figures and labels.
 - Open a feed link in the browser and check the XML.
+- The SKU count has run: `shop_sku_usage` has a row per shop for today, and a
+  customer's Billing page shows the month's figures.
 - The next scheduled run of the GitHub workflow succeeds (all three calls).
 
 ## If something is wrong

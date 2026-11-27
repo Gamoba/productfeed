@@ -204,7 +204,7 @@ The `feedflow-design` skill (`.claude/skills/feedflow-design/`) has been rewritt
 ## 8. Open questions (unclear in the recording)
 
 1. **The POAS/ROAS toggle on Labels.** The recording says it should be removed because "det vælger man jo hernede", but it doesn't make clear where "hernede" is. It could be the Labels template setup ("Hvad byder I efter?") or the conversion goals in Settings.
-2. **Plan and user limits** at agency level. Where are they configured, and by whom (an admin of ours, or a billing plan)?
+2. ~~**Plan and user limits** at agency level.~~ **Answered (Nov. 2026).** They come from the plan the account subscribes to: `plans` holds the feed, shop, user and sync limits and the included SKUs, enforced in `lib/ops/limits.ts` for both the UI and Claude. Gamoba's platform admins keep the public plans, make custom plans per company, and keep the add-on catalogue that raises those limits (Admin). See `docs/billing-data-model.md`.
 3. **The channel × country rule table.** What is the source of truth, and who keeps it up to date?
 4. **"Labels" mapping type.** Drop it or keep it?
 5. **Settings.** The recording refers to something "skubbet herind" from elsewhere, and to "Kali 2.0", which the transcription couldn't resolve. Confirm which settings move to feed level.

@@ -19,6 +19,7 @@
 import type { SupabaseClient } from '@supabase/supabase-js'
 import { dbError } from '@/lib/errors'
 import { stripeLivemode } from '@/lib/stripe'
+import { addonLimitsForMany, type AddonLimits } from '@/lib/addons'
 
 export type Standing = 'exempt' | 'active' | 'grace' | 'new' | 'lapsed'
 
@@ -51,17 +52,27 @@ type SubRow = {
   plans: { id: string; name: string; feed_limit: number | null; shop_limit: number | null; user_limit: number | null; syncs_per_day: number | null } | null
 }
 
-function derive(account: AccountRow, subs: SubRow[]): Entitlements {
+function derive(account: AccountRow, subs: SubRow[], addons: AddonLimits): Entitlements {
   const base = { accountId: account.id, type: account.type }
   if (account.billing_exempt) return { ...base, standing: 'exempt', locked: false, plan: null }
   const live = subs.find((s) => LIVE.includes(s.status))
   if (live?.plans) {
     const p = live.plans
+    // Add-ons raise the plan's limits (lib/addons.ts). An unlimited limit
+    // (null) stays unlimited.
+    const raise = (limit: number | null, delta: number) => (limit === null ? null : limit + delta)
     return {
       ...base,
       standing: live.status === 'past_due' ? 'grace' : 'active',
       locked: false,
-      plan: { id: p.id, name: p.name, feedLimit: p.feed_limit, shopLimit: p.shop_limit, userLimit: p.user_limit, syncsPerDay: p.syncs_per_day },
+      plan: {
+        id: p.id,
+        name: p.name,
+        feedLimit: raise(p.feed_limit, addons.feedDelta),
+        shopLimit: raise(p.shop_limit, addons.shopDelta),
+        userLimit: raise(p.user_limit, addons.userDelta),
+        syncsPerDay: p.syncs_per_day,
+      },
     }
   }
   // A checkout whose first payment never went through ('incomplete') isn't a
@@ -83,18 +94,26 @@ export async function getEntitlementsMany(db: SupabaseClient, accountIds: string
   // Free accounts need no second query (every existing customer today).
   const paying = rows.filter((a) => !a.billing_exempt).map((a) => a.id)
   let subs: SubRow[] = []
+  let addons = new Map<string, AddonLimits>()
   if (paying.length) {
-    const { data, error: sErr } = await db
-      .from('subscriptions')
-      .select('account_id, status, plans(id, name, feed_limit, shop_limit, user_limit, syncs_per_day)')
-      .in('account_id', paying)
-      .eq('kind', 'plan')
-      .eq('livemode', stripeLivemode())
-      .order('updated_at', { ascending: false })
+    const [{ data, error: sErr }, limits] = await Promise.all([
+      db
+        .from('subscriptions')
+        .select('account_id, status, plans(id, name, feed_limit, shop_limit, user_limit, syncs_per_day)')
+        .in('account_id', paying)
+        .eq('kind', 'plan')
+        .eq('livemode', stripeLivemode())
+        .order('updated_at', { ascending: false }),
+      addonLimitsForMany(db, paying),
+    ])
     if (sErr) dbError('getEntitlementsMany subscriptions', sErr)
     subs = (data ?? []) as unknown as SubRow[]
+    addons = limits
   }
-  for (const a of rows) out.set(a.id, derive(a, subs.filter((s) => s.account_id === a.id)))
+  const noAddons: AddonLimits = { feedDelta: 0, shopDelta: 0, userDelta: 0, skuDelta: 0 }
+  for (const a of rows) {
+    out.set(a.id, derive(a, subs.filter((s) => s.account_id === a.id), addons.get(a.id) ?? noAddons))
+  }
   return out
 }
 
