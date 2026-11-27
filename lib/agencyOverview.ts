@@ -8,6 +8,8 @@
 import type { SupabaseClient } from '@supabase/supabase-js'
 import { dbError } from '@/lib/errors'
 import { getUsableMemberships } from '@/lib/accounts'
+import { lockedAccountIds } from '@/lib/entitlements'
+import { getMccReach } from '@/lib/mccAccess'
 import { staleSyncDays } from '@/lib/syncSchedule'
 import type { ValidationIssue } from '@/lib/feedValidator'
 
@@ -25,6 +27,12 @@ export type AgencyShop = {
   feeds: number
   liveFeeds: number
   errors: number
+  /**
+   * Set when the shop is reached only through a grant on single feeds
+   * (access_grants scope 'feed', decision 10). The shop itself can't be
+   * opened — the row stands for these feeds, and the figures count only them.
+   */
+  grantedFeedIds?: string[]
 }
 
 export type AgencyOverview = {
@@ -131,5 +139,95 @@ export async function getAgencyOverview(db: SupabaseClient, userId: string): Pro
     }
   })
 
-  return { multipleAccounts: accountIds.length > 1, shops }
+  const granted = await grantedFeedShops(db, userId, new Set(projectRows.map((p) => p.id)))
+  const all = [...shops, ...granted]
+  return {
+    multipleAccounts: new Set(all.map((s) => s.accountName)).size > 1 || accountIds.length > 1,
+    shops: all,
+  }
+}
+
+// Shops the user reaches through a grant on one feed, not on the account
+// (decision 10). They can't open the shop, so the row shows what the grant
+// covers: the client's name, the feeds granted and how those feeds are doing.
+// Shops already listed through whole-account access are skipped.
+async function grantedFeedShops(
+  db: SupabaseClient,
+  userId: string,
+  alreadyListed: Set<string>
+): Promise<AgencyShop[]> {
+  const { feeds: grants } = await getMccReach(db, userId)
+  if (!grants.length) return []
+
+  const locked = await lockedAccountIds(db, grants.map((g) => g.accountId))
+  const wanted = grants.filter((g) => !locked.has(g.accountId))
+  if (!wanted.length) return []
+
+  const { data: feedRows, error: fErr } = await db
+    .from('feeds')
+    .select('id, project_id, last_synced_at')
+    .in('id', wanted.map((g) => g.feedId))
+  if (fErr) dbError('grantedFeedShops feeds', fErr)
+  const feeds = (feedRows ?? []) as { id: string; project_id: string; last_synced_at: string | null }[]
+  if (!feeds.length) return []
+
+  const projectIds = [...new Set(feeds.map((f) => f.project_id))].filter((id) => !alreadyListed.has(id))
+  if (!projectIds.length) return []
+
+  const [{ data: projects, error: pErr }, { data: caches }, { data: markets }] = await Promise.all([
+    db.from('projects').select('id, account_id, name').in('id', projectIds),
+    db.from('feed_cache').select('feed_id, validation_status, validation_errors').in('feed_id', feeds.map((f) => f.id)),
+    db.from('shop_settings').select('feed_id, selected_country').in('feed_id', feeds.map((f) => f.id)),
+  ])
+  if (pErr) dbError('grantedFeedShops projects', pErr)
+  const projectRows = (projects ?? []) as { id: string; account_id: string; name: string }[]
+  if (!projectRows.length) return []
+
+  const { data: accounts } = await db
+    .from('accounts')
+    .select('id, name')
+    .in('id', [...new Set(projectRows.map((p) => p.account_id))])
+  const accountName = new Map(((accounts ?? []) as { id: string; name: string }[]).map((a) => [a.id, a.name]))
+  const cacheBy = new Map(
+    ((caches ?? []) as { feed_id: string; validation_status: string | null; validation_errors: ValidationIssue[] | null }[]).map(
+      (c) => [c.feed_id, c]
+    )
+  )
+  const countryBy = new Map(
+    ((markets ?? []) as { feed_id: string; selected_country: string | null }[]).map((m) => [m.feed_id, m.selected_country])
+  )
+
+  return projectRows.map((p) => {
+    const own = feeds.filter((f) => f.project_id === p.id)
+    let errors = 0
+    let liveFeeds = 0
+    const countries = new Set<string>()
+    for (const f of own) {
+      const c = countryBy.get(f.id)
+      if (c) countries.add(c.toUpperCase())
+      const cache = cacheBy.get(f.id)
+      const stale = staleSyncDays(f.last_synced_at) != null
+      if (cache && !stale) liveFeeds++
+      if (stale) errors++
+      if (cache?.validation_status === 'errors') {
+        const n = (cache.validation_errors ?? []).filter((i) => i.type === 'error').length
+        errors += n || 1
+      }
+    }
+    return {
+      id: p.id,
+      name: p.name,
+      description: null,
+      accountName: accountName.get(p.account_id) ?? '',
+      // The shop's own details stay hidden: the grant is for the feeds.
+      address: null,
+      source: 'shopify' as const,
+      connection: null,
+      countries: [...countries].sort(),
+      feeds: own.length,
+      liveFeeds,
+      errors,
+      grantedFeedIds: own.map((f) => f.id),
+    }
+  })
 }

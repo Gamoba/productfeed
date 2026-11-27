@@ -14,6 +14,8 @@ type Props = {
   configured: boolean
   accounts: { id: string; name: string }[]
   detail: BillingDetail
+  /** Set when ?account named an account the user doesn't manage. */
+  unmanaged: { name: string | null } | null
   checkoutNote: 'done' | 'pending' | null
 }
 
@@ -35,7 +37,7 @@ function limit(n: number | null, one: string, many: string): string {
   return `${num.format(n)} ${n === 1 ? one : many}`
 }
 
-export function BillingClient({ billing, plans, canManage, configured, accounts, detail, checkoutNote }: Props) {
+export function BillingClient({ billing, plans, canManage, configured, accounts, detail, unmanaged, checkoutNote }: Props) {
   const [interval, setInterval] = useState<Interval>('month')
   const [busy, setBusy] = useState<string | null>(null)
   const [error, setError] = useState<string | null>(null)
@@ -98,6 +100,12 @@ export function BillingClient({ billing, plans, canManage, configured, accounts,
         </div>
       </div>
 
+      {unmanaged && (
+        <p className="note">
+          {unmanaged.name ? `${unmanaged.name} is on its own plan` : 'That account is on its own plan'}, and only its owners
+          and admins can change it. Below is {account.name}.
+        </p>
+      )}
       {checkoutNote === 'done' && <p className="note">Payment received. Your plan is active.</p>}
       {checkoutNote === 'pending' && (
         <p className="note">Payment received. Your plan is being activated; refresh in a moment if it doesn&rsquo;t show.</p>

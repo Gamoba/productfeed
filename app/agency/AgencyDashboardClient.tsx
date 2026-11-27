@@ -86,7 +86,7 @@ export function AgencyDashboardClient({ initial }: { initial: AgencyOverview }) 
                     key={s.id}
                     shop={s}
                     showAccount={initial.multipleAccounts}
-                    onOpen={() => router.push(`/project/${s.id}`)}
+                    onOpen={() => router.push(openHref(s))}
                     onRenamed={(name) => setShops((all) => all.map((x) => (x.id === s.id ? { ...x, name } : x)))}
                     onDeleted={() => setShops((all) => all.filter((x) => x.id !== s.id))}
                   />
@@ -108,7 +108,18 @@ export function AgencyDashboardClient({ initial }: { initial: AgencyOverview }) 
 
 // ── one customer ─────────────────────────────────────────────────────────────
 
+// Where a row leads: the shop, or the one feed we were granted (decision 10).
+const openHref = (shop: AgencyShop) =>
+  shop.grantedFeedIds?.length ? `/feed/${shop.grantedFeedIds[0]}` : `/project/${shop.id}`
+
 function Access({ shop }: { shop: AgencyShop }) {
+  if (shop.grantedFeedIds?.length) {
+    return (
+      <span className="pill ai">
+        {shop.grantedFeedIds.length === 1 ? 'One feed' : `${shop.grantedFeedIds.length} feeds`}
+      </span>
+    )
+  }
   if (shop.source === 'feed_url') return <span className="st">Feed URL</span>
   if (shop.connection === 'connected') return <span className="st">Shopify connected</span>
   if (shop.connection === 'error') return <span className="neg">Shopify failing</span>
@@ -130,7 +141,10 @@ function ShopRow({
 }) {
   const [dialog, setDialog] = useState<'rename' | 'delete' | null>(null)
   const stop = (e: React.SyntheticEvent) => e.stopPropagation()
-  const sub = [shop.address, showAccount ? shop.accountName : null].filter(Boolean).join(' · ')
+  const granted = shop.grantedFeedIds?.length ? shop.grantedFeedIds : null
+  const sub = [granted ? 'Access to the feed only' : shop.address, showAccount ? shop.accountName : null]
+    .filter(Boolean)
+    .join(' · ')
 
   return (
     <tr
@@ -176,9 +190,10 @@ function ShopRow({
         {shop.errors === 0 ? <span className="ag-muted">0</span> : formatNumber(shop.errors)}
       </td>
       <td className="r ag-act" onClick={stop} onKeyDown={stop}>
-        <Link href={`/project/${shop.id}`} className="link">
-          Open customer
+        <Link href={openHref(shop)} className="link">
+          {granted ? 'Open feed' : 'Open customer'}
         </Link>
+        {granted ? null : (
         <Popover
           label={`More actions for ${shop.name}`}
           align="right"
@@ -212,6 +227,7 @@ function ShopRow({
             </>
           )}
         </Popover>
+        )}
         {dialog === 'rename' && (
           <RenameDialog
             shop={shop}

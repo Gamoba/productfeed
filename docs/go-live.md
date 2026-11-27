@@ -59,7 +59,12 @@ left as it is.
      `stripe listen` prints its own signing secret (`whsec_…`); that one goes
      in `.env.local` as `STRIPE_WEBHOOK_SECRET` for local testing, not the
      Dashboard endpoint's.
-  4. Stripe → Tax: switch on Stripe Tax and set the origin address.
+  4. Stripe → Tax: switch on Stripe Tax, set the origin address, and **add
+     the tax registrations** (Denmark, plus every country Gamoba is
+     registered in). Without a registration Stripe Tax computes 0 % for
+     everyone and invoices go out with no VAT — which is what the test
+     account does today. `automatic_tax` is already on at Checkout and on the
+     extra-SKU invoices, so this is configuration, not code.
   5. Stripe → Customer portal: allow card updates, invoices, cancelling and
      switching between the FeedFlow plans.
   6. Supabase → Authentication: custom SMTP set up, and the "Invite user"
@@ -77,6 +82,13 @@ left as it is.
      They see Admin in the agency menu.
 - **Routes:** no page or API route is removed. Feed links in Merchant Center
   (`/api/feed/generate/<feedId>`) keep working.
+- **Database load:** migration 067 indexes the read every heavy path does
+  (`products` by feed, status and created_at); without it each page of a
+  catalogue read sorted the whole feed. If the database's CPU climbs after
+  go-live, start at Reports → Query Performance, check that `products` and
+  `product_metafields` have been analysed recently, and look at
+  `/api/feeds/counts`, which still recounts every feed in parallel on each
+  dashboard load.
 - **Scheduled jobs:** `.github/workflows/cron-sync.yml` gets two more steps,
   `/api/cron/google-ads` (scheduled Google Ads fetch) and
   `/api/cron/sku-usage` (the daily SKU count, which also bills each paying

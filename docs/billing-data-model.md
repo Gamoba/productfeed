@@ -376,6 +376,8 @@ A monthly account can carry both on one Stripe subscription. It's recorded as on
 |---|---|
 | A project may belong to a `user` account, or to an `mcc` account with an active subscription | trigger + create-shop op |
 | An MCC member reaches a User's shop or feed only through an `active` grant: account scope gives everything, feed scope gives that feed plus the shop's name and sync status | `getOwnedProject` / `getOwnedFeed` |
+| A feed-scope grant is listed on the agency's dashboard as the client with "One feed": no address, no shop actions, and the row opens the feed. The shop's own pages stay closed | `lib/agencyOverview.ts` (`grantedFeedShops`) |
+| Billing is for the account's own owners and admins. An agency following a client's "see plans" link is told whose plan it is, and shown its own | `/billing` page |
 | Creating a shop or feed in a User's account: its own members, or an MCC with an `account` grant. Checked against the **User's** plan | create-shop / create-feed ops |
 | An account needs an active subscription to own shops, unless it's `billing_exempt` | subscription gate |
 | Plan limits (feeds, shops, users, syncs) come from `plans` through the account's subscription. MCC seats are unlimited | limit checks |
